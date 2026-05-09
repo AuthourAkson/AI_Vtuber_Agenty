@@ -1,0 +1,23 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+.vscode/
+*.lock
+pubspec.lock
+
+# Windows
+windows/flutter/ephemeral/
+windows/flutter/CMakeFiles/
+windows/flutter/flutter_export.h
+windows/flutter/flutter_windows.h
+
+# Assets
+*.pyc
+__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
