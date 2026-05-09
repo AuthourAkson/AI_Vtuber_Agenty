@@ -288,12 +288,13 @@ Task: task_finished (all playback done)
 - [x] ✅ SessionManager 会话管理
 - [x] ✅ 侧边栏导航（10 页面）
 - [x] ✅ 聊天界面（流式 LLM 响应）
-- [x] ✅ LLM 设置页（System Prompt, API Relay）
-- [x] ✅ 角色设置页（Live2D/VRM 切换）
-- [x] ✅ TTS 设置页（GPT-SoVITS, RVC）
+- [x] ✅ LLM 设置页（System Prompt, API Relay）— 已修复 TextEditingController 生命周期
+- [x] ✅ 角色设置页（Live2D/VRM 切换）— 已修复 settings 部分更新丢失字段
+- [x] ✅ TTS 设置页（GPT-SoVITS, RVC）— 已修复 settings 部分更新丢失字段
 - [x] ✅ 视觉设置页（截图 OCR）
 - [x] ✅ 记忆页面（会话管理）
 - [x] ✅ 直播设置页（YouTube 聊天）
+- [x] ✅ Pipeline Monitor（实时流水线任务状态）
 - [x] ✅ 通用设置页（服务器连接）
 - [x] ✅ Windows 原生配置（CMake, runner）
 - [x] ✅ Git 仓库初始化 + GitHub 推送

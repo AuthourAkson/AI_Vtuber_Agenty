@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
 class TTSScreen extends StatefulWidget {
@@ -10,6 +11,35 @@ class TTSScreen extends StatefulWidget {
 }
 
 class _TTSScreenState extends State<TTSScreen> {
+  void _update(SettingsProvider sp, AppSettings s, {
+    String? ttsProvider,
+    bool? useRvc,
+    int? rvcF0UpKey,
+  }) {
+    sp.saveSettings(AppSettings(
+      ttsProvider: ttsProvider ?? s.ttsProvider,
+      useRvc: useRvc ?? s.useRvc,
+      rvcF0UpKey: rvcF0UpKey ?? s.rvcF0UpKey,
+      ttsVoice: s.ttsVoice,
+      systemPrompt: s.systemPrompt,
+      enableMemoryRetrieval: s.enableMemoryRetrieval,
+      keepModelLoaded: s.keepModelLoaded,
+      apiRelayEnabled: s.apiRelayEnabled,
+      apiRelayBaseUrl: s.apiRelayBaseUrl,
+      apiRelayApiKey: s.apiRelayApiKey,
+      apiRelayModel: s.apiRelayModel,
+      llmModelFilename: s.llmModelFilename,
+      showMonitor: s.showMonitor,
+      selectedLive2DModel: s.selectedLive2DModel,
+      selectedVRMModel: s.selectedVRMModel,
+      renderModel: s.renderModel,
+      live2DXPosition: s.live2DXPosition,
+      live2DYPosition: s.live2DYPosition,
+      live2DScale: s.live2DScale,
+      use3D: s.use3D,
+      backendUrl: s.backendUrl,
+    ));
+  }
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
@@ -30,11 +60,11 @@ class _TTSScreenState extends State<TTSScreen> {
               Row(
                 children: [
                   _providerCard('GPT-SoVITS', s.ttsProvider == 'gpt-sovits', () {
-                    sp.saveSettings(AppSettings()..ttsProvider = 'gpt-sovits');
+                    _update(sp, s, ttsProvider: 'gpt-sovits');
                   }),
                   const SizedBox(width: 12),
                   _providerCard('RVC', s.ttsProvider == 'rvc', () {
-                    sp.saveSettings(AppSettings()..ttsProvider = 'rvc');
+                    _update(sp, s, ttsProvider: 'rvc');
                   }),
                 ],
               ),
@@ -70,7 +100,7 @@ class _TTSScreenState extends State<TTSScreen> {
                 SwitchListTile(
                   title: const Text('Enable RVC'),
                   value: s.useRvc,
-                  onChanged: (v) => sp.saveSettings(AppSettings()..useRvc = v),
+                    onChanged: (v) => _update(sp, s, useRvc: v),
                   activeColor: const Color(0xFF4CAF50),
                 ),
                 Row(
@@ -85,7 +115,7 @@ class _TTSScreenState extends State<TTSScreen> {
                   max: 12,
                   divisions: 24,
                   activeColor: const Color(0xFF4CAF50),
-                  onChanged: (v) => sp.saveSettings(AppSettings()..rvcF0UpKey = v.round()),
+                  onChanged: (v) => _update(sp, s, rvcF0UpKey: v.round()),
                 ),
               ],
 

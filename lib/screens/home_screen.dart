@@ -11,6 +11,7 @@ import 'vision_screen.dart';
 import 'memory_screen.dart';
 import 'stream_screen.dart';
 import 'settings_screen.dart';
+import 'pipeline_monitor_screen.dart';
 
 /// Top-level screen: sidebar + content area
 class HomeScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     'input': const ChatScreen(),
     'vision': const VisionScreen(),
     'tts': const TTSScreen(),
-    'pipeline': const ChatScreen(), // TODO: PipelineMonitorScreen
+    'pipeline': const PipelineMonitorScreen(),
     'stream': const StreamScreen(),
     'settings': const SettingsScreen(),
   };

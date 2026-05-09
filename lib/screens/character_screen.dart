@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
 class CharacterScreen extends StatefulWidget {
@@ -10,6 +11,37 @@ class CharacterScreen extends StatefulWidget {
 }
 
 class _CharacterScreenState extends State<CharacterScreen> {
+  void _update(SettingsProvider sp, AppSettings s, {
+    bool? renderModel,
+    bool? use3D,
+    double? live2DXPosition,
+    double? live2DYPosition,
+    double? live2DScale,
+  }) {
+    sp.saveSettings(AppSettings(
+      renderModel: renderModel ?? s.renderModel,
+      use3D: use3D ?? s.use3D,
+      live2DXPosition: live2DXPosition ?? s.live2DXPosition,
+      live2DYPosition: live2DYPosition ?? s.live2DYPosition,
+      live2DScale: live2DScale ?? s.live2DScale,
+      systemPrompt: s.systemPrompt,
+      enableMemoryRetrieval: s.enableMemoryRetrieval,
+      keepModelLoaded: s.keepModelLoaded,
+      apiRelayEnabled: s.apiRelayEnabled,
+      apiRelayBaseUrl: s.apiRelayBaseUrl,
+      apiRelayApiKey: s.apiRelayApiKey,
+      apiRelayModel: s.apiRelayModel,
+      llmModelFilename: s.llmModelFilename,
+      showMonitor: s.showMonitor,
+      ttsProvider: s.ttsProvider,
+      ttsVoice: s.ttsVoice,
+      useRvc: s.useRvc,
+      rvcF0UpKey: s.rvcF0UpKey,
+      selectedLive2DModel: s.selectedLive2DModel,
+      selectedVRMModel: s.selectedVRMModel,
+      backendUrl: s.backendUrl,
+    ));
+  }
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
@@ -29,7 +61,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 title: const Text('Show Character'),
                 subtitle: const Text('Display Live2D/VRM character on screen'),
                 value: s.renderModel,
-                onChanged: (v) => sp.saveSettings(AppSettings()..renderModel = v),
+                onChanged: (v) => _update(sp, s, renderModel: v),
                 activeColor: const Color(0xFF4CAF50),
               ),
 
@@ -43,7 +75,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                       'Live2D (2D)',
                       Icons.person_outline,
                       !s.use3D,
-                      () => sp.saveSettings(AppSettings()..use3D = false),
+                      () => _update(sp, s, use3D: false),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -52,7 +84,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                       'VRM (3D)',
                       Icons.view_in_ar,
                       s.use3D,
-                      () => sp.saveSettings(AppSettings()..use3D = true),
+                      () => _update(sp, s, use3D: true),
                     ),
                   ),
                 ],
@@ -89,13 +121,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
               Row(
                 children: [
                   Expanded(child: _sliderSetting('X', s.live2DXPosition, 0, 100, (v) {
-                    sp.saveSettings(AppSettings()..live2DXPosition = v);
+                    _update(sp, s, live2DXPosition: v);
                   })),
                   Expanded(child: _sliderSetting('Y', s.live2DYPosition, 0, 100, (v) {
-                    sp.saveSettings(AppSettings()..live2DYPosition = v);
+                    _update(sp, s, live2DYPosition: v);
                   })),
                   Expanded(child: _sliderSetting('Scale', s.live2DScale, 0.05, 0.5, (v) {
-                    sp.saveSettings(AppSettings()..live2DScale = v);
+                    _update(sp, s, live2DScale: v);
                   })),
                 ],
               ),

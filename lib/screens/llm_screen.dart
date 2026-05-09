@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
 class LLMScreen extends StatefulWidget {
@@ -10,18 +11,31 @@ class LLMScreen extends StatefulWidget {
 }
 
 class _LLMScreenState extends State<LLMScreen> {
-  late TextEditingController _promptCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _promptCtrl = TextEditingController();
-  }
+  final _promptCtrl = TextEditingController();
+  final _baseUrlCtrl = TextEditingController();
+  final _apiKeyCtrl = TextEditingController();
+  final _modelCtrl = TextEditingController();
+  bool _initialized = false;
 
   @override
   void dispose() {
     _promptCtrl.dispose();
+    _baseUrlCtrl.dispose();
+    _apiKeyCtrl.dispose();
+    _modelCtrl.dispose();
     super.dispose();
+  }
+
+  void _initFromSettings(AppSettings s) {
+    if (_initialized) return;
+    _initialized = true;
+
+    if (_promptCtrl.text.isEmpty && s.systemPrompt.isNotEmpty) {
+      _promptCtrl.text = s.systemPrompt;
+    }
+    _baseUrlCtrl.text = s.apiRelayBaseUrl;
+    _apiKeyCtrl.text = s.apiRelayApiKey;
+    _modelCtrl.text = s.apiRelayModel;
   }
 
   @override
@@ -29,9 +43,7 @@ class _LLMScreenState extends State<LLMScreen> {
     return Consumer<SettingsProvider>(
       builder: (context, sp, _) {
         final s = sp.settings;
-        if (_promptCtrl.text.isEmpty && s.systemPrompt.isNotEmpty) {
-          _promptCtrl.text = s.systemPrompt;
-        }
+        _initFromSettings(s);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -62,27 +74,21 @@ class _LLMScreenState extends State<LLMScreen> {
                 title: const Text('Enable Memory Retrieval'),
                 subtitle: const Text('Use vector memory for context'),
                 value: s.enableMemoryRetrieval,
-                onChanged: (v) {
-                  sp.saveSettings(AppSettings()..enableMemoryRetrieval = v);
-                },
+                onChanged: (v) => _saveSwitch(sp, s, memoryRetrieval: v),
                 activeColor: const Color(0xFF4CAF50),
               ),
               SwitchListTile(
                 title: const Text('Keep Model Loaded'),
                 subtitle: const Text('Keep LLM in VRAM for faster responses'),
                 value: s.keepModelLoaded,
-                onChanged: (v) {
-                  sp.saveSettings(s..keepModelLoaded = v);
-                },
+                onChanged: (v) => _saveSwitch(sp, s, keepLoaded: v),
                 activeColor: const Color(0xFF4CAF50),
               ),
               SwitchListTile(
                 title: const Text('API Relay Mode'),
                 subtitle: const Text('Use remote API instead of local LLM'),
                 value: s.apiRelayEnabled,
-                onChanged: (v) {
-                  sp.saveSettings(s..apiRelayEnabled = v);
-                },
+                onChanged: (v) => _saveSwitch(sp, s, relayEnabled: v),
                 activeColor: const Color(0xFF4CAF50),
               ),
 
@@ -90,29 +96,23 @@ class _LLMScreenState extends State<LLMScreen> {
                 const SizedBox(height: 16),
                 const Text('API Relay Config', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
                 const SizedBox(height: 8),
-                _settingField('Base URL', s.apiRelayBaseUrl, (v) {
-                  sp.saveSettings(s..apiRelayBaseUrl = v);
-                }),
-                _settingField('API Key', s.apiRelayApiKey, (v) {
-                  sp.saveSettings(s..apiRelayApiKey = v);
-                }, obscure: true),
-                _settingField('Model', s.apiRelayModel, (v) {
-                  sp.saveSettings(s..apiRelayModel = v);
-                }),
+                _settingField('Base URL', _baseUrlCtrl, false),
+                _settingField('API Key', _apiKeyCtrl, true),
+                _settingField('Model', _modelCtrl, false),
               ],
 
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () {
-                  final newSettings = AppSettings()
-                    ..systemPrompt = _promptCtrl.text
-                    ..enableMemoryRetrieval = s.enableMemoryRetrieval
-                    ..keepModelLoaded = s.keepModelLoaded
-                    ..apiRelayEnabled = s.apiRelayEnabled
-                    ..apiRelayBaseUrl = s.apiRelayBaseUrl
-                    ..apiRelayApiKey = s.apiRelayApiKey
-                    ..apiRelayModel = s.apiRelayModel;
-                  sp.saveSettings(newSettings);
+                  final updated = _buildUpdatedSettings(s);
+                  sp.saveSettings(updated);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Settings saved'),
+                      backgroundColor: Color(0xFF4CAF50),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
                 },
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('Save Settings'),
@@ -128,10 +128,71 @@ class _LLMScreenState extends State<LLMScreen> {
     );
   }
 
-  Widget _settingField(String label, String value, Function(String) onChanged, {bool obscure = false}) {
+  /// Build a full AppSettings from current form state + existing settings,
+  /// so no fields are lost on save.
+  AppSettings _buildUpdatedSettings(AppSettings s) {
+    return AppSettings(
+      systemPrompt: _promptCtrl.text,
+      enableMemoryRetrieval: s.enableMemoryRetrieval,
+      keepModelLoaded: s.keepModelLoaded,
+      apiRelayEnabled: s.apiRelayEnabled,
+      apiRelayBaseUrl: _baseUrlCtrl.text,
+      apiRelayApiKey: _apiKeyCtrl.text,
+      apiRelayModel: _modelCtrl.text,
+      // Preserve other settings
+      llmModelFilename: s.llmModelFilename,
+      showMonitor: s.showMonitor,
+      ttsProvider: s.ttsProvider,
+      ttsVoice: s.ttsVoice,
+      useRvc: s.useRvc,
+      rvcF0UpKey: s.rvcF0UpKey,
+      selectedLive2DModel: s.selectedLive2DModel,
+      selectedVRMModel: s.selectedVRMModel,
+      renderModel: s.renderModel,
+      live2DXPosition: s.live2DXPosition,
+      live2DYPosition: s.live2DYPosition,
+      live2DScale: s.live2DScale,
+      use3D: s.use3D,
+      backendUrl: s.backendUrl,
+    );
+  }
+
+  void _saveSwitch(SettingsProvider sp, AppSettings s, {
+    bool? memoryRetrieval,
+    bool? keepLoaded,
+    bool? relayEnabled,
+  }) {
+    final updated = AppSettings(
+      systemPrompt: _promptCtrl.text,
+      enableMemoryRetrieval: memoryRetrieval ?? s.enableMemoryRetrieval,
+      keepModelLoaded: keepLoaded ?? s.keepModelLoaded,
+      apiRelayEnabled: relayEnabled ?? s.apiRelayEnabled,
+      apiRelayBaseUrl: _baseUrlCtrl.text,
+      apiRelayApiKey: _apiKeyCtrl.text,
+      apiRelayModel: _modelCtrl.text,
+      llmModelFilename: s.llmModelFilename,
+      showMonitor: s.showMonitor,
+      ttsProvider: s.ttsProvider,
+      ttsVoice: s.ttsVoice,
+      useRvc: s.useRvc,
+      rvcF0UpKey: s.rvcF0UpKey,
+      selectedLive2DModel: s.selectedLive2DModel,
+      selectedVRMModel: s.selectedVRMModel,
+      renderModel: s.renderModel,
+      live2DXPosition: s.live2DXPosition,
+      live2DYPosition: s.live2DYPosition,
+      live2DScale: s.live2DScale,
+      use3D: s.use3D,
+      backendUrl: s.backendUrl,
+    );
+    sp.saveSettings(updated);
+  }
+
+  Widget _settingField(String label, TextEditingController ctrl, bool obscure) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TextField(
+        controller: ctrl,
         obscureText: obscure,
         decoration: InputDecoration(
           labelText: label,
@@ -140,8 +201,6 @@ class _LLMScreenState extends State<LLMScreen> {
           fillColor: const Color(0xFF1E1E1E),
         ),
         style: const TextStyle(fontSize: 13),
-        onChanged: onChanged,
-        controller: TextEditingController(text: value),
       ),
     );
   }
