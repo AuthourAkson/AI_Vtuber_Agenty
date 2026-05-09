@@ -48,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 controller: _serverCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Backend URL',
-                  hintText: 'http://localhost:8000',
+                  hintText: 'D:\\AiVtuber_Agent_profile',
                   border: OutlineInputBorder(),
                   filled: true,
                   fillColor: Color(0xFF1E1E1E),
@@ -57,33 +57,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) => sp.updateBackendUrl(v),
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: chat.connected
-                      ? chat.disconnect
-                      : () => chat.connectToBackend(),
-                  icon: Icon(chat.connected ? Icons.link_off : Icons.link, size: 18),
-                  label: Text(chat.connected ? 'Disconnect' : 'Connect'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: chat.connected ? const Color(0xFFCF6679) : const Color(0xFF4CAF50),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
+                  const SizedBox(width: 6),
+                  const Text('Self-contained — no external backend needed',
+                      style: TextStyle(color: Color(0xFF4CAF50), fontSize: 13)),
+                ],
               ),
-              if (chat.connected)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
-                      const SizedBox(width: 6),
-                      Text('Connected to ${sp.settings.backendUrl}',
-                          style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 13)),
-                    ],
-                  ),
-                ),
-
               const SizedBox(height: 24),
               _sectionHeader('About'),
               const SizedBox(height: 8),
@@ -106,14 +87,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(color: Color(0xFFBBBBBB), fontSize: 14)),
                     SizedBox(height: 4),
                     Text('• Streaming LLM chat with character system prompt'),
-                    Text('• TTS voice synthesis via GPT-SoVITS'),
+                    Text('• TTS voice synthesis via edge-tts'),
                     Text('• Live2D / VRM character display (WIP)'),
                     Text('• Screenshot vision + OCR'),
-                    Text('• Vector memory with Qdrant'),
+                    Text('• Local keyword-based memory'),
                     Text('• Session history management'),
-                    Text('• YouTube live chat integration'),
+                    Text('• YouTube live chat integration (WIP)'),
                     SizedBox(height: 12),
-                    Text('Backend: LocalAIVtuber2 (Python FastAPI)',
+                    Text('Backend: Self-contained Dart services',
                         style: TextStyle(color: Color(0xFF666666), fontSize: 12)),
                     Text('UI Framework: Flutter 3.x + Provider',
                         style: TextStyle(color: Color(0xFF666666), fontSize: 12)),

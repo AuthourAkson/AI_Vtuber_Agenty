@@ -3,14 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/message.dart';
 import '../models/task.dart';
-import '../services/api_client.dart';
+import '../services/backend_service.dart';
 import '../services/pipeline_manager.dart';
 import '../services/session_manager.dart';
 
 /// Central state for chat messages, sessions, and pipeline interaction.
 /// Uses ChangeNotifier for Provider-based reactive UI updates.
 class ChatProvider extends ChangeNotifier {
-  final ApiClient api = ApiClient();
+  final BackendService backend = BackendService();
   late final PipelineManager pipeline;
   late final SessionManager sessionManager;
 
@@ -21,7 +21,6 @@ class ChatProvider extends ChangeNotifier {
   String _ocrPrompt = '';
   String _retrievedContext = '';
   bool _enableMemoryRetrieval = true;
-  bool _connected = false;
 
   // Streaming state
   AbortController? _abortController;
@@ -29,7 +28,7 @@ class ChatProvider extends ChangeNotifier {
 
   ChatProvider() {
     pipeline = PipelineManager();
-    sessionManager = SessionManager(api);
+    sessionManager = SessionManager(backend);
     pipeline.subscribe(_onPipelineUpdate);
   }
 
@@ -42,7 +41,7 @@ class ChatProvider extends ChangeNotifier {
   String get ocrPrompt => _ocrPrompt;
   String get retrievedContext => _retrievedContext;
   bool get enableMemoryRetrieval => _enableMemoryRetrieval;
-  bool get connected => _connected;
+  bool get connected => backend.connected;
   bool get isStreaming => _isStreaming;
 
   // ─── Setters ───
@@ -53,24 +52,6 @@ class ChatProvider extends ChangeNotifier {
   set enableMemoryRetrieval(bool v) {
     _enableMemoryRetrieval = v;
     if (!v) _retrievedContext = '';
-    notifyListeners();
-  }
-
-  // ─── Connection ───
-
-  Future<void> connectToBackend() async {
-    try {
-      await api.getSettings();
-      _connected = true;
-      notifyListeners();
-    } catch (_) {
-      _connected = false;
-      notifyListeners();
-    }
-  }
-
-  void disconnect() {
-    _connected = false;
     notifyListeners();
   }
 
@@ -98,7 +79,7 @@ class ChatProvider extends ChangeNotifier {
       String contextText = '';
       if (_enableMemoryRetrieval) {
         try {
-          final docs = await api.queryMemory(input, limit: 3);
+          final docs = await backend.queryMemory(input, limit: 3);
           contextText = docs.join('\n');
           _retrievedContext = contextText;
         } catch (_) {}
@@ -123,7 +104,7 @@ class ChatProvider extends ChangeNotifier {
       }
       await sessionManager.updateSessionContent(_sessionId, _messages);
 
-      // Stream from backend
+      // Stream from local LLM service
       final history = _messages.length > 30
           ? _messages.sublist(_messages.length - 31, _messages.length - 1)
           : _messages.sublist(0, _messages.length - 1);
@@ -132,7 +113,7 @@ class ChatProvider extends ChangeNotifier {
       String currentText = '';
       String? actualTaskId = taskId;
 
-      await for (final chunk in api.completionStream(
+      await for (final chunk in backend.completionStream(
         text: input,
         history: history,
         systemPrompt: fullSystemPrompt,
@@ -218,8 +199,6 @@ class ChatProvider extends ChangeNotifier {
     final task = pipeline.getNextTaskForLLM();
     if (task != null && task.input != null) {
       pipeline.markLLMStarted(task.id);
-      // Note: sendMessage with taskId would be called from here
-      // but to avoid recursion, the UI listens to pipeline state
     }
     notifyListeners();
   }

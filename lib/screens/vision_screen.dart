@@ -62,13 +62,13 @@ class _VisionScreenState extends State<VisionScreen> {
                   onPressed: _capturing ? null : () async {
                     setState(() => _capturing = true);
                     try {
-                      final result = await chat.api.captureScreenshot();
+                      final result = await chat.backend.captureScreenshot();
                       setState(() {
-                        _screenshotResult = 'OCR: ${result['ocr_text'] ?? 'N/A'}\n\n'
+                        _screenshotResult = 'OCR: ${result['extracted_text'] ?? 'N/A'}\n\n'
                             'Caption: ${result['caption'] ?? 'N/A'}';
                       });
                       chat.visionPrompt = result['caption'] as String? ?? '';
-                      chat.ocrPrompt = result['ocr_text'] as String? ?? '';
+                      chat.ocrPrompt = result['extracted_text'] as String? ?? '';
                     } catch (e) {
                       setState(() => _screenshotResult = 'Error: $e');
                     }

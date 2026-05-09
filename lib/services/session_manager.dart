@@ -1,15 +1,15 @@
-import 'api_client.dart';
+import '../services/backend_service.dart';
 import '../models/message.dart';
 
-/// Manages chat session lifecycle (CRUD operations via backend API)
+/// Manages chat session lifecycle (CRUD via local BackendService).
 class SessionManager {
-  final ApiClient _api;
+  final BackendService _backend;
 
-  SessionManager(this._api);
+  SessionManager(this._backend);
 
   Future<String?> createNewSession() async {
     try {
-      return await _api.createSession();
+      return await _backend.createSession();
     } catch (e) {
       return null;
     }
@@ -18,13 +18,13 @@ class SessionManager {
   Future<void> updateSessionContent(String? sessionId, List<HistoryItem> history) async {
     if (sessionId == null) return;
     try {
-      await _api.updateSession(sessionId, history);
+      await _backend.updateSession(sessionId, history);
     } catch (_) {}
   }
 
   Future<Map<String, dynamic>?> fetchSessionContent(String sessionId) async {
     try {
-      return await _api.getSession(sessionId);
+      return await _backend.getSession(sessionId);
     } catch (_) {
       return null;
     }
@@ -32,7 +32,7 @@ class SessionManager {
 
   Future<List<Map<String, dynamic>>> listSessions() async {
     try {
-      return await _api.listSessions();
+      return await _backend.listSessions();
     } catch (_) {
       return [];
     }
@@ -40,7 +40,7 @@ class SessionManager {
 
   Future<void> deleteSession(String sessionId) async {
     try {
-      await _api.deleteSession(sessionId);
+      await _backend.deleteSession(sessionId);
     } catch (_) {}
   }
 }

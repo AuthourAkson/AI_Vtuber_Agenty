@@ -32,15 +32,6 @@ class ChatScreen extends StatelessWidget {
                       label: const Text('Stop'),
                       style: TextButton.styleFrom(foregroundColor: const Color(0xFFCF6679)),
                     ),
-                  IconButton(
-                    icon: Icon(
-                      chat.connected ? Icons.link : Icons.link_off,
-                      color: chat.connected ? const Color(0xFF4CAF50) : const Color(0xFF888888),
-                      size: 20,
-                    ),
-                    tooltip: chat.connected ? 'Connected' : 'Disconnected',
-                    onPressed: () => chat.connected ? chat.disconnect() : chat.connectToBackend(),
-                  ),
                 ],
               ),
             ),

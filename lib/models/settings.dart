@@ -54,7 +54,7 @@ class AppSettings {
     this.apiRelayApiKey = '',
     this.apiRelayModel = '',
     this.apiRelayEnabled = true,
-    this.backendUrl = 'http://localhost:8000',
+    this.backendUrl = '', // No external backend — self-contained
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {

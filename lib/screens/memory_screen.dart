@@ -95,7 +95,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
                                 IconButton(
                                   icon: Icon(Icons.delete_outline, color: Colors.red[400], size: 18),
                                   onPressed: () async {
-                                    await chat.api.deleteSession(id);
+                                    await chat.backend.deleteSession(id);
                                     _loadSessions();
                                   },
                                 ),
@@ -117,7 +117,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
     setState(() => _loading = true);
     try {
       final chat = context.read<ChatProvider>();
-      _sessions = await chat.api.listSessions();
+      _sessions = await chat.backend.listSessions();
     } catch (_) {}
     setState(() => _loading = false);
   }
