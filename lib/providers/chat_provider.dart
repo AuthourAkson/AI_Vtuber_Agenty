@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message.dart';
 import '../models/task.dart';
 import '../services/backend_service.dart';
@@ -75,6 +76,13 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Sync LLM config + system prompt from saved settings before making API call
+      final settings = await backend.getSettings();
+      if (settings.systemPrompt.isNotEmpty) {
+        _systemPrompt = settings.systemPrompt;
+      }
+      _enableMemoryRetrieval = settings.enableMemoryRetrieval;
+
       // Query memory context if enabled
       String contextText = '';
       if (_enableMemoryRetrieval) {
@@ -101,6 +109,11 @@ class ChatProvider extends ChangeNotifier {
       // Create session if needed
       if (_sessionId == null) {
         _sessionId = await sessionManager.createNewSession();
+        // Persist new session as last active
+        if (_sessionId != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('last_session_id', _sessionId!);
+        }
       }
       await sessionManager.updateSessionContent(_sessionId, _messages);
 
@@ -175,10 +188,31 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Initialize from saved state: load settings + auto-restore last session.
+  Future<void> initFromSavedState() async {
+    try {
+      final settings = await backend.getSettings();
+      if (settings.systemPrompt.isNotEmpty) {
+        _systemPrompt = settings.systemPrompt;
+      }
+      _enableMemoryRetrieval = settings.enableMemoryRetrieval;
+
+      // Auto-load last session from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final lastId = prefs.getString('last_session_id');
+      if (lastId != null && lastId.isNotEmpty) {
+        await setSessionId(lastId);
+      }
+    } catch (_) {}
+  }
+
   /// Load a session
   Future<void> setSessionId(String? id) async {
     _sessionId = id;
     if (id != null) {
+      // Persist as last active session
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_session_id', id);
       try {
         final session = await sessionManager.fetchSessionContent(id);
         if (session != null) {

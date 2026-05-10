@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
@@ -10,25 +10,11 @@ import 'providers/settings_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Platform-specific initialization
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    await windowManager.ensureInitialized();
-
-    // Window options for modern rounded-corners frameless look
-    final windowOptions = WindowOptions(
-      size: const Size(1400, 900),
-      minimumSize: const Size(1200, 800),
-      center: true,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: false,
-    );
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
-    });
-  }
+  // Initialize acrylic/mica effect on Windows
+  await acrylic.Window.initialize();
+  await acrylic.Window.setEffect(
+    effect: acrylic.WindowEffect.mica,
+  );
 
   // Load saved preferences
   await SharedPreferences.getInstance();
@@ -42,4 +28,13 @@ void main() async {
       child: const MyApp(),
     ),
   );
+
+  // Configure frameless window with bitsdojo_window
+  doWhenWindowReady(() {
+    appWindow.size = const Size(1400, 900);
+    appWindow.minSize = const Size(1200, 800);
+    appWindow.alignment = Alignment.center;
+    appWindow.title = 'AI VTuber Agent';
+    appWindow.show();
+  });
 }

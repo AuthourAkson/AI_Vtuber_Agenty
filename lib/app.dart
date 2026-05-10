@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'screens/home_screen.dart';
 
 class MyApp extends StatelessWidget {
@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(0xCC121212),
         primaryColor: const Color(0xFF4CAF50),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF4CAF50),
@@ -21,9 +21,9 @@ class MyApp extends StatelessWidget {
           error: Color(0xFFCF6679),
         ),
         cardColor: const Color(0xFF1E1E1E),
-        dividerColor: const Color(0xFF2C2C2C),
+        dividerColor: const Color(0x20FFFFFF),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1A1A1A),
+          backgroundColor: Color(0xCC1A1A1A),
           elevation: 0,
         ),
       ),
@@ -32,118 +32,56 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// App shell with custom window title bar for frameless mode.
-class AppShell extends StatefulWidget {
+/// App shell with bitsdojo_window native title bar buttons + Mica background
+class AppShell extends StatelessWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
-}
-
-class _AppShellState extends State<AppShell> with WindowListener {
-  bool _isMaximized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    windowManager.addListener(this);
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    super.dispose();
-  }
-
-  @override
-  void onWindowMaximize() {
-    setState(() => _isMaximized = true);
-  }
-
-  @override
-  void onWindowUnmaximize() {
-    setState(() => _isMaximized = false);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Custom drag-to-move title bar
-        _buildTitleBar(context),
-        // Main content
-        const Expanded(child: HomeScreen()),
-      ],
-    );
-  }
-
-  Widget _buildTitleBar(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onDoubleTap: () => windowManager.maximizeOrRestore(),
-      onPanStart: (_) => windowManager.startDragging(),
-      child: Container(
-        height: 32,
-        decoration: const BoxDecoration(
-          color: Color(0xFF1A1A1A),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
           children: [
-            // Window title
-            const Padding(
-              padding: EdgeInsets.only(left: 12),
-              child: Text(
-                'AI VTuber Agent',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF888888),
-                ),
-              ),
-            ),
-            const Spacer(),
-            // Window control buttons
-            _windowButton(
-              icon: Icons.minimize,
-              onTap: () => windowManager.minimize(),
-              tooltip: 'Minimize',
-            ),
-            _windowButton(
-              icon: _isMaximized ? Icons.filter_none : Icons.crop_square,
-              onTap: () => windowManager.maximizeOrRestore(),
-              tooltip: _isMaximized ? 'Restore' : 'Maximize',
-            ),
-            _windowButton(
-              icon: Icons.close,
-              onTap: () => windowManager.close(),
-              tooltip: 'Close',
-              isClose: true,
-            ),
+            // Custom title bar with bitsdojo_window native buttons
+            _buildTitleBar(),
+            // Main content
+            const Expanded(child: HomeScreen()),
           ],
         ),
       ),
     );
   }
 
-  Widget _windowButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    required String tooltip,
-    bool isClose = false,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          width: 46,
-          height: 32,
-          child: Icon(
-            icon,
-            size: 14,
-            color: isClose ? const Color(0xFF888888) : const Color(0xFF666666),
+  Widget _buildTitleBar() {
+    return Container(
+      height: 32,
+      color: const Color(0xCC1A1A1A),
+      child: Row(
+        children: [
+          // Draggable area + window title
+          Expanded(
+            child: MoveWindow(
+              child: Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 12),
+                child: const Text(
+                  'AI VTuber Agent',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF888888),
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+          // Native window buttons from bitsdojo_window
+          MinimizeWindowButton(),
+          MaximizeWindowButton(),
+          CloseWindowButton(),
+        ],
       ),
     );
   }

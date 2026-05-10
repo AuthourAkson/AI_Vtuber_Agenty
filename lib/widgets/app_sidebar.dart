@@ -12,13 +12,14 @@ class AppSidebar extends StatelessWidget {
   });
 
   static const _testPipeline = ['home', 'character', 'memory'];
-  static const _footer = ['input', 'vision', 'tts', 'pipeline', 'stream', 'settings'];
+  static const _footer = ['input', 'llm', 'vision', 'tts', 'pipeline', 'stream', 'settings'];
 
   static const _icons = {
     'home': Icons.home,
     'character': Icons.person,
     'memory': Icons.memory,
     'input': Icons.mic,
+    'llm': Icons.psychology,
     'vision': Icons.remove_red_eye,
     'tts': Icons.record_voice_over,
     'pipeline': Icons.square_foot,
@@ -31,6 +32,7 @@ class AppSidebar extends StatelessWidget {
     'character': 'Character',
     'memory': 'Memory',
     'input': 'Input',
+    'llm': 'LLM',
     'vision': 'Vision',
     'tts': 'TTS',
     'pipeline': 'Pipeline',

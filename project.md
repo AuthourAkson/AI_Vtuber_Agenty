@@ -49,12 +49,14 @@
 
 **技术栈：**
 - **Frontend:** Flutter Desktop (Windows .exe) + Provider state management
+- **Window:** bitsdojo_window (frameless native buttons) + flutter_acrylic (Mica 毛玻璃)
+- **UI:** fluent_ui (Microsoft Fluent Design System — NavigationView 侧边栏)
 - **Backend:** 自包含 Dart 服务层（BackendService），无外部 Python 依赖
 - **LLM:** 直接调用 OpenAI 兼容 API（SiliconFlow, OpenRouter, Anthropic, Google, Ollama）
 - **TTS:** edge-tts CLI（子进程） + 本地音频缓存
-- **Storage:** `D:\AiVtuber_Agent_profile\`（Steam 风格本地存档，可备份到云端）
+- **Storage:** `D:\\AiVtuber_Agent_profile\\`（Steam 风格本地存档，可备份到云端）
 
-**重要：本项目完全独立，不修改或依赖 D:\LocalAIVtuber2**
+**重要：本项目完全独立，不修改或依赖 D:\\LocalAIVtuber2**
 
 ---
 
@@ -108,6 +110,7 @@ AiVtuber_Agent/
 │   │
 │   └── widgets/                        可复用组件
 │       ├── app_sidebar.dart            侧边栏导航（图标 + Tooltip）
+│       ├── api_sidebar.dart            ★ API 设置右侧栏（Base URL / API Key / Model）
 │       ├── chat_bubble.dart            聊天气泡（用户/AI 双色）
 │       └── chat_input.dart             聊天输入框（含发送按钮）
 │
@@ -305,7 +308,16 @@ Task: task_finished (all playback done)
 - [x] ✅ Bug 修复（memory regex / profileDir 私有访问 / updateBackendUrl / 窗口圆角）
 - [x] ✅ Windows 11 原生圆角（DWMWA_WINDOW_CORNER_PREFERENCE）
 - [x] ✅ 自定义标题栏（window_manager TitleBarStyle.hidden + Flutter 拖拽栏）
-- [ ] ⬜ Flutter pub get + 编译验证（需 Windows 终端，WSL 环境受限）
+- [x] ✅ 窗口圆角 overlay 修复（WS_THICKFRAME 保留 + DwmExtendFrameIntoClientArea）
+- [x] ✅ 标题栏文字下划线修复
+- [x] ✅ 聊天页面 API 设置侧边栏（Base URL + API Key + Model + Test Connection）
+- [x] ✅ 编译验证 & 运行成功（Windows 11）
+- [x] ✅ SystemPrompt 同步到对话（ChatProvider 每次发消息前加载 settings）
+- [x] ✅ 启动自动恢复上次会话（SharedPreferences 记录 last_session_id）
+- [x] ✅ UI 现代化改造：bitsdojo_window + flutter_acrylic（Mica 毛玻璃）
+- [x] ✅ 退回 Material3（移除 fluent_ui 依赖 — API 不稳定）
+- [x] ✅ 真正四角圆端：BDW_CUSTOM_FRAME frameless → DWM 自动圆角 + ClipRRect 内容圆角
+- [x] ✅ Flutter pub get + 编译验证（需 Windows 终端，WSL 环境受限）
 - [ ] ⬜ Live2D 角色渲染集成
 - [ ] ⬜ TTS 音频播放集成
 - [ ] ⬜ 端到端测试（聊天 + 记忆 + 截图）
@@ -341,26 +353,50 @@ Task: task_finished (all playback done)
 
 ---
 
-## 最近修复 (2026-05-10)
+## 最终变更汇总 (2026-05-11)
 
 ### Bug 修复
-1. **memory_service.dart:86** — Dart raw string 中单引号转义失效，`r'...\\'\\...'` 被提前截断
-   - 修复: 改用非 raw 双引号字符串 `"[...]"` 并正确转义反斜杠
-2. **tts_service.dart:12 / vision_service.dart:11** — `StorageService._profileDir` 为私有成员，外部类无法访问
-   - 修复: 添加 `static String get profileDir => _profileDir` 公开 getter
-3. **settings_screen.dart:57** — `SettingsProvider` 缺少 `updateBackendUrl` 方法
-   - 修复: 在 SettingsProvider 添加 `updateBackendUrl(String url)` 方法
+| # | 问题 | 文件 |
+|---|------|------|
+| B6 | window_manager API 变更 maximizeOrRestore | lib/app.dart |
+| B7 | DWM 类型转换 static_cast | windows/runner/flutter_window.cpp |
+| B8 | InkWell 缺少 Material 祖先 | lib/app.dart |
+| B9 | RenderFlex 溢出（级联） | 自动修复 |
+| B10 | DWM 圆角未生效（初始修复） | flutter_window.cpp |
+| B11 | overlay + 四角矩形（不完整修复） | flutter_window.cpp |
+| B12 | 标题栏下划线 | lib/app.dart |
+| B13 | ChatProvider LLMService 未同步 API 设置 | lib/providers/chat_provider.dart |
+| B14 | SystemPrompt 未同步到对话 | lib/providers/chat_provider.dart |
+| B15 | 启动未自动恢复上次会话 | chat_provider.dart + home_screen.dart |
+| B16 | C4819 MSVC 编码警告 | CMakeLists.txt + 源文件 |
 
-### 窗口样式修复（四角圆端 + 无上边框）
-- **Win32 原生层** (`flutter_window.cpp`): 添加 `DWMWA_WINDOW_CORNER_PREFERENCE` = `DWMWCP_ROUND`，启用 Windows 11 原生圆角
-- **Flutter 层** (`main.dart`): 通过 `window_manager` 设置 `TitleBarStyle.hidden` + `windowButtonVisibility: false`，隐藏原生标题栏
-- **自定义标题栏** (`app.dart`): 新增 `AppShell` 组件，包含可拖拽标题栏 + 最小化/最大化/关闭按钮，双击切换全屏
+### 功能新增
+| 功能 | 文件 |
+|------|------|
+| 聊天页 API 侧边栏（Base URL/Key/Model + Test + Presets） | lib/widgets/api_sidebar.dart（新） |
+| 启动自动加载上次对话历史 | lib/providers/chat_provider.dart |
+| LLM 侧边栏入口 | lib/widgets/app_sidebar.dart |
 
-### 用户验证步骤
+### UI 现代化
+| 改动 | 说明 |
+|------|------|
+| window_manager → bitsdojo_window | 原生窗口按钮 + frameless |
+| + flutter_acrylic | Windows 11 Mica 毛玻璃效果 |
+| + bitsdojo_window_configure(BDW_CUSTOM_FRAME) | main.cpp — 触发 DWM 自动圆角 |
+| + ClipRRect(r=12) | app.dart — 内容区圆角 |
+| fluent_ui → Material3 | 回退（fluent_ui API 不稳定） |
+
+### 技术栈（最终）
+```
+Material3 + bitsdojo_window + flutter_acrylic
+  ↓
+Frameless Window → DWM 自动圆角 + Mica 毛玻璃 + 原生窗口按钮
+```
+
+### 编译 & 运行
 ```bash
-# 在 Windows 终端：
 cd D:\AiVtuber_Agent
-flutter clean          # 清理旧构建缓存
-flutter pub get        # 拉取依赖
-flutter run -d windows # 编译运行
+flutter clean
+flutter pub get
+flutter run -d windows
 ```
