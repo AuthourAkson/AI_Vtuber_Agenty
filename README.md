@@ -3,6 +3,7 @@
 A Flutter desktop application that reproduces and extends LocalAIVtuber2 — a fully local AI-powered virtual YouTuber.
 
 ## Features
+
 - 10-page sidebar navigation (Chat, LLM, Character, Memory, Vision, TTS, Pipeline, Stream, Settings)
 - Chat interface with streaming LLM responses (direct OpenAI-compatible API)
 - Live2D character display (planned)
@@ -13,6 +14,7 @@ A Flutter desktop application that reproduces and extends LocalAIVtuber2 — a f
 - YouTube live chat integration (planned)
 
 ## Stack
+
 - **Frontend:** Flutter Desktop (Windows)
 - **Backend:** Self-contained Dart services (no external server needed)
 - **State:** Provider (ChangeNotifier)
@@ -41,6 +43,7 @@ Configure your API relay in **LLM Settings** (base URL, API key, model).
 ## Profile Data
 
 All user data stored at `D:\AiVtuber_Agent_profile\`:
+
 ```
 D:\AiVtuber_Agent_profile\
 ├── settings.json          # LLM config, TTS voice, character settings
@@ -60,3 +63,5 @@ flutter pub get
 flutter run -d windows
 flutter build windows     # Release .exe
 ```
+
+ade
