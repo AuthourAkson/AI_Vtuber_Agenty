@@ -1,8 +1,17 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <dwmapi.h>
 
 #include "flutter/generated_plugin_registrant.h"
+
+// Windows 11 DWM corner preference (not in older SDK headers)
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 1
+#endif
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -26,6 +35,14 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+
+  // Enable Windows 11 rounded corners via DWM
+  HWND hwnd = GetHandle();
+  if (hwnd) {
+    DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND;
+    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
+                          &preference, sizeof(preference));
+  }
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();

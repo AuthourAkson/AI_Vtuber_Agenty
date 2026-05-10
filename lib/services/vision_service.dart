@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'storage_service.dart';
+import 'dart:io';
 
 /// Vision service: capture screenshot and perform OCR.
 /// Uses mss (via Python subprocess) for capture + easyocr for OCR.
 class VisionService {
   final StorageService _storage;
-  final _cacheDir = p.join(StorageService._profileDir, 'screenshots');
+  final _cacheDir = p.join(StorageService.profileDir, 'screenshots');
 
   VisionService(this._storage) {
     final dir = Directory(_cacheDir);

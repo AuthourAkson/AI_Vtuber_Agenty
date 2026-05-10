@@ -302,7 +302,10 @@ Task: task_finished (all playback done)
 - [x] ✅ 通用设置页
 - [x] ✅ Windows 原生配置（CMake, runner）
 - [x] ✅ Git 仓库初始化 + GitHub 推送
-- [ ] ⬜ Flutter pub get + 编译验证（Windows 终端）
+- [x] ✅ Bug 修复（memory regex / profileDir 私有访问 / updateBackendUrl / 窗口圆角）
+- [x] ✅ Windows 11 原生圆角（DWMWA_WINDOW_CORNER_PREFERENCE）
+- [x] ✅ 自定义标题栏（window_manager TitleBarStyle.hidden + Flutter 拖拽栏）
+- [ ] ⬜ Flutter pub get + 编译验证（需 Windows 终端，WSL 环境受限）
 - [ ] ⬜ Live2D 角色渲染集成
 - [ ] ⬜ TTS 音频播放集成
 - [ ] ⬜ 端到端测试（聊天 + 记忆 + 截图）
@@ -335,3 +338,29 @@ Task: task_finished (all playback done)
 *此文档由 Hermes Agent 维护。*
 *项目完全自包含，不依赖 LocalAIVtuber2 后端。*
 *数据存储路径：D:\AiVtuber_Agent_profile\（Steam 风格本地存档）*
+
+---
+
+## 最近修复 (2026-05-10)
+
+### Bug 修复
+1. **memory_service.dart:86** — Dart raw string 中单引号转义失效，`r'...\\'\\...'` 被提前截断
+   - 修复: 改用非 raw 双引号字符串 `"[...]"` 并正确转义反斜杠
+2. **tts_service.dart:12 / vision_service.dart:11** — `StorageService._profileDir` 为私有成员，外部类无法访问
+   - 修复: 添加 `static String get profileDir => _profileDir` 公开 getter
+3. **settings_screen.dart:57** — `SettingsProvider` 缺少 `updateBackendUrl` 方法
+   - 修复: 在 SettingsProvider 添加 `updateBackendUrl(String url)` 方法
+
+### 窗口样式修复（四角圆端 + 无上边框）
+- **Win32 原生层** (`flutter_window.cpp`): 添加 `DWMWA_WINDOW_CORNER_PREFERENCE` = `DWMWCP_ROUND`，启用 Windows 11 原生圆角
+- **Flutter 层** (`main.dart`): 通过 `window_manager` 设置 `TitleBarStyle.hidden` + `windowButtonVisibility: false`，隐藏原生标题栏
+- **自定义标题栏** (`app.dart`): 新增 `AppShell` 组件，包含可拖拽标题栏 + 最小化/最大化/关闭按钮，双击切换全屏
+
+### 用户验证步骤
+```bash
+# 在 Windows 终端：
+cd D:\AiVtuber_Agent
+flutter clean          # 清理旧构建缓存
+flutter pub get        # 拉取依赖
+flutter run -d windows # 编译运行
+```

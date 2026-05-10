@@ -35,6 +35,11 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateBackendUrl(String url) {
+    _settings.backendUrl = url;
+    saveSettings(_settings);
+  }
+
   Future<void> saveSettings(AppSettings newSettings) async {
     // Save to local profile (D:\AiVtuber_Agent_profile\settings.json)
     try {

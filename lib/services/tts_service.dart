@@ -9,7 +9,7 @@ class TTSService {
   final StorageService _storage;
 
   String _voice = 'zh-CN-XiaoxiaoNeural';
-  final _cacheDir = p.join(StorageService._profileDir, 'tts_cache');
+  final _cacheDir = p.join(StorageService.profileDir, 'tts_cache');
 
   TTSService(this._storage) {
     _ensureCacheDir();

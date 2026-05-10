@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 /// Mimics Steam-style local save + optional cloud sync.
 class StorageService {
   static const _profileDir = r'D:\AiVtuber_Agent_profile';
+  static String get profileDir => _profileDir;
   static const _settingsFile = 'settings.json';
   static const _sessionsDir = 'sessions';
 

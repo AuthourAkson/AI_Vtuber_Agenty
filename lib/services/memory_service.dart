@@ -83,10 +83,10 @@ class MemoryService {
       '能', '可以', '如果', '因为', '所以', '虽然', '但是', '而且',
     };
     final words = text
-        .split(RegExp(r'[\s,，.。!！?？;；:：\'\"\(\)\[\]【】《》\n\r\t]+'))
-        .where((w) => w.length > 1 && !stopWords.contains(w.toLowerCase()))
-        .toSet()
-        .toList();
+      .split(RegExp("[\\s,，.。!！?？;；:：()\\[\\]【】《》'\"\\n\\r\\t]+"))
+      .where((w) => w.length > 1 && !stopWords.contains(w.toLowerCase()))
+      .toSet()
+      .toList();
     return words;
   }
 

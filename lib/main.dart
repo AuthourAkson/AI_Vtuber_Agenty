@@ -13,9 +13,21 @@ void main() async {
   // Platform-specific initialization
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
-    await windowManager.setMinimumSize(const Size(1200, 800));
-    await windowManager.setSize(const Size(1400, 900));
-    await windowManager.center();
+
+    // Window options for modern rounded-corners frameless look
+    final windowOptions = WindowOptions(
+      size: const Size(1400, 900),
+      minimumSize: const Size(1200, 800),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
 
   // Load saved preferences
