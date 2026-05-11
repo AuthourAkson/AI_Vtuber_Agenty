@@ -39,10 +39,10 @@ class Live2DView extends StatefulWidget {
   });
 
   @override
-  State<Live2DView> createState() => _Live2DViewState();
+  State<Live2DView> createState() => Live2DViewState();
 }
 
-class _Live2DViewState extends State<Live2DView> {
+class Live2DViewState extends State<Live2DView> {
   InAppWebViewController? _controller;
   bool _ready = false;
   bool _loading = true;
@@ -145,6 +145,14 @@ class _Live2DViewState extends State<Live2DView> {
     final escaped = name.replaceAll("'", "\\'");
     await _controller!.evaluateJavascript(
       source: "setExpression('$escaped')"
+    );
+  }
+
+  /// Set eye target from global mouse tracking (Dart→Win32→JS)
+  Future<void> setEyeTarget(double ox, double oy) async {
+    if (_controller == null || !_ready) return;
+    await _controller!.evaluateJavascript(
+      source: 'setEyeTarget($ox, $oy)'
     );
   }
 
