@@ -29,6 +29,7 @@ dependencies:
   record: ^6.2.0
   flutter_audio_capture: 1.1.12
   flutter_inappwebview: ^6.0.0
+  ffi: ^2.1.0
   desktop_multi_window: ^0.3.0
   window_manager: ^0.5.1
 

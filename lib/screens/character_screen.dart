@@ -429,8 +429,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   void _openPetMode(String modelPath, AppSettings s) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PetModeOverlay(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        pageBuilder: (_, __, ___) => PetModeOverlay(
           modelPath: modelPath,
           positionX: s.live2DXPosition,
           positionY: s.live2DYPosition,

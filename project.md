@@ -489,3 +489,42 @@ flutter run -d windows
 | B20 | desktop_multi_window API (WindowController) | character_screen.dart, overlay_main.dart |
 | B21 | cubism4.min.js 加载顺序 → PIXI.live2d undefined | renderer.html |
 | B22 | window_manager 在子窗口不可用 | overlay_main.dart |
+
+---
+
+## 变更汇总 (2026-05-12 晚)
+
+### Pet Mode 全屏覆盖 + 拖拽 + 眼球追踪
+| 文件 | 说明 |
+|------|------|
+| `lib/widgets/pet_mode_overlay.dart` | **新增** 全屏透明覆盖层（替代 desktop_multi_window 子窗口） |
+| `assets/live2d/renderer.html` | **重写** JS 原生 mousemove 眼球追踪 (ParamEyeBallX/Y, ParamAngleX/Y) + 拖拽逻辑 |
+| `lib/widgets/live2d_view.dart` | + setEyeTarget, + setMouseTracking, Live2DViewState 公开 |
+| `lib/screens/character_screen.dart` | + Launch Pet Mode 按钮, PageRouteBuilder(opaque: false) 透明路由 |
+| `pubspec.yaml` | + ffi（备用） |
+
+### 架构（最终）
+```
+主窗口 (AI VTuber Agent)
+┌─────────────────────────────────┐
+│  正常 UI (Chat/Settings/...)    │
+│                                 │
+│  Character Settings:            │
+│    [Launch Pet Mode] ──push──→  │  PetModeOverlay (全屏透明覆盖)
+│                                 │  ┌─────────────────────────┐
+│                                 │  │ Live2DView (WebView)    │
+│                                 │  │  👀 JS原生mousemove追踪  │
+│                                 │  │  ✋ 拖拽模型位置         │
+│                                 │  │  💬 右键→透明对话框     │
+│                                 │  │  [Exit Pet Mode]        │
+│                                 │  └─────────────────────────┘
+│                                 │
+└──── Live2DServer :48888 ────────┘
+```
+
+### Bug 修复 (第四批次)
+| # | 问题 | 文件 |
+|---|------|------|
+| B23 | desktop_multi_window 子窗口 plugin 未注册 | → PetModeOverlay 替代 |
+| B24 | Pet 模式白底 | PageRouteBuilder(opaque: false) |
+| B25 | 眼球追踪卡顿 | Dart GetCursorPos → JS 原生 mousemove |
