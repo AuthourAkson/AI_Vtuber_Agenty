@@ -6,9 +6,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
+import 'overlay_main.dart';
+import 'services/live2d_server.dart';
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Check if this is the overlay sub-window
+  if (args.isNotEmpty) {
+    overlayMain(args);
+    return;
+  }
+
+  // ─── Main app window ───
+
+  // Start Live2D HTTP file server (shared by main + overlay)
+  await Live2DServer.start();
 
   // Initialize acrylic/mica effect on Windows
   await acrylic.Window.initialize();

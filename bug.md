@@ -190,13 +190,58 @@ SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
 
 ## ⬜ 待修复
 
-D:\AiVtuber_Agent>flutter run -d windows
-Launching lib\main.dart on Windows in debug mode...
-D:\AiVtuber_Agent\windows\runner\main.cpp(1,1): error C2220: 以下警告被视为错误 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
-D:\AiVtuber_Agent\windows\runner\main.cpp(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
-Building Windows application...                                    61.3s
-Error: Build process failed.
+Destroyed managed flutter window: b8edf047-05c5-4198-9f29-5a348967057a
+[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method createInAppWebView on channel com.pichillilorenzo/flutter_inappwebview_manager)
+#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364:7)
+<asynchronous suspension>
+#1      CustomPlatformViewController.initialize (package:flutter_inappwebview_windows/src/in_app_webview/custom_platform_view.dart:126:19)
+<asynchronous suspension>
 
 ---
+
+## ✅ 已修复 (2026-05-11 第三批次)
+
+### Bug #B17: file_picker v11 API 变更 — FilePicker.platform 不存在
+
+**日期**: 2026-05-11
+
+**现象**:
+
+```
+lib/screens/character_screen.dart(70,37): error G75B77105: Member not found: 'platform'.
+```
+
+**根因**: `file_picker` 11.0.2 移除了 `FilePicker.platform.pickFiles()` 中的 `platform` getter。
+
+**修复**: 改为直接调用静态方法 `FilePicker.pickFiles(...)`
+
+**受影响文件**: `lib/screens/character_screen.dart:70`
+
+---
+
+### Bug #B18: WebView file:// CORS — 模型加载失败 (Status 0 Network Error)
+
+**日期**: 2026-05-11
+
+**现象**:
+
+```
+[XHRLoader] Failed to load resource as json (Status 0):
+  file:///D:/AiVtuber_Agent_profile/models/live2d/Amiya/Amiya.model3.json
+Live2D load warning: _e: Network error.
+```
+
+Live2D 容器一片空白，模型无法加载。
+
+**根因**: Edge WebView2 安全策略禁止从 `file://` 页面通过 XHR 访问其他 `file://` 路径。
+pixi-live2d-display 内部使用 XHR 加载 .model3.json，触发 CORS 限制。
+
+**修复**: 
+
+- 引入 `InAppLocalhostServer`（localhost:48888），以 `D:\AiVtuber_Agent_profile` 为根目录
+- renderer.html 和模型文件统一通过 HTTP 加载（同源，无 CORS 限制）
+- 模型路径从 `file:///D:/...` 转为 `http://localhost:48888/models/live2d/...`
+
+**受影响文件**: `lib/widgets/live2d_view.dart`
 
 *最后更新: 2026-05-11*

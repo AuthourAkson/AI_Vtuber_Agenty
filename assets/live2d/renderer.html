@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live2D Desktop Pet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: transparent;
+  }
+  canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* Chat dialog — floating transparent bubble */
+  #chat-dialog {
+    display: none;
+    position: fixed;
+    min-width: 260px;
+    max-width: 400px;
+    max-height: 300px;
+    background: rgba(20, 20, 20, 0.85);
+    border: 1px solid rgba(76, 175, 80, 0.4);
+    border-radius: 12px;
+    padding: 10px;
+    color: #ccc;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 12px;
+    z-index: 9999;
+    overflow-y: auto;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+  #chat-dialog .header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    cursor: move;
+  }
+  #chat-dialog .title { color: #4CAF50; font-weight: 600; font-size: 13px; }
+  #chat-dialog .close-btn {
+    cursor: pointer; color: #888; font-size: 16px; line-height: 1;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  #chat-dialog .close-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+  #chat-dialog .msg { margin-bottom: 5px; padding: 3px 0; }
+  #chat-dialog .msg.user { color: #64B5F6; }
+  #chat-dialog .msg.assistant { color: #A5D6A7; }
+  #chat-dialog .msg .label { font-size: 10px; opacity: 0.5; margin-bottom: 1px; text-transform: uppercase; }
+  #chat-dialog .msg .text { line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<canvas id="live2d-canvas"></canvas>
+
+<div id="chat-dialog">
+  <div class="header">
+    <span class="title">Live2D Chat</span>
+    <span class="close-btn" onclick="closeChatDialog()">✕</span>
+  </div>
+  <div id="chat-messages"></div>
+</div>
+
+<script src="pixi.min.js"></script>
+<script src="live2dcubismcore.min.js"></script>
+<script src="live2d.min.js"></script>
+<script src="cubism4.min.js"></script>
+
+<script>
+// ─── Global state ───
+let app = null;
+let model = null;
+let modelReady = false;
+let currentModelPath = null;
+let modelScale = 0.16;
+let modelX = 0.5;
+let modelY = 0.5;
+
+// Tracking state
+let mouseTracking = false;
+let mouseX = 0.5;
+let mouseY = 0.5;
+let isDesktopMode = false;
+
+// Chat dialog drag state
+let dialogDragging = false;
+let dialogOffsetX = 0;
+let dialogOffsetY = 0;
+
+// ─── Message to Flutter ───
+function postToFlutter(type, data) {
+  try {
+    if (window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('onLive2DEvent', JSON.stringify({type: type, data: data || {}}));
+    }
+  } catch(e) {
+    console.log('Live2D event:', type, data);
+  }
+}
+
+// ─── Initialize PixiJS ───
+function initPixi() {
+  if (app) return;
+  const canvas = document.getElementById('live2d-canvas');
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  app = new PIXI.Application({
+    view: canvas,
+    width: w,
+    height: h,
+    backgroundAlpha: 0,
+    antialias: true,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+  });
+
+  window.addEventListener('resize', () => {
+    if (!app) return;
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    if (model) updateModelTransform();
+  });
+
+  // ─── Mouse tracking for eye movement ───
+  document.addEventListener('mousemove', (e) => {
+    if (!mouseTracking || !modelReady || !model) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    // Normalized offset from center: -1 to 1
+    const offsetX = (e.clientX - w / 2) / (w / 2);
+    const offsetY = -(e.clientY - h / 2) / (h / 2);
+
+    mouseX = offsetX;
+    mouseY = offsetY;
+
+    try {
+      const core = model.internalModel.coreModel;
+      // Head rotation (subtle)
+      core.setParameterValueById('ParamAngleX', offsetX * 30);
+      core.setParameterValueById('ParamAngleY', offsetY * 30);
+      // Eye direction (direct)
+      core.setParameterValueById('ParamEyeBallX', offsetX);
+      core.setParameterValueById('ParamEyeBallY', offsetY);
+    } catch(e) {}
+  });
+
+  // Right-click → show chat dialog
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    postToFlutter('rightClick', {
+      screenX: e.screenX, screenY: e.screenY,
+      clientX: e.clientX, clientY: e.clientY
+    });
+  });
+
+  // Chat dialog drag
+  const dialog = document.getElementById('chat-dialog');
+  const header = dialog.querySelector('.header');
+  header.addEventListener('mousedown', (e) => {
+    dialogDragging = true;
+    dialogOffsetX = e.clientX - dialog.offsetLeft;
+    dialogOffsetY = e.clientY - dialog.offsetTop;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dialogDragging) return;
+    dialog.style.left = (e.clientX - dialogOffsetX) + 'px';
+    dialog.style.top = (e.clientY - dialogOffsetY) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dialogDragging = false; });
+}
+
+// ─── Load Model ───
+function loadModel(path, scale, xPos, yPos) {
+  if (!app) initPixi();
+
+  if (model) {
+    try {
+      app.stage.removeChild(model);
+      model.destroy({ children: true, texture: true, baseTexture: true });
+    } catch(e) {}
+    model = null;
+    modelReady = false;
+  }
+
+  if (!path) {
+    postToFlutter('modelUnloaded', {});
+    return;
+  }
+
+  currentModelPath = path;
+  modelScale = scale || 0.16;
+
+  try {
+    const { Live2DModel } = PIXI.live2d;
+    Live2DModel.from(path, {
+      onError: function(err) { console.warn('Live2D load warning:', err); },
+      autoInteract: false
+    }).then(function(l2dModel) {
+      model = l2dModel;
+      model.anchor.set(0.5, 0.5);
+      updateModelTransform();
+      app.stage.addChild(model);
+      modelReady = true;
+      postToFlutter('modelLoaded', {path: path});
+      console.log('Live2D model loaded:', path);
+
+      // Start idle motions
+      if (model.internalModel.motionManager) {
+        model.internalModel.motionManager.startRandomMotion('Idle');
+      }
+    }).catch(function(err) {
+      postToFlutter('modelError', {error: String(err)});
+      console.error('Failed to load Live2D model:', err);
+    });
+  } catch(err) {
+    postToFlutter('modelError', {error: String(err)});
+  }
+}
+
+// ─── Update transform ───
+function updateModelTransform() {
+  if (!model || !app) return;
+  const w = app.renderer.width;
+  const h = app.renderer.height;
+  model.x = modelX * w;
+  model.y = modelY * h;
+  model.scale.set(modelScale, modelScale);
+}
+
+// ─── API for Flutter ───
+function setModelPosition(xPercent, yPercent) {
+  modelX = xPercent / 100;
+  modelY = yPercent / 100;
+  updateModelTransform();
+}
+
+function setModelScale(scale) {
+  modelScale = scale;
+  updateModelTransform();
+}
+
+// Enable/disable eye tracking
+function setMouseTracking(enabled) {
+  mouseTracking = enabled;
+}
+
+// Mouth sync (0-1)
+function setMouthOpen(value) {
+  if (!modelReady || !model) return;
+  try {
+    model.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', value);
+  } catch(e) {}
+}
+
+// Set expression by name
+function setExpression(expression) {
+  if (!modelReady || !model) return;
+  try {
+    model.internalModel.motionManager.expressionManager.setExpression(expression);
+  } catch(e) {}
+}
+
+// ─── Chat Dialog ───
+function showChatDialog(messages) {
+  const dialog = document.getElementById('chat-dialog');
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = '';
+  if (messages && messages.length > 0) {
+    messages.forEach(function(msg) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (msg.role || 'assistant');
+      const roleLabel = (msg.role === 'user') ? 'YOU' : 'AI';
+      div.innerHTML = '<div class="label">' + roleLabel + '</div><div class="text">' + escapeHtml(msg.content || msg.text || '') + '</div>';
+      container.appendChild(div);
+    });
+  } else {
+    container.innerHTML = '<div class="msg assistant"><div class="text" style="opacity:0.5">No messages yet...</div></div>';
+  }
+  dialog.style.display = 'block';
+  if (!dialog.style.left) {
+    dialog.style.left = '10px';
+    dialog.style.top = '10px';
+  }
+  dialog.scrollTop = dialog.scrollHeight;
+}
+
+function closeChatDialog() {
+  document.getElementById('chat-dialog').style.display = 'none';
+  postToFlutter('chatDialogClosed', {});
+}
+
+function hideChatDialog() {
+  document.getElementById('chat-dialog').style.display = 'none';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ─── Idle motion timer ───
+setInterval(function() {
+  if (modelReady && model && model.internalModel.motionManager) {
+    model.internalModel.motionManager.startRandomMotion('Idle');
+  }
+}, 15000);
+
+// ─── Signal ready ───
+window.addEventListener('load', function() {
+  initPixi();
+  postToFlutter('rendererReady', {});
+  console.log('Live2D renderer initialized');
+});
+</script>
+</body>
+</html>

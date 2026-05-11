@@ -5,6 +5,7 @@ import 'llm_service.dart';
 import 'tts_service.dart';
 import 'memory_service.dart';
 import 'vision_service.dart';
+import 'live2d_model_service.dart';
 
 /// Central backend service — replaces ApiClient with local Dart implementation.
 /// All data stored at D:\AiVtuber_Agent_profile\ (like Steam game saves).
@@ -14,6 +15,7 @@ class BackendService {
   late final TTSService tts = TTSService(storage);
   late final MemoryService memory = MemoryService(storage);
   late final VisionService vision = VisionService(storage);
+  late final Live2DModelService live2dModels = Live2DModelService();
 
   /// Whether the backend is "connected" (always true — local).
   bool get connected => true;
@@ -86,9 +88,16 @@ class BackendService {
 
   // ─── Character Models ───
 
-  Future<List<String>> listLive2DModels() async {
-    // Return empty for now — Live2D models stored locally
-    return <String>[];
+  Future<List<Map<String, String>>> listLive2DModels() async {
+    return live2dModels.listModels();
+  }
+
+  Future<String?> importLive2DModel(String sourceDir) async {
+    return live2dModels.importModel(sourceDir);
+  }
+
+  Future<bool> deleteLive2DModel(String modelName) async {
+    return live2dModels.deleteModel(modelName);
   }
 
   // ─── Memory ───

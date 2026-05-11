@@ -71,10 +71,17 @@ AiVtuber_Agent/
 ├── README.md                           项目说明
 │
 ├── assets/                             静态资源（Live2D 模型、音频等）
-│   └── .gitkeep
+│   ├── .gitkeep
+│   └── live2d/                         ★ Live2D Cubism SDK + 渲染页面
+│       ├── pixi.min.js                 PixiJS v6.5.10 (WebGL 渲染)
+│       ├── live2d.min.js               Cubism 2.1 Framework
+│       ├── live2dcubismcore.min.js     Cubism Core
+│       ├── cubism4.min.js              pixi-live2d-display (Cubism 4 封装)
+│       └── renderer.html               ★ PixiJS WebGL 渲染页面 + 眼球追踪 + 对话框
 │
 ├── lib/                                Flutter 应用源代码
-│   ├── main.dart                       ★ 入口：初始化 Provider + WindowManager
+│   ├── main.dart                       ★ 入口：初始化 Provider + 分支主窗/悬浮窗
+│   ├── overlay_main.dart               ★ 悬浮窗独立入口（desktop pet 子窗口）
 │   ├── app.dart                        ★ MaterialApp：暗色主题配置
 │   │
 │   ├── models/                         数据模型
@@ -88,11 +95,13 @@ AiVtuber_Agent/
 │   │
 │   ├── services/                       业务逻辑层（BackendService + 子服务）
 │   │   ├── backend_service.dart        ★ BackendService：总入口，替换原 ApiClient
-│   │   ├── storage_service.dart        ★ StorageService：D:\AiVtuber_Agent_profile\ JSON 读写
+│   │   ├── storage_service.dart        ★ StorageService：D:\\AiVtuber_Agent_profile\\ JSON 读写
 │   │   ├── llm_service.dart            ★ LLMService：直接调用 OpenAI 兼容 API（SSE 流式）
 │   │   ├── tts_service.dart            ★ TTSService：edge-tts 子进程合成 + 缓存
 │   │   ├── memory_service.dart         ★ MemoryService：本地关键词匹配记忆检索
 │   │   ├── vision_service.dart         ★ VisionService：mss 截图 + easyocr OCR
+│   │   ├── live2d_model_service.dart   ★ Live2DModelService：模型文件管理
+│   │   ├── live2d_server.dart          ★ Live2DServer：全局 HTTP 文件服务
 │   │   ├── pipeline_manager.dart       PipelineManager：Task 流水线（LLM→TTS→Audio）
 │   │   └── session_manager.dart        SessionManager：会话 CRUD 操作
 │   │
@@ -112,7 +121,8 @@ AiVtuber_Agent/
 │       ├── app_sidebar.dart            侧边栏导航（图标 + Tooltip）
 │       ├── api_sidebar.dart            ★ API 设置右侧栏（Base URL / API Key / Model）
 │       ├── chat_bubble.dart            聊天气泡（用户/AI 双色）
-│       └── chat_input.dart             聊天输入框（含发送按钮）
+│       ├── chat_input.dart             聊天输入框（含发送按钮）
+│       └── live2d_view.dart            ★ Live2D WebView 渲染组件（Dart↔JS 桥）
 │
 └── windows/                            Windows 平台原生配置
     ├── CMakeLists.txt                  CMake 构建配置
@@ -227,6 +237,8 @@ Task: task_finished (all playback done)
 | TTS 合成 | lib/services/tts_service.dart |
 | 记忆检索 | lib/services/memory_service.dart |
 | 截图 OCR | lib/services/vision_service.dart |
+| Live2D 模型管理 | lib/services/live2d_model_service.dart |
+| Live2D 渲染 | lib/widgets/live2d_view.dart → assets/live2d/renderer.html |
 | Pipeline 任务状态 | lib/services/pipeline_manager.dart |
 | 会话存储 | lib/services/session_manager.dart → storage_service.dart |
 | 数据模型（Message） | lib/models/message.dart |
@@ -248,6 +260,12 @@ Task: task_finished (all playback done)
 ---
 
 ## 扩展指南
+
+### 添加 Live2D 渲染
+1. 使用 Flutter WebView 嵌入 PixiJS + Live2D Cubism SDK
+2. 模型文件存储在 `D:\AiVtuber_Agent_profile\models\live2d\`
+3. 渲染页面: `assets/live2d/renderer.html`
+4. Dart↔JS 通信: JavaScript Handler 双向桥
 
 ### 添加新的 LLM Provider
 1. `lib/services/llm_service.dart` — 添加新的 API 格式适配
@@ -318,7 +336,8 @@ Task: task_finished (all playback done)
 - [x] ✅ 退回 Material3（移除 fluent_ui 依赖 — API 不稳定）
 - [x] ✅ 真正四角圆端：BDW_CUSTOM_FRAME frameless → DWM 自动圆角 + ClipRRect 内容圆角
 - [x] ✅ Flutter pub get + 编译验证（需 Windows 终端，WSL 环境受限）
-- [ ] ⬜ Live2D 角色渲染集成
+- [x] ✅ Live2D 角色渲染集成（WebView + PixiJS + Cubism SDK）
+- [x] ✅ Live2D 桌宠悬浮窗（桌面透明窗口 + 眼球追踪 + 右键对话）
 - [ ] ⬜ TTS 音频播放集成
 - [ ] ⬜ 端到端测试（聊天 + 记忆 + 截图）
 
@@ -393,6 +412,34 @@ Material3 + bitsdojo_window + flutter_acrylic
 Frameless Window → DWM 自动圆角 + Mica 毛玻璃 + 原生窗口按钮
 ```
 
+### Live2D 渲染栈 (2026-05-11)
+```
+Flutter InAppWebView (Edge WebView2)
+  ↓
+PixiJS v6.5.10 (WebGL)
+  ├── pixi-live2d-display v0.4.0 (Cubism 4)
+  ├── live2dcubismcore.min.js (Cubism Core)
+  └── live2d.min.js (Cubism 2.1 compat)
+  ↓
+模型文件: D:\AiVtuber_Agent_profile\models\live2d\
+```
+
+### 新增文件 (Live2D 集成)
+| 文件 | 说明 |
+|------|------|
+| `assets/live2d/renderer.html` | PixiJS WebGL 渲染页面，含右鍵對話框 UI |
+| `assets/live2d/live2dcubismcore.min.js` | Live2D Cubism Core (從 LocalAIVtuber2 複製) |
+| `assets/live2d/live2d.min.js` | Live2D Cubism 2.1 Framework |
+| `lib/services/live2d_model_service.dart` | 模型匯入/列表/刪除 |
+| `lib/widgets/live2d_view.dart` | InAppWebView 封裝 + JavaScript Handler 雙向橋 |
+
+### 修改文件 (Live2D 集成)
+| 文件 | 變更 |
+|------|------|
+| `pubspec.yaml` | + flutter_inappwebview, + desktop_multi_window, + assets/live2d/ |
+| `lib/screens/character_screen.dart` | 完整重寫：Live2D 預覽 + 模型選擇 + 文件上傳 |
+| `lib/services/backend_service.dart` | + Live2DModelService, 替換 stub 為真實實現 |
+
 ### 编译 & 运行
 ```bash
 cd D:\AiVtuber_Agent
@@ -400,3 +447,45 @@ flutter clean
 flutter pub get
 flutter run -d windows
 ```
+
+---
+
+## 变更汇总 (2026-05-12)
+
+### 桌宠悬浮窗 + 眼球追踪
+| 文件 | 说明 |
+|------|------|
+| `lib/services/live2d_server.dart` | **新增** 全局 HTTP 服务器（localhost:48888），服务 assets + 模型文件 |
+| `lib/overlay_main.dart` | **新增** 悬浮窗独立入口，WebView 渲染 Live2D 桌宠 |
+| `lib/main.dart` | 分支主窗口/悬浮窗 + 启动 Live2DServer |
+| `assets/live2d/renderer.html` | **重写** 加入眼球追踪(ParamEyeBallX/Y)、嘴型同步(ParamMouthOpenY)、右键对话 |
+| `assets/live2d/pixi.min.js` | **新增** PixiJS v6.5.10 本地化 |
+| `assets/live2d/cubism4.min.js` | **新增** pixi-live2d-display 本地化 |
+| `lib/screens/character_screen.dart` | +Launch Desktop Pet 按钮 + 表情/嘴型测试控件 |
+| `lib/widgets/live2d_view.dart` | 重构使用共享 Live2DServer |
+| `pubspec.yaml` | + window_manager, + desktop_multi_window |
+
+### 架构
+```
+主窗口 (AI VTuber Agent)              悬浮窗 (Live2D Desktop Pet)
+┌──────────────────────┐              ┌─────────────────────┐
+│ Character Settings   │   Window     │ 透明 + always-on-top │
+│  预览 / 上传 / 控制  │◄─Channel──►│ WebView              │
+│  Launch Desktop Pet  │              │  👀 眼球追踪鼠标     │
+│  Smile / Star Eyes   │              │  🗣 嘴型同步 (TTS)   │
+│  Test Mouth Open     │              │  💬 右键→透明对话框  │
+└──────────────────────┘              └─────────────────────┘
+              │                                  │
+              └──── Live2DServer :48888 ─────────┘
+                     (HTTP 文件服务)
+```
+
+### Bug 修复 (第三批次)
+| # | 问题 | 文件 |
+|---|------|------|
+| B17 | file_picker v11 API 变更 | character_screen.dart |
+| B18 | WebView file:// CORS 模型加载失败 | live2d_view.dart → Live2DServer |
+| B19 | 中文路径 URL 编码 → 404 | live2d_server.dart (Uri.decodeComponent) |
+| B20 | desktop_multi_window API (WindowController) | character_screen.dart, overlay_main.dart |
+| B21 | cubism4.min.js 加载顺序 → PIXI.live2d undefined | renderer.html |
+| B22 | window_manager 在子窗口不可用 | overlay_main.dart |
