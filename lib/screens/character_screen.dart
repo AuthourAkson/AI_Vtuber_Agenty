@@ -1,13 +1,12 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
 import '../widgets/live2d_view.dart';
+import '../widgets/pet_mode_overlay.dart';
 
 class CharacterScreen extends StatefulWidget {
   const CharacterScreen({super.key});
@@ -404,61 +403,22 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               const Text(
-                'Opens a transparent always-on-top window with your Live2D character on the desktop. '
-                'Right-click the character to open a chat dialog.',
+                'Opens a full-screen transparent overlay with your Live2D character. '
+                'Right-click the character to open a chat dialog. '
+                'Move your mouse to control eye tracking.',
                 style: TextStyle(color: Color(0xFF888888), fontSize: 12),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: () => _openOverlayWindow(modelJsonPath),
+                onPressed: modelJsonPath != null
+                    ? () => _openPetMode(modelJsonPath!, s)
+                    : null,
                 icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Launch Desktop Pet'),
+                label: const Text('Launch Pet Mode'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF4CAF50),
                   side: const BorderSide(color: Color(0xFF4CAF50)),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // ─── Mouth / Expression Test ───
-              const Text('Test Controls',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  OutlinedButton(
-                    onPressed: () => _sendToOverlay('setExpression', {'expression': '咧嘴笑'}),
-                    child: const Text('Smile', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF888888),
-                      side: const BorderSide(color: Color(0xFF2C2C2C)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(
-                    onPressed: () => _sendToOverlay('setExpression', {'expression': '星星眼'}),
-                    child: const Text('Star Eyes', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF888888),
-                      side: const BorderSide(color: Color(0xFF2C2C2C)),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _testMouthOpen(),
-                      child: const Text('Test Mouth Open', style: TextStyle(fontSize: 12)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF4CAF50),
-                        side: const BorderSide(color: Color(0xFF2C2C2C)),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -467,67 +427,18 @@ class _CharacterScreenState extends State<CharacterScreen> {
     );
   }
 
-  WindowController? _overlayController;
-
-  Future<void> _openOverlayWindow(String? modelPath) async {
-    try {
-      final config = jsonEncode({
-        'modelPath': modelPath,
-      });
-      final controller = await WindowController.create(
-        WindowConfiguration(arguments: config, hiddenAtLaunch: true),
-      );
-      _overlayController = controller;
-
-      await controller.show();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Desktop pet launched!'),
-            backgroundColor: Color(0xFF4CAF50),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to launch: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _sendToOverlay(String method, Map<String, dynamic> args) async {
-    if (_overlayController == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Open desktop pet first!'), backgroundColor: Color(0xFF888888)),
-      );
-      return;
-    }
-    try {
-      await _overlayController!.invokeMethod(method, args);
-    } catch (e) {
-      debugPrint('Overlay IPC error: $e');
-    }
-  }
-
-  Future<void> _testMouthOpen() async {
-    if (_overlayController == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Open desktop pet first!'), backgroundColor: Color(0xFF888888)),
-      );
-      return;
-    }
-    for (var i = 0; i < 3; i++) {
-      await _overlayController!.invokeMethod('setMouthOpen', {'value': 0.8});
-      await Future.delayed(const Duration(milliseconds: 200));
-      await _overlayController!.invokeMethod('setMouthOpen', {'value': 0.0});
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
+  void _openPetMode(String modelPath, AppSettings s) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PetModeOverlay(
+          modelPath: modelPath,
+          positionX: s.live2DXPosition,
+          positionY: s.live2DYPosition,
+          scale: s.live2DScale,
+          onExit: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
   }
 
   Widget _modeCard(String title, IconData icon, bool selected, VoidCallback onTap) {
