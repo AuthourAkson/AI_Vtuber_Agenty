@@ -10,8 +10,10 @@ class Live2DServer {
   static const port = 48888;
 
   static HttpServer? _server;
+  static Process? _petProcess;
 
   static bool get isRunning => _server != null;
+  static bool get petRunning => _petProcess != null;
 
   static Future<void> start() async {
     if (_server != null) return;
@@ -29,16 +31,32 @@ class Live2DServer {
     _server = null;
   }
 
+  /// Register the Python pet subprocess for lifecycle management.
+  static void setPetProcess(Process? process) {
+    _petProcess = process;
+  }
+
+  /// Kill the pet subprocess if it's running.
+  static void killPet() {
+    if (_petProcess != null) {
+      debugPrint('[Live2DServer] Killing pet process...');
+      _petProcess!.kill(ProcessSignal.sigterm);
+      _petProcess = null;
+    }
+  }
+
   static Future<void> _copyAssets() async {
     final dir = Directory(_webDir);
     if (!dir.existsSync()) dir.createSync(recursive: true);
 
     final assets = [
       'assets/live2d/renderer.html',
+      'assets/live2d/pet.html',
       'assets/live2d/pixi.min.js',
       'assets/live2d/live2dcubismcore.min.js',
       'assets/live2d/live2d.min.js',
       'assets/live2d/cubism4.min.js',
+      'assets/live2d/qwebchannel.js',
     ];
 
     for (final assetPath in assets) {
@@ -54,6 +72,18 @@ class Live2DServer {
     try {
       var safePath = Uri.decodeComponent(request.uri.path);
       if (safePath.startsWith('/')) safePath = safePath.substring(1);
+
+      // Health check endpoint — used by Python ParentAliveChecker
+      if (safePath == '' || safePath == 'health') {
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..headers.set('Access-Control-Allow-Origin', '*')
+          ..write('{"status":"ok"}');
+        await request.response.close();
+        return;
+      }
+
       if (safePath.startsWith('/')) safePath = safePath.substring(1);
       if (safePath.contains('..')) {
         request.response.statusCode = 403;

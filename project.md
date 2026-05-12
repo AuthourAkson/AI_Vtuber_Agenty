@@ -570,3 +570,185 @@ flutter run -d windows
 | B27 | PetModeOverlay 导致主窗口无法拖拽 | → 独立 Win32 窗口 (WS_EX_TOOLWINDOW) |
 | B28 | desktop_multi_window 子窗口 flutter_inappwebview 插件未注册 | → 绕过 Flutter 插件，直接用 C++ WebView2 |
 | B29 | CMake WebView2 SDK 路径错误 `CMAKE_SOURCE_DIR/build` → `../build` | CMakeLists.txt 路径修复 + fallback |
+
+---
+
+## 变更汇总 (2026-05-13 — PyQt6 桌宠模式：对标 AUAK)
+
+### 决策：放弃 C++ Native WebView2 Overlay，改用 PyQt6 子进程
+
+**原因：** 用户已有成熟 PyQt6 实现（D:\\AUAK_Live2D_Desktop_AI），该方案已完美实现透明背景、
+拖拽、眼球追踪。C++ 方案编译复杂、WebView2 SDK 路径问题多、调试困难。PyQt6 方案在同一技术栈
+下更易维护。
+
+### 桌宠架构 (PyQt6)
+
+```
+主窗口 (AI VTuber Agent)                桌宠 (PyQt6 独立子进程)
+┌──────────────────────────┐         ┌─────────────────────────┐
+│  正常 UI                 │         │ Frameless + AlwaysOnTop │
+│  (Chat/Settings/...)     │  HTTP   │ Tool Window (无任务栏)   │
+│                          │◄───────►│ WA_TranslucentBackground│
+│  Character Settings:     │ control │                         │
+│    [Launch Desktop Pet]  │         │  QWebEngineView (透明)  │
+│    [Close] [ClickThru]   │         │  pet.html               │
+│    [Reload Model]        │ :48889  │  ├── PixiJS + Live2D    │
+└──── Live2DServer :48888 ─┴─────────┤  ├── 眼球追踪 (60fps)   │
+           (HTTP 文件服务)            │  ├── 拖拽控制器          │
+                                      │  └── 聊天气泡            │
+                                      └─────────────────────────┘
+                                               ↕ OBS 捕获
+```
+
+### 技术栈对比
+
+| 特性 | C++ WebView2 Overlay (已废弃) | PyQt6 子进程 (当前) |
+|------|------------------------------|---------------------|
+| 语言 | C++ + Dart FFI | Python (同 AUAK) |
+| 浏览器引擎 | WebView2 (需 SDK) | QWebEngineView (Qt 内置) |
+| 透明背景 | DWM API + COM | WA_TranslucentBackground |
+| 拖拽 | WM_NCHITTEST | QWebChannel → WindowController |
+| 眼球追踪 | JS mousemove 事件 | QWebChannel → MouseTracker (60fps) |
+| 编译 | CMake + WebView2 SDK 链接 | 无需编译 (Python 脚本) |
+| Flutter 交互 | Dart FFI (函数调用) | HTTP REST (loose coupling) |
+| 复杂度 | 高 (500+ 行 C++ + FFI) | 低 (300 行 Python + HTML) |
+
+### 核心文件
+
+| 文件 | 说明 |
+|------|------|
+| `lib/services/live2d_pet.py` | **PyQt6 桌宠窗口**：透明窗口、WebView、拖拽、眼球追踪、HTTP 控制服务 |
+| `assets/live2d/pet.html` | **PixiJS 渲染页面**：Live2D 模型加载、眼球追踪 (ParamEyeBallX/Y)、自动缩放、拖拽手柄、聊天气泡 |
+| `lib/screens/character_screen.dart` | Flutter 侧控制：`_openPet` 启动 Python 子进程、`_closePet`、`_togglePetClickThrough`、`_reloadPetModel` |
+| `lib/services/live2d_server.dart` | HTTP 文件服务 (port 48888)：serves pet.html + JS 库 + Live2D 模型文件 |
+| `lib/services/live2d_overlay_ffi.dart` | ⚠️ **已废弃**（C++ FFI 绑定，保留代码但不再使用） |
+
+### 依赖 (Python 侧，与 AUAK 相同)
+
+```bash
+pip install PyQt6 PyQt6-WebEngine
+# Qt6 WebEngine 自带 Chromium 内核，无需额外安装浏览器
+```
+
+### Flutter 启动桌宠流程
+
+```
+1. 用户在 Character Screen 点击 [Launch Desktop Pet]
+2. Flutter: Live2DServer.toModelUrl(path) → HTTP URL
+3. Flutter: Process.start('python', ['lib/services/live2d_pet.py', '--model-url', url, ...])
+4. Python: 启动 PyQt6 透明窗口 → 加载 pet.html → QWebChannel 绑定
+5. Python: 启动 HTTP 控制服务 (127.0.0.1:48889)
+6. Flutter: GET /health → 确认启动成功 → 显示 SnackBar
+7. 用户拖拽绿色手柄移动桌宠，眼球跟随鼠标
+```
+
+### HTTP 控制 API (port 48889)
+
+| Method | Path | Body | 说明 |
+|--------|------|------|------|
+| GET | `/health` | — | 健康检查 → `{"status":"ok"}` |
+| GET | `/status` | — | 窗口状态查询 |
+| POST | `/close` | — | 优雅关闭 |
+| POST | `/click_through` | `{"enable": bool}` | 鼠标穿透开关 |
+| POST | `/reload_model` | `{"model_url":"...","scale":...,"x":...,"y":...}` | 切换模型 |
+| POST | `/show_message` | `{"text":"...","duration_ms":3000}` | 显示聊天气泡 |
+
+### 眼球追踪实现
+
+```
+Python MouseTracker (60fps QTimer)
+  → 计算 cursor_pos - window_topLeft
+  → QWebChannel emit mouseMoved(relX, relY)
+  → JS: offsetX = (x - w/2) / (w/2), offsetY = -(y - h/2) / (h/2)
+  → live2d coreModel.setParameterValueById("ParamEyeBallX", offsetX)
+  → live2d coreModel.setParameterValueById("ParamEyeBallY", offsetY)
+  → live2d coreModel.setParameterValueById("ParamAngleX", offsetX * 30)
+  → live2d coreModel.setParameterValueById("ParamAngleY", offsetY * 30)
+```
+
+### 自动缩放
+
+pet.html 在模型加载后自动计算缩放比例：
+```js
+var targetHeight = window.innerHeight * 0.80;
+modelScale = targetHeight / model.height;
+```
+用户可通过 query param `?scale=X` 手动覆盖。
+
+### 与 C++ Overlay 的共存
+
+C++ overlay 文件保留在仓库中但**不再活跃使用**：
+- `lib/services/live2d_overlay_ffi.dart` — Dart FFI 绑定 (保留)
+- `windows/runner/live2d_overlay_window.h/cpp` — C++ 实现 (保留)
+- `windows/runner/live2d_overlay_bridge.cpp` — C API 桥接 (保留)
+- `windows/runner/CMakeLists.txt` — overlay 源文件链接可注释掉以减少编译时间
+
+### 移除的旧方案
+
+| 旧文件 | 状态 |
+|--------|------|
+| `lib/widgets/pet_mode_overlay.dart` | 之前已删除 |
+| `lib/overlay_main.dart` | 保留但不再使用 (desktop_multi_window 方案) |
+| C++ overlay 全套 | ⚠️ 保留代码，不参与编译 |
+
+---
+
+## 变更汇总 (2026-05-13 下午 — 桌宠 Bug 修复)
+
+### Bug B30: 模型位置偏下 + 窗口过大 + 关闭后进程残留
+
+**问题分析：**
+
+1. **模型位置偏下** — Live2D chibi 模型的视觉中心通常高于几何中心（头顶有留白）。默认 Y=50%
+   导致人物下半身被裁切。对比 AUAK 的 `index.html`：它使用硬编码居中 `model.y = innerHeight/2`，
+   但我们的 `pet.html` 的 Y 参数通过 query param 传递（来自 Settings），且默认值偏高。
+
+2. **窗口过大** — 400×600 对桌宠来说浪费空间。AUAK 同样使用此尺寸，但用户需要刚好容纳
+   模型+拖拽按钮的紧凑窗口。
+
+3. **关闭后进程残留** — `_petProcess` 是 `CharacterScreen` 的私有字段。当 Flutter 主窗口
+   关闭时，`dispose()` 未必执行，导致 Python 子进程成为孤儿。且原 `_closePet()` 有逻辑缺陷：
+   `setState(() => _petProcess = null)` 在 `Future.delayed` 前同步执行，导致延迟 kill 永远不触发。
+
+**修复：**
+
+| # | 问题 | 文件 | 变更 |
+|---|------|------|------|
+| B30a | 模型偏下 | `assets/live2d/pet.html` | `updateModelTransform()` 改用硬编码居中 `model.x = innerWidth/2; model.y = innerHeight/2`（匹配 AUAK） |
+| | | `assets/live2d/pet.html` | 自动缩放 80%（匹配 AUAK） |
+| B30b | 窗口过大 | `lib/services/live2d_pet.py` | `DEFAULT_W` 400→320, `DEFAULT_H` 600→480 |
+| B30c | 进程残留 | `lib/services/live2d_pet.py` | 新增 `ParentAliveChecker`：QTimer 每 3s poll Flutter :48888，1 次失败即自动退出 |
+| | | `lib/services/live2d_server.dart` | 新增 `/` 和 `/health` 路由返回 200（供 checker poll） |
+| | | `assets/live2d/pet.html` | 新增红色 X 关闭按钮（直接 POST /close） |
+| | | `lib/screens/character_screen.dart` | `_petProcess` 字段移除，全部改用 `Live2DServer.setPetProcess()` / `petRunning` |
+| | | `lib/main.dart` | `ProcessSignal.sigterm.watch()` 兜底 kill pet |
+| | | `lib/screens/character_screen.dart` | `_closePet()` 修复：不再提前 null 阻碍 delayed kill |
+
+### 生命周期流程（修复后）
+
+```
+Flutter App 启动
+  └─ Live2DServer.start()                    → HTTP :48888
+  └─ ProcessSignal.sigterm.watch()           → killPet() on exit
+
+用户点击 [Open Pet]
+  └─ Process.start('python', ['live2d_pet.py', ...])
+  └─ Live2DServer.setPetProcess(process)     → 全局引用
+
+用户点击 [Close] 或关闭主窗口
+  └─ CharacterScreen._closePet()
+  │    └─ HTTP POST /close                   → Python: QApplication.quit()
+  │    └─ Future.delayed(500ms): killPet()   → sigterm 兜底
+  └─ 或 ParentAliveChecker 连续 3 次 poll 失败      → Python 自动 shutdown
+  └─ 或 ProcessSignal.sigterm 收到 (macOS/Linux)    → killPet()
+```
+
+### 参数对照
+
+| 参数 | 旧值 | 新值 | 说明 |
+|------|------|------|------|
+| 窗口尺寸 | 400×600 | 320×480 | 更紧凑，适合桌宠 |
+| 模型定位 | 百分比 Y=42% | 硬编码居中（同 AUAK） | `model.y = innerHeight / 2` |
+| 自动缩放 | 90% | 80% | 匹配 AUAK，模型完整显示 |
+| 进程清理 | sigterm watch | ParentAliveChecker + sigterm | 双重兜底：Python 自主检测 + 信号 |
+

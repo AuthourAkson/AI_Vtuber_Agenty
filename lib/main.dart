@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
@@ -28,6 +29,13 @@ void main(List<String> args) async {
 
   // Load saved preferences
   await SharedPreferences.getInstance();
+
+  // ─── Process signal handler: kill pet subprocess on app exit ───
+  // When the Flutter desktop app is closed, the runtime sends SIGTERM.
+  // We use this to clean up the Python pet subprocess before exiting.
+  ProcessSignal.sigterm.watch().listen((_) {
+    Live2DServer.killPet();
+  });
 
   runApp(
     MultiProvider(

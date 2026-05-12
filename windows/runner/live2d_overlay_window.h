@@ -56,6 +56,10 @@ class Live2DOverlayWindow {
   // Set always-on-top.
   void SetTopMost(bool topmost);
 
+  // Enable/disable mouse click-through (WS_EX_TRANSPARENT).
+  // When true, all mouse events pass through to windows below.
+  void SetClickThrough(bool enable);
+
   // Get the window size.
   void GetSize(int* width, int* height);
 
@@ -67,6 +71,9 @@ class Live2DOverlayWindow {
 
   // Window procedure (public — needed by RegisterClass)
   static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+  // Track click-through state (public — read by subclass proc)
+  bool click_through_ = true;
 
  private:
   // Instance message handler

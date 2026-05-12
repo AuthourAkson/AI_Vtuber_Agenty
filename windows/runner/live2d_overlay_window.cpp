@@ -82,16 +82,39 @@ constexpr int kResizeBorder = 8;
 constexpr UINT_PTR kSubclassId = 0x4C324457;  // "L2DW"
 
 // Subclass proc for the WebView2 child window.
-// Forwards left-clicks to the overlay parent as window-drag commands.
+// refData = Live2DOverlayWindow* pointer.
 LRESULT CALLBACK WebViewChildSubclass(
     HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     UINT_PTR id, DWORD_PTR refData) {
-  HWND parent = reinterpret_cast<HWND>(refData);
+  auto* self = reinterpret_cast<Live2DOverlayWindow*>(refData);
+  if (!self) return DefSubclassProc(hwnd, msg, wp, lp);
+
   switch (msg) {
+    case WM_NCHITTEST:
+      if (self->click_through_) {
+        return HTTRANSPARENT;  // Click-through: mouse transparent
+      }
+      break;
+
+    case WM_KEYDOWN:
+      if (wp == VK_F2) {
+        self->SetClickThrough(!self->click_through_);
+        return 0;
+      }
+      if (wp == VK_ESCAPE) {
+        PostMessage(self->GetHandle(), WM_CLOSE, 0, 0);
+        return 0;
+      }
+      break;
+
     case WM_LBUTTONDOWN:
-      // Left-click on WebView2 → drag the overlay window
-      SendMessage(parent, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
-      return 0;
+      if (!self->click_through_) {
+        // Interactive mode: left-click → start window drag
+        PostMessage(self->GetHandle(), WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
+        return 0;
+      }
+      break;
+
     case WM_NCDESTROY:
       RemoveWindowSubclass(hwnd, WebViewChildSubclass, id);
       break;
@@ -154,6 +177,14 @@ bool Live2DOverlayWindow::Create(const std::wstring& title,
   // WS_EX_NOREDIRECTIONBITMAP tells DWM to composite this window with
   // per-pixel alpha. WebView2 renders the transparent content directly.
   Show(true);
+  // Default: click-through so the overlay doesn't block mouse interaction.
+  // Must be called AFTER Show() for the extended style to take effect.
+  SetClickThrough(true);
+
+  // Register global hotkeys so F2/ESC work even when overlay lacks focus
+  RegisterHotKey(hwnd_, 1, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, VK_F2);
+  RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'Q');
+
   return true;
 }
 
@@ -196,16 +227,28 @@ void Live2DOverlayWindow::SetTopMost(bool on) {
       0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 }
 
+void Live2DOverlayWindow::SetClickThrough(bool enable) {
+  click_through_ = enable;
+  // The subclass proc checks click_through_ on each WM_NCHITTEST
+  // and returns HTTRANSPARENT when true. No window style changes needed.
+}
+
 // ─── Destroy ───
 
 void Live2DOverlayWindow::Destroy() {
   destroying_ = true;
 
-  // Release COM pointers (order matters: controller, webview, env)
+  // Release COM pointers
   if (webview_controller_) { webview_controller_->Release(); webview_controller_ = nullptr; }
   if (webview_)           { webview_->Release();           webview_ = nullptr; }
   if (webview_env_)       { webview_env_->Release();       webview_env_ = nullptr; }
   webview_ready_ = false;
+
+  // Unregister global hotkeys
+  if (hwnd_) {
+    UnregisterHotKey(hwnd_, 1);
+    UnregisterHotKey(hwnd_, 2);
+  }
 
   if (hwnd_) {
     DestroyWindow(hwnd_);
@@ -287,7 +330,7 @@ void Live2DOverlayWindow::OnControllerCreated(
   HWND child = FindWindowEx(hwnd_, nullptr, nullptr, nullptr);
   if (child) {
     SetWindowSubclass(child, WebViewChildSubclass, kSubclassId,
-                      reinterpret_cast<DWORD_PTR>(hwnd_));
+                      reinterpret_cast<DWORD_PTR>(this));
   }
 
   if (!pending_url_.empty() && webview_) {
@@ -356,8 +399,19 @@ LRESULT Live2DOverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
       SendMessage(hwnd_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
       return 0;
 
+    case WM_HOTKEY:
+      if (wp == 1) {
+        // Ctrl+Shift+F2: toggle click-through globally
+        SetClickThrough(!click_through_);
+      } else if (wp == 2) {
+        // Ctrl+Shift+Q: close overlay globally
+        Destroy();
+      }
+      return 0;
+
     case WM_KEYDOWN:
       if (wp == VK_ESCAPE) { Destroy(); return 0; }
+      if (wp == VK_F2) { SetClickThrough(!click_through_); return 0; }
       break;
 
     case WM_CLOSE:

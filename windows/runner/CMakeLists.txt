@@ -11,8 +11,8 @@ add_executable(${BINARY_NAME} WIN32
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"
-  "live2d_overlay_window.cpp"
-  "live2d_overlay_bridge.cpp"
+  # "live2d_overlay_window.cpp"   # DISABLED: PyQt6 pet mode replaces C++ overlay (2026-05-13)
+  # "live2d_overlay_bridge.cpp"   # DISABLED: PyQt6 pet mode replaces C++ overlay (2026-05-13)
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"
   "runner.exe.manifest"
@@ -45,32 +45,25 @@ endif()
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 
-# WebView2 SDK (from flutter_inappwebview build artifacts)
-# CMAKE_SOURCE_DIR = D:/AiVtuber_Agent/windows/ (top-level CMakeLists.txt)
-# Actual build dir = D:/AiVtuber_Agent/build/
-set(WEBVIEW2_DIR "${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/Microsoft.Web.WebView2/build/native")
-if(EXISTS "${WEBVIEW2_DIR}")
-  target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/include")
-  target_link_libraries(${BINARY_NAME} PRIVATE
-    "${WEBVIEW2_DIR}/x64/WebView2LoaderStatic.lib"
-  )
-  message(STATUS "WebView2 SDK found at: ${WEBVIEW2_DIR}")
-else()
-  # Fallback: try Flutter ephemeral cache (after flutter clean + rebuild)
-  set(WEBVIEW2_FALLBACK "${CMAKE_SOURCE_DIR}/flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/build/webview2/native")
-  if(EXISTS "${WEBVIEW2_FALLBACK}")
-    set(WEBVIEW2_DIR "${WEBVIEW2_FALLBACK}")
-    target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/include")
-    target_link_libraries(${BINARY_NAME} PRIVATE
-      "${WEBVIEW2_DIR}/x64/WebView2LoaderStatic.lib"
-    )
-    message(STATUS "WebView2 SDK found at (fallback): ${WEBVIEW2_DIR}")
-  else()
-    message(WARNING "WebView2 SDK not found. Live2D overlay will not compile.")
-    message(WARNING "  Tried: ${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/...")
-    message(WARNING "  Tried: ${WEBVIEW2_FALLBACK}")
-  endif()
-endif()
+# WebView2 SDK DISABLED — PyQt6 pet mode replaces C++ overlay (2026-05-13)
+# If re-enabling the C++ overlay, uncomment:
+#   1. live2d_overlay_window.cpp + live2d_overlay_bridge.cpp in add_executable above
+#   2. The WebView2 SDK block below
+# set(WEBVIEW2_DIR "${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/Microsoft.Web.WebView2/build/native")
+# if(EXISTS "${WEBVIEW2_DIR}")
+#   target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/include")
+#   target_link_libraries(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/x64/WebView2LoaderStatic.lib")
+#   message(STATUS "WebView2 SDK found at: ${WEBVIEW2_DIR}")
+# else()
+#   set(WEBVIEW2_FALLBACK "${CMAKE_SOURCE_DIR}/flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/build/webview2/native")
+#   if(EXISTS "${WEBVIEW2_FALLBACK}")
+#     set(WEBVIEW2_DIR "${WEBVIEW2_FALLBACK}")
+#     target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/include")
+#     target_link_libraries(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/x64/WebView2LoaderStatic.lib")
+#   else()
+#     message(WARNING "WebView2 SDK not found. Live2D overlay will not compile.")
+#   endif()
+# endif()
 
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 

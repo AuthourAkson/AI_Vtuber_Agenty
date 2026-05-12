@@ -190,7 +190,6 @@ SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
 
 ## ⬜ 待修复
 
-D:\AiVtuber_Agent>flutter run -d windows
 Launching lib\main.dart on Windows in debug mode...
 CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/windows/CMakeLists.txt:31 (add_custom_command):
   The following keywords are not supported when using
@@ -201,128 +200,110 @@ CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_w
   command to set the policy and suppress this warning.
 This warning is for project developers.  Use -Wno-dev to suppress it.
 
-D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(267,1): error C2220: 以下警告被视为错误 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
-D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(267,1): warning C4010: 单行注释包含行继续符 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
-D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(268,26): error C2065: “tempPath”: 未声明的标识符 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
-D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(269,46): error C2065: “tempPath”: 未声明的标识符 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
-Building Windows application...                                    18.2s
+lib/main.dart(15,10): error G5FE39F1E: Type 'AppExitResponse' not found. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/main.dart(17,12): error G4127D1E8: The getter 'AppExitResponse' isn't defined for the type '_AppExitObserver'. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+D:\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\Microsoft.CppCommon.targets(254,5): error MSB8066: “D:\AiVtuber_Agent\build\windows\x64\CMakeFiles\c34551fe35923833d11a024e38cb5a47\flutter_windows.dll.rule;D:\AiVtuber_Agent\build\windows\x64\CMakeFiles\d93f91fab4440261b871f34779069aea\flutter_assemble.rule”的自定义生成已退出，代码为 1。 [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+Building Windows application...                                    16.5s
 Error: Build process failed.
 
+D:\AiVtuber_Agent>
+
 ---
 
-### Bug #B28: desktop_multi_window 子窗口 flutter_inappwebview 插件未注册
+## ✅ 已修复 (2026-05-13)
 
-**日期**: 2026-05-11 (发现), 2026-05-12 (根治)
+### Bug #30: WebView2.h not found — C++ overlay compilation blocks build
+
+**日期**: 2026-05-13
 
 **现象**:
 
 ```
-MissingPluginException(No implementation found for method createInAppWebView
-on channel com.pichillilorenzo/flutter_inappwebview_manager)
-```
-
-**根因**: desktop_multi_window 创建新 Flutter Engine 时，PlatformView 插件（InAppWebView）不会自动注册。
-这是 Flutter 多窗口 + PlatformView 的已知限制。
-
-**修复**: 绕过 Flutter 插件体系，直接在 C++ 层创建 WebView2：
-
-- 使用 Win32 CreateWindowEx + 原生 WebView2 COM API
-- 复用 flutter_inappwebview 内的 WebView2 SDK 头文件和静态库
-- 无需任何 Flutter 插件注册
-
----
-
-## ✅ 已修复 (2026-05-12 — CMake 路径修复)
-
-### Bug #B29: CMake WebView2 SDK 路径错误
-
-**日期**: 2026-05-12
-
-**现象**:
-
-```
-CMake Warning: WebView2 SDK not found at
-  D:/AiVtuber_Agent/windows/build/windows/x64/packages/Microsoft.Web.WebView2/build/native.
-
 windows/runner/live2d_overlay_window.cpp(4,10): error C1083:
   无法打开包括文件: "WebView2.h": No such file or directory
+CMake Warning: WebView2 SDK not found. Live2D overlay will not compile.
 ```
 
-**根因**: CMakeLists.txt 中 `CMAKE_SOURCE_DIR` = `D:/AiVtuber_Agent/windows/`，
-但实际 build 目录在 `D:/AiVtuber_Agent/build/`。路径 `CMAKE_SOURCE_DIR/build/...` 
-解析为 `D:/AiVtuber_Agent/windows/build/...`（不存在）。
+**根因**: `live2d_overlay_window.cpp` 和 `live2d_overlay_bridge.cpp` 仍在 CMakeLists.txt 中编译，
+但 WebView2 SDK 未安装在预期路径。项目已决定使用 PyQt6 子进程方案替代 C++ overlay（详见 `project.md` 2026-05-13 变更汇总）。
 
-**修复**: 路径改为 `${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/...`。
-同时添加 fallback 搜索路径到 flutter ephemeral cache。
+**修复**: `windows/runner/CMakeLists.txt`
 
-**受影响文件**: `windows/runner/CMakeLists.txt`
+1. 注释 `add_executable` 中的 `live2d_overlay_window.cpp` 和 `live2d_overlay_bridge.cpp`
+2. 注释整个 WebView2 SDK 查找/链接块
+3. 保留注释中的恢复说明（如需重新启用 C++ overlay）
 
 ---
 
-## ✅ 已修复 (2026-05-12 — WRL 编译错误)
+### 
 
-### Bug #B30: WRL Callback + private WndProc + static OnEnvironmentCreated 编译错误
+---
 
-**日期**: 2026-05-12
+## ✅ 已修复 (2026-05-13 下午)
+
+### Bug #31: didRequestAppExit 返回类型不匹配
+
+**日期**: 2026-05-13
+
+**现象 (第一次)**:
+```
+error: The return type 'Future<bool>' does not match 'Future<AppExitResponse>'
+```
+
+**现象 (第二次，改为 AppExitResponse 后)**:
+```
+error: Type 'AppExitResponse' not found.
+error: The getter 'AppExitResponse' isn't defined.
+```
+
+**根因**: Flutter SDK 的 `WidgetsBindingObserver.didRequestAppExit()` 方法签名在部分中间版本中
+返回 `Future<AppExitResponse>`，但 `AppExitResponse` 枚举在某些 Flutter 引擎缓存版本中未正确导出。
+
+**修复**: `lib/main.dart`
+- 放弃使用 `WidgetsBindingObserver` / `didRequestAppExit()`
+- 改用 `dart:io` 的 `ProcessSignal.sigterm.watch()` 监听进程终止信号
+- Flutter 桌面窗口关闭时，runtime 会向进程发送 SIGTERM，在此清理 Python pet 子进程
+
+---
+
+### Bug #32: 模型腿部超出窗口 + ProcessSignal.sigterm 在 Windows 不触发
+
+**日期**: 2026-05-13
 
 **现象**:
-
-```
-error C2248: "WndProc": 无法访问 private 成员
-error C2039: "Callback": 不是 "Microsoft::WRL" 的成员
-error C2597: 对非静态成员"webview_env_"的非法引用
-error C2660: CreateCoreWebView2EnvironmentWithOptions 不接受 3 个参数
-```
+1. 桌宠模型下半身（腿部）仍然超出窗口不可见
+2. 关闭 Flutter 主窗口后 Python 桌宠子进程仍然在运行
 
 **根因**:
+1. `pet.html` 使用百分比定位 `model.y = modelY_pct * height`，Live2D chibi 模型的视觉中心
+   与几何中心不匹配，42% 仍不够。AUAK 使用硬编码居中 `model.y = innerHeight / 2` 完美居中。
+2. `ProcessSignal.sigterm.watch()` 在 Windows 桌面应用关闭时不触发 —
+   Windows 通过 WM_CLOSE 销毁窗口而非常规 Unix 信号流程，Dart 进程直接终止。
 
-1. `WndProc` 声明在 `private:` 区域 → 匿名 namespace 的 `RegisterOverlayClass` 无法引用
-2. `Microsoft::WRL::Callback` 需要 C++ 异常支持，但项目全局 `_HAS_EXCEPTIONS=0`
-3. `OnEnvironmentCreated` 声明为 `static` 但访问了非静态成员 `webview_env_`, `hwnd_`
-4. WRL `Callback` 找不到导致编译器认为第4参数缺失
+**修复**:
 
-**修复**: 
-
-- `WndProc` 移到 `public:` 区域
-- `OnEnvironmentCreated` 改为非静态成员函数
-- 完全移除 WRL 依赖，用**手写 COM callback 类**替代 `Microsoft::WRL::Callback`
-  - `EnvironmentCompletedHandler` — 实现 `ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler`
-  - `ControllerCompletedHandler` — 实现 `ICoreWebView2CreateCoreWebView2ControllerCompletedHandler`
-  - 手写 `QueryInterface`/`AddRef`/`Release`/`Invoke`
-- CMakeLists.txt 移除不再需要的 `/EHsc /U_HAS_EXCEPTIONS` 覆盖
-
-**受影响文件**:
-
-- `windows/runner/live2d_overlay_window.h` — WndProc public, OnEnvironmentCreated non-static
-- `windows/runner/live2d_overlay_window.cpp` — 完全重写
-- `windows/runner/CMakeLists.txt` — 清理编译标志
+| # | 问题 | 文件 | 变更 |
+|---|------|------|------|
+| B32a | 模型偏下 | `assets/live2d/pet.html` | `updateModelTransform()` 改用硬编码居中：`model.x = innerWidth/2; model.y = innerHeight/2` |
+| | | `assets/live2d/pet.html` | 自动缩放 90% → 80%（匹配 AUAK） |
+| B32b | 进程残留 | `lib/services/live2d_pet.py` | 新增 `ParentAliveChecker` 类：QTimer 每 3s poll Flutter Live2DServer (port 48888) |
+| | | `lib/services/live2d_pet.py` | 连续 3 次连接失败 → `self.shutdown()` 自动退出 |
+| | | `lib/main.dart` | 保留 `ProcessSignal.sigterm.watch()` 作为额外兜底（macOS/Linux 可用） |
 
 ---
 
-## ✅ 已修复 (2026-05-12 — 同步 WebView2 初始化 + COM 引用计数)
+### Bug #33: 桌宠启动几秒后自动关闭 — Live2DServer 无 /health 路由
 
-### Bug #B33: WebView2 异步初始化永不触发 + COM 引用缺失 → 模型不显示 + Close 崩溃
+**日期**: 2026-05-13
 
-**日期**: 2026-05-12
+**现象**: 桌宠打开几秒后自动关闭，Flutter 主窗口并未退出。
 
-**现象**: 
-1. `C4010: 单行注释包含行继续符` — 注释 `\` 吞掉下行
-2. Overlay 透明但模型不显示
-3. Close Overlay 卡退
+**根因**: `ParentAliveChecker` 每 3 秒 poll `http://127.0.0.1:48888`（HEAD 请求），
+但 `Live2DServer` 没有 `/` 或 `/health` 路由。它对所有请求尝试从文件系统读取，
+`D:\AiVtuber_Agent_profile\` 是目录而非文件 → 500 错误。
+Python `urllib.request.urlopen()` 对非 2xx 响应抛出 `HTTPError`，
+被 `except Exception` 捕获 → `fail_count++` → 连续 3 次后误判为"Flutter 已退出" → 自动关闭。
 
-**根因**:
-1. 注释行 `// Default: %TEMP%\AiVtuber_Overlay\` 末尾 `\` 是 C/C++ 行继续符
-2. `CreateCoreWebView2EnvironmentWithOptions` 是异步的，回调依赖 COM 消息泵。`CreateOverlay()` 不等回调就返回到 Dart，`pending_url_` 设好了但回调永远不触发 → WebView2 从未就绪，URL 从未加载
-3. COM 接口指针（`webview_env_`, `webview_controller_`, `webview_`）裸赋值未调 `AddRef()`/`Release()`，销毁时可能 double-free 或 use-after-free
-
-**修复**:
-- 注释 `\` → `/`
-- `InitWebView()` 改为**同步**：`CreateCoreWebView2EnvironmentWithOptions` 后用 `PeekMessage`/`DispatchMessage` 循环泵消息直到 `webview_ready_ == true`（10s 超时）。确保返回到 Dart 时 WebView2 已完全初始化、URL 已加载
-- COM 指针赋值时调 `AddRef()`，`Destroy()` 中调 `Release()`
-- 新增 `destroying_` 标志，回调中检查防止销毁期间操作成员
-- 移除 `DwmEnableBlurBehindWindow`（可能与 WebView2 透明冲突）
-
-**受影响文件**:
-- `windows/runner/live2d_overlay_window.h` — + destroying_
-- `windows/runner/live2d_overlay_window.cpp` — 同步 InitWebView + COM ref + destroying_
-- `windows/runner/live2d_overlay_bridge.cpp` — PostMessage WM_CLOSE（前次修复）
+**修复**: `lib/services/live2d_server.dart`
+- 在 `_handleRequest()` 开头新增 `/` 和 `/health` 路由
+- 返回 `200 {"status":"ok"}` → `ParentAliveChecker` 正确识别服务器存活

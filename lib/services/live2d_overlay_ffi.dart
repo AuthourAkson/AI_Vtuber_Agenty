@@ -38,6 +38,9 @@ typedef ShowOverlayDart = void Function(int windowId, int visible);
 typedef SetOverlayTopMostNative = Void Function(Int32 windowId, Int32 topmost);
 typedef SetOverlayTopMostDart = void Function(int windowId, int topmost);
 
+typedef SetOverlayClickThroughNative = Void Function(Int32 windowId, Int32 enable);
+typedef SetOverlayClickThroughDart = void Function(int windowId, int enable);
+
 typedef IsOverlayAliveNative = Int32 Function(Int32 windowId);
 typedef IsOverlayAliveDart = int Function(int windowId);
 
@@ -60,6 +63,7 @@ class Live2DOverlayFfi {
   NavigateOverlayDart? _navigateOverlay;
   ShowOverlayDart? _showOverlay;
   SetOverlayTopMostDart? _setOverlayTopMost;
+  SetOverlayClickThroughDart? _setClickThrough;
   IsOverlayAliveDart? _isOverlayAlive;
   GetOverlaySizeDart? _getOverlaySize;
 
@@ -94,8 +98,10 @@ class Live2DOverlayFfi {
       _showOverlay = _lib!
           .lookupFunction<ShowOverlayNative, ShowOverlayDart>('ShowOverlay');
       _setOverlayTopMost = _lib!
-          .lookupFunction<SetOverlayTopMostNative, SetOverlayTopMostDart>(
-              'SetOverlayTopMost');
+          .lookupFunction<SetOverlayTopMostNative, SetOverlayTopMostDart>('SetOverlayTopMost');
+      _setClickThrough = _lib!
+          .lookupFunction<SetOverlayClickThroughNative, SetOverlayClickThroughDart>(
+              'SetOverlayClickThrough');
       _isOverlayAlive = _lib!
           .lookupFunction<IsOverlayAliveNative, IsOverlayAliveDart>('IsOverlayAlive');
       _getOverlaySize = _lib!
@@ -169,6 +175,13 @@ class Live2DOverlayFfi {
   void setTopMost(int windowId, bool topmost) {
     if (!isAvailable) return;
     _setOverlayTopMost!(windowId, topmost ? 1 : 0);
+  }
+
+  /// Enable/disable click-through mode.
+  /// When true, all mouse events pass through to windows behind the overlay.
+  void setClickThrough(int windowId, bool enable) {
+    if (!isAvailable) return;
+    _setClickThrough!(windowId, enable ? 1 : 0);
   }
 
   /// Check if the overlay window is alive.

@@ -93,6 +93,13 @@ __declspec(dllexport) void SetOverlayTopMost(int window_id, int topmost) {
   g_overlay->SetTopMost(topmost != 0);
 }
 
+/// Set click-through mode (WS_EX_TRANSPARENT).
+/// When enabled, all mouse events pass through to windows behind.
+__declspec(dllexport) void SetOverlayClickThrough(int window_id, int enable) {
+  if (window_id != g_current_id || !g_overlay) return;
+  g_overlay->SetClickThrough(enable != 0);
+}
+
 /// Check if overlay is alive.
 __declspec(dllexport) int IsOverlayAlive(int window_id) {
   if (window_id != g_current_id || !g_overlay) return 0;

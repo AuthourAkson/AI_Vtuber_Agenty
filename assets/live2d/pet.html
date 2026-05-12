@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live2D Desktop Pet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: transparent !important;
+  }
+  :root { background: transparent !important; }
+  canvas {
+    position: absolute;
+    display: block;
+    background: transparent !important;
+    pointer-events: none; /* clicks pass through canvas to drag handle below */
+  }
+
+  /* ── Control Panel (top-left, always visible) ── */
+  .control-panel {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .draggable-handle {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    border-radius: 8px;
+    cursor: move;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: transform 0.1s, opacity 0.3s;
+  }
+  .draggable-handle:active {
+    transform: scale(0.95);
+  }
+  .draggable-handle svg {
+    width: 20px;
+    height: 20px;
+    stroke: white;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+
+  /* When click-through is enabled, hide the panel */
+  .control-panel.click-through {
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  /* ── Close button ── */
+  .close-btn {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #E53935, #B71C1C);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: transform 0.1s, opacity 0.3s;
+    border: none;
+    outline: none;
+  }
+  .close-btn:active {
+    transform: scale(0.9);
+  }
+  .close-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: white;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    pointer-events: none;
+  }
+
+  /* ── Chat Bubble (bottom-center) ── */
+  #chat-bubble {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 20px;
+    max-width: 80%;
+    max-width: 400px;
+    text-align: center;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #chat-bubble.visible {
+    opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="live2d-canvas"></canvas>
+
+<div class="control-panel" id="control-panel">
+  <div id="draggable-handle" class="draggable-handle">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <polyline points="5 9 2 12 5 15" />
+      <polyline points="9 5 12 2 15 5" />
+      <polyline points="15 19 12 22 9 19" />
+      <polyline points="19 9 22 12 19 15" />
+      <line x1="2" x2="22" y1="12" y2="12" />
+      <line x1="12" x2="12" y1="2" y2="22" />
+    </svg>
+  </div>
+  <button id="close-btn" class="close-btn" title="Close pet">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
+    </svg>
+  </button>
+</div>
+
+<div id="chat-bubble"></div>
+
+<script src="pixi.min.js"></script>
+<script src="live2dcubismcore.min.js"></script>
+<script src="live2d.min.js"></script>
+<script src="cubism4.min.js"></script>
+<script src="qwebchannel.js"></script>
+
+<script>
+// ─── Global state ───
+let app = null;
+let model = null;
+let modelReady = false;
+let modelScale = 0;
+let modelX_pct = 0.5;
+let modelY_pct = 0.42;
+let clickThrough = false;
+
+// ─── Parse query parameters ───
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var modelParam = params.get('model');
+  if (modelParam) {
+    window.__initialModelUrl = decodeURIComponent(modelParam);
+  }
+  var xParam = params.get('x');
+  if (xParam) modelX_pct = parseFloat(xParam) / 100;
+  var yParam = params.get('y');
+  if (yParam) modelY_pct = parseFloat(yParam) / 100;
+  var scaleParam = params.get('scale');
+  if (scaleParam) modelScale = parseFloat(scaleParam);
+})();
+
+// ─── Initialize PIXI ───
+function initPixi() {
+  if (app) return;
+  var canvas = document.getElementById('live2d-canvas');
+  var w = window.innerWidth, h = window.innerHeight;
+
+  app = new PIXI.Application({
+    view: canvas, width: w, height: h,
+    transparent: true,
+    backgroundAlpha: 0,
+    antialias: true,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+  });
+
+  window.addEventListener('resize', function() {
+    if (!app) return;
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    updateModelTransform();
+  });
+}
+
+// ─── Model loading ───
+function loadModel(url) {
+  if (!app) initPixi();
+
+  if (model) {
+    try {
+      app.stage.removeChild(model);
+      model.destroy({children: true, texture: true, baseTexture: true});
+    } catch(_) {}
+    model = null;
+    modelReady = false;
+  }
+
+  if (!url) return;
+
+  try {
+    var Live2DModel = PIXI.live2d.Live2DModel;
+    Live2DModel.from(url, {
+      onError: function(err) { console.warn('Live2D pet load error:', err); },
+      autoInteract: false
+    }).then(function(l2d) {
+      model = l2d;
+      model.anchor.set(0.5, 0.5);
+      modelReady = true;
+
+      // Auto-scale: if no scale specified via query param, fit to 80% window height (matching AUAK)
+      if (!modelScale && model.height > 0) {
+        var targetHeight = window.innerHeight * 0.80;
+        modelScale = targetHeight / model.height;
+      }
+      updateModelTransform();
+      app.stage.addChild(model);
+
+      if (model.internalModel.motionManager) {
+        model.internalModel.motionManager.startRandomMotion('Idle');
+      }
+    }).catch(function(err) {
+      console.error('Live2D pet load error:', err);
+    });
+  } catch(err) {
+    console.error('Live2D pet error:', err);
+  }
+}
+
+function updateModelTransform() {
+  if (!model || !app) return;
+  // Hardcode center — same as AUAK Live2dDesktopAI index.html
+  model.x = window.innerWidth / 2;
+  model.y = window.innerHeight / 2;
+  model.scale.set(modelScale, modelScale);
+}
+
+// ─── Idle motions (every 15s) ───
+setInterval(function() {
+  if (modelReady && model && model.internalModel.motionManager) {
+    model.internalModel.motionManager.startRandomMotion('Idle');
+  }
+}, 15000);
+
+// ─── Chat bubble helpers ───
+function showBubble(text, durationMs) {
+  var b = document.getElementById('chat-bubble');
+  b.textContent = text;
+  b.classList.add('visible');
+  if (durationMs) {
+    setTimeout(function() { b.classList.remove('visible'); }, durationMs);
+  }
+}
+function hideBubble() {
+  document.getElementById('chat-bubble').classList.remove('visible');
+}
+
+// ─── Click-through toggle (called from Python) ───
+function setClickThrough(enable) {
+  clickThrough = enable;
+  var panel = document.getElementById('control-panel');
+  if (enable) {
+    panel.classList.add('click-through');
+  } else {
+    panel.classList.remove('click-through');
+  }
+}
+
+// ─── Main init on window load ───
+window.addEventListener('load', function() {
+  initPixi();
+
+  // Auto-load model from query params
+  if (window.__initialModelUrl) {
+    setTimeout(function() {
+      loadModel(window.__initialModelUrl);
+    }, 500);
+  }
+
+  // ─── QWebChannel setup ───
+  if (typeof QWebChannel !== 'undefined') {
+    new QWebChannel(qt.webChannelTransport, function(channel) {
+      var windowController = channel.objects.windowController;
+      var mouseTracker = channel.objects.mouseTracker;
+
+      // ── Window drag via handle ──
+      if (windowController) {
+        var handle = document.getElementById('draggable-handle');
+        var isDragging = false;
+        handle.onmousedown = function(e) {
+          isDragging = true;
+          windowController.start_drag();
+          e.preventDefault();
+        };
+        document.onmousemove = function(e) {
+          if (isDragging) windowController.drag();
+        };
+        document.onmouseup = function() {
+          if (isDragging) {
+            isDragging = false;
+            windowController.end_drag();
+          }
+        };
+
+        // ── Close button (manual shutdown) ──
+        var closeBtn = document.getElementById('close-btn');
+        if (closeBtn) {
+          closeBtn.onclick = function(e) {
+            e.stopPropagation();
+            var port = new URLSearchParams(window.location.search).get('port') || '48889';
+            fetch('http://127.0.0.1:' + port + '/close', {method: 'POST'});
+          };
+        }
+      }
+
+      // ── Eye tracking (60fps from Python MouseTracker) ──
+      if (mouseTracker) {
+        mouseTracker.mouseMoved.connect(function(x, y) {
+          if (!modelReady || !model) return;
+          var offsetX = (x - window.innerWidth / 2) / (window.innerWidth / 2);
+          var offsetY = -(y - window.innerHeight / 2) / (window.innerHeight / 2);
+          try {
+            var core = model.internalModel.coreModel;
+            core.setParameterValueById('ParamAngleX', offsetX * 30);
+            core.setParameterValueById('ParamAngleY', offsetY * 30);
+            core.setParameterValueById('ParamEyeBallX', offsetX);
+            core.setParameterValueById('ParamEyeBallY', offsetY);
+          } catch(_) {}
+        });
+      }
+    });
+  }
+
+  // ─── Keyboard shortcut: ESC to close ───
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      if (windowController) {
+        // Signal Python to clean shutdown via HTTP
+        fetch('http://127.0.0.1:' + (new URLSearchParams(window.location.search).get('port') || '48889') + '/close', {method: 'POST'});
+      }
+    }
+  });
+});
+
+// ─── Expose for external control (Python runJavaScript) ───
+window.changeModel = function(modelPath) {
+  console.log('changeModel:', modelPath);
+  loadModel(modelPath);
+};
+
+window.setModelTransform = function(xPct, yPct, scale) {
+  if (xPct !== undefined) modelX_pct = xPct;
+  if (yPct !== undefined) modelY_pct = yPct;
+  if (scale !== undefined) modelScale = scale;
+  updateModelTransform();
+};
+
+window.showMessage = function(text, durationMs) {
+  showBubble(text, durationMs || 3000);
+};
+
+window.setClickThrough = setClickThrough;
+</script>
+</body>
+</html>

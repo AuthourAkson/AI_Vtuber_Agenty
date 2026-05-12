@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,7 +8,6 @@ import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
 import '../services/live2d_server.dart';
-import '../services/live2d_overlay_ffi.dart';
 import '../widgets/live2d_view.dart';
 
 class CharacterScreen extends StatefulWidget {
@@ -20,7 +21,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
   final Live2DModelService _modelService = Live2DModelService();
   List<Map<String, String>> _models = [];
   String? _importingModel; // model being imported
-  int _overlayId = 0; // Native overlay window ID, 0 = not open
+  int _petPort = 48889; // HTTP port for pet control
+  bool _clickThrough = true; // Default: click-through for streaming
+  final HttpClient _httpClient = HttpClient();
 
   @override
   void initState() {
@@ -30,7 +33,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   @override
   void dispose() {
-    _closeOverlay(); // Clean up native overlay if open
+    _closePet(); // Clean up Python pet process if running
+    _httpClient.close();
     super.dispose();
   }
 
@@ -412,8 +416,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
               const SizedBox(height: 4),
               const Text(
                 'Open a separate transparent, always-on-top window with your Live2D character. '
-                'Drag anywhere on screen. Position it for OBS streaming capture. '
-                'The overlay is frame-less — drag the character itself to move the window.',
+                'Default: click-through (mouse passes through). '
+                'F2 or Ctrl+Shift+F2 to toggle Interactive mode for dragging. '
+                'ESC or Ctrl+Shift+Q to close the overlay.',
                 style: TextStyle(color: Color(0xFF888888), fontSize: 12),
               ),
               const SizedBox(height: 12),
@@ -422,23 +427,23 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: modelJsonPath != null && _overlayId == 0
-                        ? () => _openOverlay(modelJsonPath!, s)
+                    onPressed: modelJsonPath != null && !Live2DServer.petRunning
+                        ? () => _openPet(modelJsonPath!, s)
                         : null,
                     icon: const Icon(Icons.open_in_new, size: 18),
-                    label: Text(_overlayId != 0 ? 'Overlay Active' : 'Open Overlay'),
+                    label: Text(Live2DServer.petRunning ? 'Pet Active' : 'Open Pet'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF4CAF50),
                       side: BorderSide(
-                        color: _overlayId != 0
+                        color: Live2DServer.petRunning
                             ? const Color(0xFF4CAF50)
                             : const Color(0xFF4CAF50),
                       ),
                     ),
                   ),
-                  if (_overlayId != 0) ...[
+                  if (Live2DServer.petRunning) ...[
                     OutlinedButton.icon(
-                      onPressed: _closeOverlay,
+                      onPressed: _closePet,
                       icon: const Icon(Icons.close, size: 18),
                       label: const Text('Close'),
                       style: OutlinedButton.styleFrom(
@@ -447,9 +452,18 @@ class _CharacterScreenState extends State<CharacterScreen> {
                       ),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _toggleOverlayTopMost,
-                      icon: const Icon(Icons.vertical_align_top, size: 18),
-                      label: const Text('Toggle Topmost'),
+                      onPressed: _togglePetClickThrough,
+                      icon: Icon(_clickThrough ? Icons.touch_app : Icons.touch_app_outlined, size: 18),
+                      label: Text(_clickThrough ? 'Click-through ON' : 'Interactive'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _clickThrough ? const Color(0xFF4CAF50) : const Color(0xFF888888),
+                        side: BorderSide(color: _clickThrough ? const Color(0xFF4CAF50) : const Color(0xFF444444)),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _reloadPetModel,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Reload Model'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF888888),
                         side: const BorderSide(color: Color(0xFF444444)),
@@ -465,70 +479,166 @@ class _CharacterScreenState extends State<CharacterScreen> {
     );
   }
 
-  void _openOverlay(String modelPath, AppSettings s) {
-    final overlay = Live2DOverlayFfi.instance;
-    if (!overlay.isAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Native overlay not available. (Build required.)'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+  // ─── Python Pet Subprocess Management ───
 
-    // Build URL with model parameters in query string so WebView loads model
-    // on first navigation (once WebView2 async init completes).
+  /// Send an HTTP request to the Python pet control server.
+  Future<Map<String, dynamic>?> _petRequest(String path, {Map<String, dynamic>? body}) async {
+    if (!Live2DServer.petRunning) return null;
+    try {
+      final request = await _httpClient.postUrl(
+        Uri.parse('http://127.0.0.1:$_petPort$path'),
+      );
+      if (body != null) {
+        request.write(jsonEncode(body));
+      }
+      final response = await request.close().timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final data = await response.transform(utf8.decoder).join();
+        return jsonDecode(data) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('Pet HTTP error ($path): $e');
+    }
+    return null;
+  }
+
+  Future<void> _openPet(String modelPath, AppSettings s) async {
+    if (Live2DServer.petRunning) return;
+
+    // Build model URL
     final modelUrl = Live2DServer.toModelUrl(modelPath);
-    final fullUrl = 'http://localhost:${Live2DServer.port}/live2d_web/renderer.html'
-        '?model=${Uri.encodeComponent(modelUrl)}'
-        '&x=${s.live2DXPosition}&y=${s.live2DYPosition}&scale=${s.live2DScale}';
 
-    final id = overlay.create(
-      fullUrl,
-      x: 100, y: 100,
-      width: 400, height: 600,
-    );
+    // Resolve python executable — try python3 first, then python
+    String pythonExe = 'python3';
+    try {
+      final result = await Process.run(pythonExe, ['--version']);
+      if (result.exitCode != 0) pythonExe = 'python';
+    } catch (_) {
+      pythonExe = 'python';
+    }
 
-    if (id > 0) {
-      setState(() => _overlayId = id);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Overlay opened. Drag anywhere to move.'),
-          backgroundColor: Color(0xFF4CAF50),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to create overlay window.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    // Find the pet script path relative to the project
+    final scriptPath = 'lib/services/live2d_pet.py';
+
+    try {
+      final process = await Process.start(pythonExe, [
+        scriptPath,
+        '--port', _petPort.toString(),
+        '--model-url', modelUrl,
+        '--scale', s.live2DScale.toString(),
+        '--x', s.live2DXPosition.toString(),
+        '--y', s.live2DYPosition.toString(),
+      ]);
+
+      Live2DServer.setPetProcess(process);
+
+      // Listen to stdout/stderr
+      process.stdout.transform(utf8.decoder).listen((data) {
+        debugPrint('[Pet stdout] $data');
+      });
+      process.stderr.transform(utf8.decoder).listen((data) {
+        debugPrint('[Pet stderr] $data');
+      });
+
+      // Handle process exit
+      process.exitCode.then((code) {
+        debugPrint('[Pet] Process exited with code $code');
+        Live2DServer.setPetProcess(null);
+        if (mounted) setState(() {});
+      });
+
+      // Wait a moment for the server to start, then confirm health
+      await Future.delayed(const Duration(seconds: 2));
+      final healthOk = await _checkPetHealth();
+      if (healthOk && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Desktop pet opened. Hover top-left corner to drag.'),
+            backgroundColor: Color(0xFF4CAF50),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Live2DServer.setPetProcess(null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start desktop pet: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  void _closeOverlay() {
-    if (_overlayId != 0) {
-      Live2DOverlayFfi.instance.destroy(_overlayId);
-      setState(() => _overlayId = 0);
+  Future<bool> _checkPetHealth() async {
+    try {
+      final request = await _httpClient.getUrl(
+        Uri.parse('http://127.0.0.1:$_petPort/health'),
+      );
+      final response = await request.close().timeout(const Duration(seconds: 3));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
     }
   }
 
-  void _toggleOverlayTopMost() {
-    if (_overlayId != 0) {
-      final overlay = Live2DOverlayFfi.instance;
-      // Toggle: we track by metadata; just toggle
-      overlay.setTopMost(_overlayId, true); // always keep on top
+  void _closePet() {
+    if (Live2DServer.petRunning) {
+      // Try graceful shutdown via HTTP
+      _petRequest('/close');
+      // Force kill after a short delay as safety net
+      Future.delayed(const Duration(milliseconds: 500), () {
+        Live2DServer.killPet();
+      });
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Overlay set to always-on-top'),
+          content: Text('Desktop pet closed.'),
           backgroundColor: Color(0xFF888888),
           duration: Duration(seconds: 1),
         ),
       );
     }
+  }
+
+  void _togglePetClickThrough() {
+    if (!Live2DServer.petRunning) return;
+    final newState = !_clickThrough;
+    _petRequest('/click_through', body: {'enable': newState});
+    setState(() => _clickThrough = newState);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(newState
+            ? 'Click-through ON — mouse passes through'
+            : 'Interactive mode — drag handle visible to move window'),
+        backgroundColor: newState ? const Color(0xFF4CAF50) : const Color(0xFF888888),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _reloadPetModel() {
+    if (!Live2DServer.petRunning) return;
+    final sp = context.read<SettingsProvider>();
+    final s = sp.settings;
+    final modelPath = s.selectedLive2DModel;
+    if (modelPath == null) return;
+    final modelUrl = Live2DServer.toModelUrl(modelPath);
+    _petRequest('/reload_model', body: {
+      'model_url': modelUrl,
+      'scale': s.live2DScale,
+      'x': s.live2DXPosition,
+      'y': s.live2DYPosition,
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Reloading pet model...'),
+        backgroundColor: Color(0xFF888888),
+        duration: Duration(seconds: 1),
+      ),
+    );
   }
 
   Widget _modeCard(String title, IconData icon, bool selected, VoidCallback onTap) {
