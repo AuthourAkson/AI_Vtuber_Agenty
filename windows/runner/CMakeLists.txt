@@ -11,6 +11,8 @@ add_executable(${BINARY_NAME} WIN32
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"
+  "live2d_overlay_window.cpp"
+  "live2d_overlay_bridge.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"
   "runner.exe.manifest"
@@ -35,10 +37,41 @@ if(MSVC)
   target_compile_options(${BINARY_NAME} PRIVATE "/utf-8")
 endif()
 
+# No special compile flags needed for overlay files.
+# They use hand-rolled COM callbacks (no WRL dependency).
+
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+
+# WebView2 SDK (from flutter_inappwebview build artifacts)
+# CMAKE_SOURCE_DIR = D:/AiVtuber_Agent/windows/ (top-level CMakeLists.txt)
+# Actual build dir = D:/AiVtuber_Agent/build/
+set(WEBVIEW2_DIR "${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/Microsoft.Web.WebView2/build/native")
+if(EXISTS "${WEBVIEW2_DIR}")
+  target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/include")
+  target_link_libraries(${BINARY_NAME} PRIVATE
+    "${WEBVIEW2_DIR}/x64/WebView2LoaderStatic.lib"
+  )
+  message(STATUS "WebView2 SDK found at: ${WEBVIEW2_DIR}")
+else()
+  # Fallback: try Flutter ephemeral cache (after flutter clean + rebuild)
+  set(WEBVIEW2_FALLBACK "${CMAKE_SOURCE_DIR}/flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/build/webview2/native")
+  if(EXISTS "${WEBVIEW2_FALLBACK}")
+    set(WEBVIEW2_DIR "${WEBVIEW2_FALLBACK}")
+    target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/include")
+    target_link_libraries(${BINARY_NAME} PRIVATE
+      "${WEBVIEW2_DIR}/x64/WebView2LoaderStatic.lib"
+    )
+    message(STATUS "WebView2 SDK found at (fallback): ${WEBVIEW2_DIR}")
+  else()
+    message(WARNING "WebView2 SDK not found. Live2D overlay will not compile.")
+    message(WARNING "  Tried: ${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/...")
+    message(WARNING "  Tried: ${WEBVIEW2_FALLBACK}")
+  endif()
+endif()
+
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

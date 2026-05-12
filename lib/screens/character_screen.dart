@@ -5,8 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
+import '../services/live2d_server.dart';
+import '../services/live2d_overlay_ffi.dart';
 import '../widgets/live2d_view.dart';
-import '../widgets/pet_mode_overlay.dart';
 
 class CharacterScreen extends StatefulWidget {
   const CharacterScreen({super.key});
@@ -19,11 +20,18 @@ class _CharacterScreenState extends State<CharacterScreen> {
   final Live2DModelService _modelService = Live2DModelService();
   List<Map<String, String>> _models = [];
   String? _importingModel; // model being imported
+  int _overlayId = 0; // Native overlay window ID, 0 = not open
 
   @override
   void initState() {
     super.initState();
     _refreshModels();
+  }
+
+  @override
+  void dispose() {
+    _closeOverlay(); // Clean up native overlay if open
+    super.dispose();
   }
 
   void _refreshModels() {
@@ -398,27 +406,57 @@ class _CharacterScreenState extends State<CharacterScreen> {
               const Divider(color: Color(0xFF2C2C2C)),
               const SizedBox(height: 16),
 
-              // ─── Desktop Pet Overlay ───
-              const Text('Desktop Pet Overlay',
+              // ─── Transparent Overlay (VTube Studio Style) ───
+              const Text('Transparent Overlay',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               const Text(
-                'Opens a full-screen transparent overlay with your Live2D character. '
-                'Right-click the character to open a chat dialog. '
-                'Move your mouse to control eye tracking.',
+                'Open a separate transparent, always-on-top window with your Live2D character. '
+                'Drag anywhere on screen. Position it for OBS streaming capture. '
+                'The overlay is frame-less — drag the character itself to move the window.',
                 style: TextStyle(color: Color(0xFF888888), fontSize: 12),
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: modelJsonPath != null
-                    ? () => _openPetMode(modelJsonPath!, s)
-                    : null,
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Launch Pet Mode'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF4CAF50),
-                  side: const BorderSide(color: Color(0xFF4CAF50)),
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: modelJsonPath != null && _overlayId == 0
+                        ? () => _openOverlay(modelJsonPath!, s)
+                        : null,
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: Text(_overlayId != 0 ? 'Overlay Active' : 'Open Overlay'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF4CAF50),
+                      side: BorderSide(
+                        color: _overlayId != 0
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFF4CAF50),
+                      ),
+                    ),
+                  ),
+                  if (_overlayId != 0) ...[
+                    OutlinedButton.icon(
+                      onPressed: _closeOverlay,
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('Close'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(color: Colors.redAccent),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _toggleOverlayTopMost,
+                      icon: const Icon(Icons.vertical_align_top, size: 18),
+                      label: const Text('Toggle Topmost'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF888888),
+                        side: const BorderSide(color: Color(0xFF444444)),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -427,20 +465,70 @@ class _CharacterScreenState extends State<CharacterScreen> {
     );
   }
 
-  void _openPetMode(String modelPath, AppSettings s) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        barrierColor: Colors.transparent,
-        pageBuilder: (_, __, ___) => PetModeOverlay(
-          modelPath: modelPath,
-          positionX: s.live2DXPosition,
-          positionY: s.live2DYPosition,
-          scale: s.live2DScale,
-          onExit: () => Navigator.of(context).pop(),
+  void _openOverlay(String modelPath, AppSettings s) {
+    final overlay = Live2DOverlayFfi.instance;
+    if (!overlay.isAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Native overlay not available. (Build required.)'),
+          backgroundColor: Colors.red,
         ),
-      ),
+      );
+      return;
+    }
+
+    // Build URL with model parameters in query string so WebView loads model
+    // on first navigation (once WebView2 async init completes).
+    final modelUrl = Live2DServer.toModelUrl(modelPath);
+    final fullUrl = 'http://localhost:${Live2DServer.port}/live2d_web/renderer.html'
+        '?model=${Uri.encodeComponent(modelUrl)}'
+        '&x=${s.live2DXPosition}&y=${s.live2DYPosition}&scale=${s.live2DScale}';
+
+    final id = overlay.create(
+      fullUrl,
+      x: 100, y: 100,
+      width: 400, height: 600,
     );
+
+    if (id > 0) {
+      setState(() => _overlayId = id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Overlay opened. Drag anywhere to move.'),
+          backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to create overlay window.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _closeOverlay() {
+    if (_overlayId != 0) {
+      Live2DOverlayFfi.instance.destroy(_overlayId);
+      setState(() => _overlayId = 0);
+    }
+  }
+
+  void _toggleOverlayTopMost() {
+    if (_overlayId != 0) {
+      final overlay = Live2DOverlayFfi.instance;
+      // Toggle: we track by metadata; just toggle
+      overlay.setTopMost(_overlayId, true); // always keep on top
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Overlay set to always-on-top'),
+          backgroundColor: Color(0xFF888888),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   Widget _modeCard(String title, IconData icon, bool selected, VoidCallback onTap) {

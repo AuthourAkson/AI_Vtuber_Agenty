@@ -190,58 +190,139 @@ SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
 
 ## ⬜ 待修复
 
-Destroyed managed flutter window: b8edf047-05c5-4198-9f29-5a348967057a
-[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: MissingPluginException(No implementation found for method createInAppWebView on channel com.pichillilorenzo/flutter_inappwebview_manager)
-#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:364:7)
-<asynchronous suspension>
-#1      CustomPlatformViewController.initialize (package:flutter_inappwebview_windows/src/in_app_webview/custom_platform_view.dart:126:19)
-<asynchronous suspension>
+D:\AiVtuber_Agent>flutter run -d windows
+Launching lib\main.dart on Windows in debug mode...
+CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/windows/CMakeLists.txt:31 (add_custom_command):
+  The following keywords are not supported when using
+  add_custom_command(TARGET): DEPENDS.
+
+  Policy CMP0175 is not set: add_custom_command() rejects invalid arguments.
+  Run "cmake --help-policy CMP0175" for policy details.  Use the cmake_policy
+  command to set the policy and suppress this warning.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(267,1): error C2220: 以下警告被视为错误 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
+D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(267,1): warning C4010: 单行注释包含行继续符 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
+D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(268,26): error C2065: “tempPath”: 未声明的标识符 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
+D:\AiVtuber_Agent\windows\runner\live2d_overlay_window.cpp(269,46): error C2065: “tempPath”: 未声明的标识符 [D:\AiVtuber_Agent\build\windows\x64\runner\ai_vtuber_agent.vcxproj]
+Building Windows application...                                    18.2s
+Error: Build process failed.
 
 ---
 
-## ✅ 已修复 (2026-05-11 第三批次)
+### Bug #B28: desktop_multi_window 子窗口 flutter_inappwebview 插件未注册
 
-### Bug #B17: file_picker v11 API 变更 — FilePicker.platform 不存在
-
-**日期**: 2026-05-11
+**日期**: 2026-05-11 (发现), 2026-05-12 (根治)
 
 **现象**:
 
 ```
-lib/screens/character_screen.dart(70,37): error G75B77105: Member not found: 'platform'.
+MissingPluginException(No implementation found for method createInAppWebView
+on channel com.pichillilorenzo/flutter_inappwebview_manager)
 ```
 
-**根因**: `file_picker` 11.0.2 移除了 `FilePicker.platform.pickFiles()` 中的 `platform` getter。
+**根因**: desktop_multi_window 创建新 Flutter Engine 时，PlatformView 插件（InAppWebView）不会自动注册。
+这是 Flutter 多窗口 + PlatformView 的已知限制。
 
-**修复**: 改为直接调用静态方法 `FilePicker.pickFiles(...)`
+**修复**: 绕过 Flutter 插件体系，直接在 C++ 层创建 WebView2：
 
-**受影响文件**: `lib/screens/character_screen.dart:70`
+- 使用 Win32 CreateWindowEx + 原生 WebView2 COM API
+- 复用 flutter_inappwebview 内的 WebView2 SDK 头文件和静态库
+- 无需任何 Flutter 插件注册
 
 ---
 
-### Bug #B18: WebView file:// CORS — 模型加载失败 (Status 0 Network Error)
+## ✅ 已修复 (2026-05-12 — CMake 路径修复)
 
-**日期**: 2026-05-11
+### Bug #B29: CMake WebView2 SDK 路径错误
+
+**日期**: 2026-05-12
 
 **现象**:
 
 ```
-[XHRLoader] Failed to load resource as json (Status 0):
-  file:///D:/AiVtuber_Agent_profile/models/live2d/Amiya/Amiya.model3.json
-Live2D load warning: _e: Network error.
+CMake Warning: WebView2 SDK not found at
+  D:/AiVtuber_Agent/windows/build/windows/x64/packages/Microsoft.Web.WebView2/build/native.
+
+windows/runner/live2d_overlay_window.cpp(4,10): error C1083:
+  无法打开包括文件: "WebView2.h": No such file or directory
 ```
 
-Live2D 容器一片空白，模型无法加载。
+**根因**: CMakeLists.txt 中 `CMAKE_SOURCE_DIR` = `D:/AiVtuber_Agent/windows/`，
+但实际 build 目录在 `D:/AiVtuber_Agent/build/`。路径 `CMAKE_SOURCE_DIR/build/...` 
+解析为 `D:/AiVtuber_Agent/windows/build/...`（不存在）。
 
-**根因**: Edge WebView2 安全策略禁止从 `file://` 页面通过 XHR 访问其他 `file://` 路径。
-pixi-live2d-display 内部使用 XHR 加载 .model3.json，触发 CORS 限制。
+**修复**: 路径改为 `${CMAKE_SOURCE_DIR}/../build/windows/x64/packages/...`。
+同时添加 fallback 搜索路径到 flutter ephemeral cache。
+
+**受影响文件**: `windows/runner/CMakeLists.txt`
+
+---
+
+## ✅ 已修复 (2026-05-12 — WRL 编译错误)
+
+### Bug #B30: WRL Callback + private WndProc + static OnEnvironmentCreated 编译错误
+
+**日期**: 2026-05-12
+
+**现象**:
+
+```
+error C2248: "WndProc": 无法访问 private 成员
+error C2039: "Callback": 不是 "Microsoft::WRL" 的成员
+error C2597: 对非静态成员"webview_env_"的非法引用
+error C2660: CreateCoreWebView2EnvironmentWithOptions 不接受 3 个参数
+```
+
+**根因**:
+
+1. `WndProc` 声明在 `private:` 区域 → 匿名 namespace 的 `RegisterOverlayClass` 无法引用
+2. `Microsoft::WRL::Callback` 需要 C++ 异常支持，但项目全局 `_HAS_EXCEPTIONS=0`
+3. `OnEnvironmentCreated` 声明为 `static` 但访问了非静态成员 `webview_env_`, `hwnd_`
+4. WRL `Callback` 找不到导致编译器认为第4参数缺失
 
 **修复**: 
 
-- 引入 `InAppLocalhostServer`（localhost:48888），以 `D:\AiVtuber_Agent_profile` 为根目录
-- renderer.html 和模型文件统一通过 HTTP 加载（同源，无 CORS 限制）
-- 模型路径从 `file:///D:/...` 转为 `http://localhost:48888/models/live2d/...`
+- `WndProc` 移到 `public:` 区域
+- `OnEnvironmentCreated` 改为非静态成员函数
+- 完全移除 WRL 依赖，用**手写 COM callback 类**替代 `Microsoft::WRL::Callback`
+  - `EnvironmentCompletedHandler` — 实现 `ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler`
+  - `ControllerCompletedHandler` — 实现 `ICoreWebView2CreateCoreWebView2ControllerCompletedHandler`
+  - 手写 `QueryInterface`/`AddRef`/`Release`/`Invoke`
+- CMakeLists.txt 移除不再需要的 `/EHsc /U_HAS_EXCEPTIONS` 覆盖
 
-**受影响文件**: `lib/widgets/live2d_view.dart`
+**受影响文件**:
 
-*最后更新: 2026-05-11*
+- `windows/runner/live2d_overlay_window.h` — WndProc public, OnEnvironmentCreated non-static
+- `windows/runner/live2d_overlay_window.cpp` — 完全重写
+- `windows/runner/CMakeLists.txt` — 清理编译标志
+
+---
+
+## ✅ 已修复 (2026-05-12 — 同步 WebView2 初始化 + COM 引用计数)
+
+### Bug #B33: WebView2 异步初始化永不触发 + COM 引用缺失 → 模型不显示 + Close 崩溃
+
+**日期**: 2026-05-12
+
+**现象**: 
+1. `C4010: 单行注释包含行继续符` — 注释 `\` 吞掉下行
+2. Overlay 透明但模型不显示
+3. Close Overlay 卡退
+
+**根因**:
+1. 注释行 `// Default: %TEMP%\AiVtuber_Overlay\` 末尾 `\` 是 C/C++ 行继续符
+2. `CreateCoreWebView2EnvironmentWithOptions` 是异步的，回调依赖 COM 消息泵。`CreateOverlay()` 不等回调就返回到 Dart，`pending_url_` 设好了但回调永远不触发 → WebView2 从未就绪，URL 从未加载
+3. COM 接口指针（`webview_env_`, `webview_controller_`, `webview_`）裸赋值未调 `AddRef()`/`Release()`，销毁时可能 double-free 或 use-after-free
+
+**修复**:
+- 注释 `\` → `/`
+- `InitWebView()` 改为**同步**：`CreateCoreWebView2EnvironmentWithOptions` 后用 `PeekMessage`/`DispatchMessage` 循环泵消息直到 `webview_ready_ == true`（10s 超时）。确保返回到 Dart 时 WebView2 已完全初始化、URL 已加载
+- COM 指针赋值时调 `AddRef()`，`Destroy()` 中调 `Release()`
+- 新增 `destroying_` 标志，回调中检查防止销毁期间操作成员
+- 移除 `DwmEnableBlurBehindWindow`（可能与 WebView2 透明冲突）
+
+**受影响文件**:
+- `windows/runner/live2d_overlay_window.h` — + destroying_
+- `windows/runner/live2d_overlay_window.cpp` — 同步 InitWebView + COM ref + destroying_
+- `windows/runner/live2d_overlay_bridge.cpp` — PostMessage WM_CLOSE（前次修复）

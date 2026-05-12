@@ -491,40 +491,82 @@ flutter run -d windows
 | B22 | window_manager 在子窗口不可用 | overlay_main.dart |
 
 ---
+---
+## 变更汇总 (2026-05-12 晚 — VTube Studio 风格透明浮窗)
 
-## 变更汇总 (2026-05-12 晚)
+### 架构重构：从全屏覆盖到独立透明窗口
 
-### Pet Mode 全屏覆盖 + 拖拽 + 眼球追踪
+**旧方案 (PetModeOverlay)**：全屏透明 Flutter 路由覆盖在主窗口上，阻断 UI 交互和窗口拖拽。
+
+**新方案 (Native WebView2 Overlay)**：C++ 原生 Win32 窗口，独立于 Flutter 主窗口，VTube Studio 风格：
+
+```
+主窗口 (AI VTuber Agent)              独立透明浮窗 (Live2D Overlay)
+┌──────────────────────────┐         ┌─────────────────────┐
+│  正常 UI                 │         │ WS_EX_LAYERED       │
+│  (Chat/Settings/...)     │  FFI    │ WS_EX_TOPMOST       │
+│                          │◄───────►│ WS_EX_TOOLWINDOW    │
+│  Character Settings:     │         │                     │
+│    [Open Overlay]        │         │  WebView2 (透明BG)  │
+│    [Close] [Toggle Top]  │         │  PixiJS + Live2D    │
+│                          │         │  👀 眼球追踪鼠标     │
+└──── Live2DServer :48888 ─┴─────────┤  ✋ 拖拽移动窗口     │
+                                     │  ↕↔ 边缘调整大小    │
+                                     └─────────────────────┘
+                                              ↕ OBS 捕获
+```
+
+### 新增/修改文件
+
 | 文件 | 说明 |
 |------|------|
-| `lib/widgets/pet_mode_overlay.dart` | **新增** 全屏透明覆盖层（替代 desktop_multi_window 子窗口） |
-| `assets/live2d/renderer.html` | **重写** JS 原生 mousemove 眼球追踪 (ParamEyeBallX/Y, ParamAngleX/Y) + 拖拽逻辑 |
-| `lib/widgets/live2d_view.dart` | + setEyeTarget, + setMouseTracking, Live2DViewState 公开 |
-| `lib/screens/character_screen.dart` | + Launch Pet Mode 按钮, PageRouteBuilder(opaque: false) 透明路由 |
-| `pubspec.yaml` | + ffi（备用） |
+| `windows/runner/live2d_overlay_window.h` | **新增** C++ 透明窗口类：Win32 + WebView2 + DWM 合成 |
+| `windows/runner/live2d_overlay_window.cpp` | **新增** 实现：窗口创建、WebView2 初始化、拖拽/缩放、透明背景 |
+| `windows/runner/live2d_overlay_bridge.cpp` | **新增** C API 桥接（Dart FFI 调用入口） |
+| `windows/runner/CMakeLists.txt` | **修改** + overlay 源文件 + WebView2 SDK 链接 |
+| `lib/services/live2d_overlay_ffi.dart` | **新增** Dart FFI 绑定：create/destroy/move/resize/navigate/setTopMost |
+| `lib/main.dart` | **修改** + Live2DOverlayFfi 初始化 |
+| `lib/screens/character_screen.dart` | **重写** PetModeOverlay → Native Overlay：Open/Close/Toggle Topmost 按钮 |
+| `assets/live2d/renderer.html` | **修改** + 查询参数解析 (?model=&x=&y=&scale=), + 透明背景 !important |
+| `lib/widgets/pet_mode_overlay.dart` | **删除**（已废弃） |
 
-### 架构（最终）
-```
-主窗口 (AI VTuber Agent)
-┌─────────────────────────────────┐
-│  正常 UI (Chat/Settings/...)    │
-│                                 │
-│  Character Settings:            │
-│    [Launch Pet Mode] ──push──→  │  PetModeOverlay (全屏透明覆盖)
-│                                 │  ┌─────────────────────────┐
-│                                 │  │ Live2DView (WebView)    │
-│                                 │  │  👀 JS原生mousemove追踪  │
-│                                 │  │  ✋ 拖拽模型位置         │
-│                                 │  │  💬 右键→透明对话框     │
-│                                 │  │  [Exit Pet Mode]        │
-│                                 │  └─────────────────────────┘
-│                                 │
-└──── Live2DServer :48888 ────────┘
-```
+### 技术细节
 
-### Bug 修复 (第四批次)
-| # | 问题 | 文件 |
+**透明窗口实现：**
+- `WS_EX_LAYERED` | `WS_EX_TOPMOST` | `WS_EX_TOOLWINDOW` — 分层 + 置顶 + 无任务栏图标
+- `DwmExtendFrameIntoClientArea` (margins=-1) — DWM 全窗口玻璃效果
+- `DwmEnableBlurBehindWindow` — 启用模糊透明
+- `ICoreWebView2Controller2::put_DefaultBackgroundColor({0,0,0,0})` — WebView 透明
+
+**窗口交互：**
+- `WM_NCHITTEST` 返回 `HTCAPTION` — 点击模型本体拖拽整个窗口
+- 边缘 8px 检测 — 四边 + 四角调整窗口大小
+- `ESC` 键关闭窗口
+
+**WebView2 编译：**
+- 复用 flutter_inappwebview 的 WebView2 SDK (build/windows/x64/packages/)
+- 链接 WebView2LoaderStatic.lib (静态库，无需额外 DLL)
+- 覆盖 `_HAS_EXCEPTIONS` 宏（WebView2 COM 回调需要）
+
+### 移除的旧方案
+
+| 旧文件 | 状态 |
+|--------|------|
+| `lib/widgets/pet_mode_overlay.dart` | **删除** — 全屏覆盖阻断主窗口 |
+| `lib/overlay_main.dart` | 保留但不再使用（desktop_multi_window 方案） |
+
+### 后续优化
+
+- [ ] 从 Dart 调用 JS 控制模型（通过 WebView2 WebMessage API）
+- [ ] 鼠标点击穿透模式（OBS 捕获时不阻挡操作）
+- [ ] 窗口位置/大小持久化
+- [ ] 多显示器支持
+
+### Bug 修复 (第五批次)
+
+| # | 问题 | 修复 |
 |---|------|------|
-| B23 | desktop_multi_window 子窗口 plugin 未注册 | → PetModeOverlay 替代 |
-| B24 | Pet 模式白底 | PageRouteBuilder(opaque: false) |
-| B25 | 眼球追踪卡顿 | Dart GetCursorPos → JS 原生 mousemove |
+| B26 | PetModeOverlay 覆盖全屏阻断主窗口 UI | → Native WebView2 overlay 窗口 |
+| B27 | PetModeOverlay 导致主窗口无法拖拽 | → 独立 Win32 窗口 (WS_EX_TOOLWINDOW) |
+| B28 | desktop_multi_window 子窗口 flutter_inappwebview 插件未注册 | → 绕过 Flutter 插件，直接用 C++ WebView2 |
+| B29 | CMake WebView2 SDK 路径错误 `CMAKE_SOURCE_DIR/build` → `../build` | CMakeLists.txt 路径修复 + fallback |

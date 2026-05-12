@@ -9,15 +9,16 @@
   html, body {
     width: 100%; height: 100%;
     overflow: hidden;
-    background: transparent;
+    background: transparent !important;
   }
   /* Force WebView2 transparency */
-  :root { background: transparent; }
+  :root { background: transparent !important; }
   canvas {
     display: block;
     width: 100% !important;
     height: 100% !important;
     cursor: grab;
+    background: transparent !important;
   }
   canvas:active { cursor: grabbing; }
   /* Chat dialog */
@@ -77,6 +78,21 @@ let currentModelPath = null;
 let modelScale = 0.16;
 let modelX = 0.5;
 let modelY = 0.5;
+
+// ─── Parse query parameters (must be after var declarations) ───
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var modelParam = params.get('model');
+  if (modelParam) {
+    window.__initialModel = decodeURIComponent(modelParam);
+  }
+  var xParam = params.get('x');
+  if (xParam) modelX = parseFloat(xParam) / 100;
+  var yParam = params.get('y');
+  if (yParam) modelY = parseFloat(yParam) / 100;
+  var scaleParam = params.get('scale');
+  if (scaleParam) modelScale = parseFloat(scaleParam);
+})();
 
 // Drag state
 let isDragging = false;
@@ -304,6 +320,12 @@ setInterval(function() {
 window.addEventListener('load', function() {
   initPixi();
   postToFlutter('rendererReady', {});
+  // Auto-load model from query params (for native overlay)
+  if (window.__initialModel) {
+    setTimeout(function() {
+      loadModel(window.__initialModel, modelScale, modelX * 100, modelY * 100);
+    }, 500);
+  }
 });
 </script>
 </body>

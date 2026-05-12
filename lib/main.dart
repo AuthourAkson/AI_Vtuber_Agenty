@@ -7,6 +7,7 @@ import 'app.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/live2d_server.dart';
+import 'services/live2d_overlay_ffi.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,9 @@ void main(List<String> args) async {
 
   // Start Live2D HTTP file server
   await Live2DServer.start();
+
+  // Initialize native overlay FFI (VTube Studio-style transparent window)
+  Live2DOverlayFfi.instance.load();
 
   // Initialize acrylic/mica effect on Windows
   await acrylic.Window.initialize();
