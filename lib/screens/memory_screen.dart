@@ -4,9 +4,10 @@ import '../app.dart';
 import '../providers/chat_provider.dart';
 
 /// Memory page — matches LocalAIVtuber2's SessionList / MemoryPage.
-/// Shows session cards with search, filters, index/delete actions.
+/// Memory page — matches LocalAIVtuber2's SessionList / MemoryPage.
 class MemoryScreen extends StatefulWidget {
-  const MemoryScreen({super.key});
+  final VoidCallback? onNavigateHome;
+  const MemoryScreen({super.key, this.onNavigateHome});
 
   @override
   State<MemoryScreen> createState() => _MemoryScreenState();
@@ -16,6 +17,18 @@ class _MemoryScreenState extends State<MemoryScreen> {
   final _searchCtrl = TextEditingController();
   String _searchTerm = '';
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load sessions into cache on first open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chat = context.read<ChatProvider>();
+      chat.sessionManager.loadSessions().then((_) {
+        if (mounted) setState(() {});
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -125,9 +138,8 @@ class _MemoryScreenState extends State<MemoryScreen> {
                             ? null
                             : () async {
                                 setState(() => _loading = true);
-                                // Trigger session list refresh
-                                await chat.sessionManager.listSessions();
-                                setState(() => _loading = false);
+                                await chat.sessionManager.loadSessions();
+                                if (mounted) setState(() => _loading = false);
                               },
                         child: Container(
                           width: 36,
@@ -268,7 +280,10 @@ class _MemoryScreenState extends State<MemoryScreen> {
             children: [
               // Load button
               GestureDetector(
-                onTap: () => chat.loadSession(id),
+                onTap: () async {
+                  await chat.loadSession(id);
+                  widget.onNavigateHome?.call();
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -290,8 +305,8 @@ class _MemoryScreenState extends State<MemoryScreen> {
               const SizedBox(width: 6),
               // Delete button
               GestureDetector(
-                onTap: () {
-                  chat.sessionManager.deleteSession(id);
+                onTap: () async {
+                  await chat.sessionManager.deleteSession(id);
                   setState(() {});
                 },
                 child: const Icon(

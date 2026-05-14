@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   provider: ^6.1.2
   flutter_markdown: ^0.7.7+1
+  # LaTeX math rendering
+  flutter_math_fork: ^0.7.2
   # bitsdojo_window for modern frameless windows with native buttons
   bitsdojo_window: ^0.1.6
   # flutter_acrylic for Windows acrylic/mica blur effects

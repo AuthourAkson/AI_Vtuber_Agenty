@@ -240,6 +240,9 @@ class ChatProvider extends ChangeNotifier {
       }
       _enableMemoryRetrieval = settings.enableMemoryRetrieval;
 
+      // Load session list into cache
+      await sessionManager.loadSessions();
+
       // Auto-load last session from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       final lastId = prefs.getString('last_session_id');
@@ -247,6 +250,7 @@ class ChatProvider extends ChangeNotifier {
         await setSessionId(lastId);
       }
     } catch (_) {}
+    notifyListeners();
   }
 
   /// Load a session

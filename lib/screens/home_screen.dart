@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'character':
         return const CharacterScreen();
       case 'memory':
-        return const MemoryScreen();
+        return MemoryScreen(onNavigateHome: () => setState(() => _activePage = 'home'));
       case 'vision':
         return const VisionScreen();
       case 'tts':

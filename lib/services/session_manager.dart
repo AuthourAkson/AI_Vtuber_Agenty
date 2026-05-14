@@ -46,7 +46,9 @@ class SessionManager {
 
   Future<List<Map<String, dynamic>>> listSessions() async {
     try {
-      return await _backend.listSessions();
+      final list = await _backend.listSessions();
+      _sessionsCache = list;
+      return list;
     } catch (_) {
       return [];
     }
@@ -55,6 +57,10 @@ class SessionManager {
   Future<void> deleteSession(String sessionId) async {
     try {
       await _backend.deleteSession(sessionId);
+      await _refreshCache(); // update cache after delete
     } catch (_) {}
   }
+
+  /// Load initial session list into cache (call on screen init)
+  Future<void> loadSessions() => _refreshCache();
 }

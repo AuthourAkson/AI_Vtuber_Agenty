@@ -803,9 +803,47 @@ Flutter App 启动
 | `llm-monitor.tsx` | `LLMMonitor` (只读 TextArea) |
 | `session-list.tsx` | `MemoryScreen` (搜索 + 卡片列表) |
 | `ttsPage.tsx` + Card | `TTSScreen` (shadCard 卡片式) |
-| `page-mapping.ts` 10 页面路由 | `HomeScreen._pageMap` (10 页面 IndexedStack) |
+| `page-mapping.ts` 10 页面路由 | `HomeScreen._buildPage` (条件 switch，仅构建活跃页) |
 
 ### 窗口框架
 保持不变：`bitsdojo_window` (BDW_CUSTOM_FRAME) + `flutter_acrylic` (Mica 毛玻璃) + Windows 11 原生圆角。
+
+---
+
+## 变更汇总 (2026-05-14 #2 — Markdown/LaTeX 渲染 + SelectionArea)
+
+### 新增功能
+- **Markdown 渲染**: 粗体、斜体、列表、引用块、链接（flutter_markdown + MarkdownBody）
+- **代码块**: 深色背景 + 等宽字体 + 原生选区复制（SelectionArea）
+- **LaTeX 公式**: `$...$` 行内 / `$$...$$` 块级（flutter_math_fork + Math.tex）
+- **化学式**: `\ce{H2O}` → `H_{2}O` 自动转换（flutter_math_fork 不含 mhchem）
+- **选区高亮**: 绿色半透明底色 + 光标（textSelectionTheme）
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/widgets/rich_content_bubble.dart` | **新增** 统一渲染组件：LaTeX 正则分割 + MarkdownBody + \ce 预处理 |
+| `lib/widgets/chat_bubble.dart` | 改用 RichContentBubble + SelectionArea 包裹 |
+| `lib/app.dart` | + textSelectionTheme（选区高亮色） |
+| `pubspec.yaml` | + flutter_math_fork（LaTeX 渲染） |
+
+### Session 面板修复
+| 文件 | 变更 |
+|------|------|
+| `lib/providers/chat_provider.dart` | `initFromSavedState()` 启动时加载 session list + notifyListeners() |
+| `lib/services/session_manager.dart` | `listSessions()` 同步缓存; `deleteSession()` 自动刷新; + `loadSessions()` |
+| `lib/screens/memory_screen.dart` | + initState 预加载; Load 按钮跳转 Home; Delete 异步处理 |
+| `lib/screens/home_screen.dart` | MemoryScreen 接收 `onNavigateHome` 回调 |
+
+### Bug 修复
+| Bug | 现象 | 修复 |
+|-----|------|------|
+| #34 | debugFrameWasSentToEngine 无限循环 | IndexedStack→switch; AnimationController→隐式动画 |
+| #35 | SidePanel Stack 无界约束崩溃 | SizedBox(width:) 包裹 |
+| #36 | Session 面板重叠 AppSidebar + 按钮无响应 | ClipRect + 条件渲染 + 状态外露 |
+| #37 | flutter_markdown _inlines 断言崩溃 | 移除自定义 CodeBlockBuilder |
+| #38 | LaTeX 正则错误 (\$) | 修正为 `\$` |
+| #39 | Session 面板启动无数据 | initFromSavedState 加 loadSessions() |
 
 

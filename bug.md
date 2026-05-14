@@ -330,6 +330,7 @@ Python `urllib.request.urlopen()` 对非 2xx 响应抛出 `HTTPError`，
 **日期**: 2026-05-14
 
 **现象**: 窗口启动后崩溃，`debugFrameWasSentToEngine` 级联：
+
 ```
 ══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞══════════════════
 A Stack requires bounded constraints from its parent.
@@ -346,208 +347,91 @@ A Stack requires bounded constraints from its parent.
 **日期**: 2026-05-14
 
 **现象**:
+
 1. 左侧会话管理面板关闭时**视觉覆盖** AppSidebar 区域
 2. 点击 session 列表的 "New Session" 和会话项**无反应**
 3. 左侧侧边栏被 session 面板部分覆盖，但点原本位置仍会切换页面
 
 **根因（多个）**:
+
 1. **无 ClipRect**: `ChatScreen` 的 `Stack` 无裁剪 → `AnimatedSlide(offset: -1.0)` 将面板左移 260px，进入 AppSidebar 的渲染区
 2. **Header 按钮代码错误**: `findAncestorStateOfType<_ChatScreenState>()` 查找私有类型 + 空 `setState((){})` — 完全不工作
 3. **状态未外露**: `SidePanel` 的 `_isOpen` 是内部状态，外部无法控制
 4. **Positioned 无显式 width**: 需 `SizedBox` 包裹提供有界宽度
 
-**修复**: `lib/screens/chat_screen.dart`
-- 新增 `ClipRect` 包裹 Stack — 面板关闭时裁剪到 ChatScreen 边界内
-- 新增 `_SidePanelBuild` 内联组件 — 由 ChatScreen 控制 `isOpen`，不再用内部状态
-- Header 按钮 → 直接 `setState(() => _sessionPanelOpen = !_sessionPanelOpen)`
-- Header 新增 Settings 齿轮按钮 → toggle 设置面板
-- 所有 `Positioned` 的子组件包裹 `SizedBox(width: ...)`
-Launching lib\main.dart on Windows in debug mode...
-CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/windows/CMakeLists.txt:31 (add_custom_command):
-  The following keywords are not supported when using
-  add_custom_command(TARGET): DEPENDS.
+**待修复**: Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
+'_inlines.isEmpty': is not true.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6268 pos 12:
+'_dependents.isEmpty': is not true.
+[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: 'package:flutter/src/rendering/object.dart': Failed assertion: line 3536 pos 12: 'attached': is not true.
+#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:67:4)
+#1      _AssertionError._throwNew (dart:core-patch/errors_patch.dart:49:5)
+#2      RenderObject.getTransformTo (package:flutter/src/rendering/object.dart:3536:12)
+#3      RenderBox.localToGlobal (package:flutter/src/rendering/box.dart:3092:39)
+#4      _CustomPlatformViewState._reportWidgetPosition (package:flutter_inappwebview_windows/src/in_app_webview/custom_platform_view.dart:426:28)
+<asynchronous suspension>
 
-  Policy CMP0175 is not set: add_custom_command() rejects invalid arguments.
-  Run "cmake --help-policy CMP0175" for policy details.  Use the cmake_policy
-  command to set the policy and suppress this warning.
-This warning is for project developers.  Use -Wno-dev to suppress it.
-
-D:\AiVtuber_Agent\windows\flutter\ephemeral\.plugin_symlinks\flutter_inappwebview_windows\windows\utils\base64.cpp(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失 [D:\AiVtuber_Agent\build\windows\x64\plugins\flutter_inappwebview_windows\flutter_inappwebview_windows_plugin.vcxproj]
-D:\AiVtuber_Agent\windows\flutter\ephemeral\.plugin_symlinks\flutter_inappwebview_windows\windows\types\web_resource_response.cpp(54,28): warning C4244: “参数”: 从“__int64”转换到“int”，可能丢失数据 [D:\AiVtuber_Agent\build\windows\x64\plugins\flutter_inappwebview_windows\flutter_inappwebview_windows_plugin.vcxproj]
-D:\AiVtuber_Agent\build\windows\x64\packages\Microsoft.Web.WebView2\build\native\include\WebView2EnvironmentOptions.h(194,3): warning C4458: “value”的声明隐藏了类成员 [D:\AiVtuber_Agent\build\windows\x64\plugins\flutter_inappwebview_windows\flutter_inappwebview_windows_plugin.vcxproj]
-D:\AiVtuber_Agent\build\windows\x64\packages\Microsoft.Web.WebView2\build\native\include\WebView2EnvironmentOptions.h(193,3): warning C4458: “value”的声明隐藏了类成员 [D:\AiVtuber_Agent\build\windows\x64\plugins\flutter_inappwebview_windows\flutter_inappwebview_windows_plugin.vcxproj]
-D:\AiVtuber_Agent\build\windows\x64\packages\Microsoft.Web.WebView2\build\native\include\WebView2EnvironmentOptions.h(194,3): warning C4458: “value”的声明隐藏了类成员 [D:\AiVtuber_Agent\build\windows\x64\plugins\flutter_inappwebview_windows\flutter_inappwebview_windows_plugin.vcxproj]
-D:\AiVtuber_Agent\build\windows\x64\packages\Microsoft.Web.WebView2\build\native\include\WebView2EnvironmentOptions.h(193,3): warning C4458: “value”的声明隐藏了类成员 [D:\AiVtuber_Agent\build\windows\x64\plugins\flutter_inappwebview_windows\flutter_inappwebview_windows_plugin.vcxproj]
-Building Windows application...                                   249.3s
-√ Built build\windows\x64\runner\Debug\ai_vtuber_agent.exe
-Live2D HTTP server on http://localhost:48888
-Live2DOverlayFfi: Failed to load native functions: Invalid argument(s): Failed to lookup symbol 'CreateOverlay': None of the loaded modules contained the requested symbol 'CreateOverlay'.
-[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: SignalException: Failed to listen for SIGTERM, osError: OS Error: 不支持该请求。, errno = 50
-
-══╡ EXCEPTION CAUGHT BY RENDERING LIBRARY ╞═════════════════════════════════════════════════════════
-The following assertion was thrown during performLayout():
-A Stack requires bounded constraints from its parent. This error commonly occurs when a Stack is
-placed inside a widget like Column, ListView, or other widgets that do not constrain their children.
-To fix this, wrap the Stack in a widget that provides finite height and width constraints, such as a
-SizedBox or ConstrainedBox. Use Expanded only if the parent is a Flex widget like Row or Column.
-'package:flutter/src/rendering/stack.dart':
-Failed assertion: line 664 pos 7: 'size.isFinite'
-
-Either the assertion indicates an error in the framework itself, or we should provide substantially
-more information in this error message to help you determine and fix the underlying cause.
-In either case, please report this assertion by filing a bug on GitHub:
-  https://github.com/flutter/flutter/issues/new?template=02_bug.yml
-
-The relevant error-causing widget was:
-  Stack Stack:file:///D:/AiVtuber_Agent/lib/widgets/side_panel.dart:46:12
-
-When the exception was thrown, this was the stack:
-#2      RenderStack._computeSize (package:flutter/src/rendering/stack.dart:664:7)
-#3      RenderStack.performLayout (package:flutter/src/rendering/stack.dart:680:12)
-#4      RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#5      RenderStack.layoutPositionedChild (package:flutter/src/rendering/stack.dart:549:11)
-#6      RenderStack.performLayout (package:flutter/src/rendering/stack.dart:691:13)
-#7      RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#8      RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#9      RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#10     ChildLayoutHelper.layoutChild (package:flutter/src/rendering/layout_helper.dart:62:11)
-#11     RenderFlex._computeSizes (package:flutter/src/rendering/flex.dart:1275:26)
-#12     RenderFlex.performLayout (package:flutter/src/rendering/flex.dart:1329:32)
-#13     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#14     ChildLayoutHelper.layoutChild (package:flutter/src/rendering/layout_helper.dart:62:11)
-#15     RenderFlex._computeSizes (package:flutter/src/rendering/flex.dart:1275:26)
-#16     RenderFlex.performLayout (package:flutter/src/rendering/flex.dart:1329:32)
-#17     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#18     MultiChildLayoutDelegate.layoutChild (package:flutter/src/rendering/custom_layout.dart:180:12)
-#19     _ScaffoldLayout.performLayout (package:flutter/src/material/scaffold.dart:1113:7)
-#20     MultiChildLayoutDelegate._callPerformLayout (package:flutter/src/rendering/custom_layout.dart:246:7)
-#21     RenderCustomMultiChildLayoutBox.performLayout (package:flutter/src/rendering/custom_layout.dart:417:14)
-#22     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#23     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#24     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#25     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#26     _RenderCustomClip.performLayout (package:flutter/src/rendering/proxy_box.dart:1549:11)
-#27     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#28     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#29     _RenderCustomClip.performLayout (package:flutter/src/rendering/proxy_box.dart:1549:11)
-#30     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#31     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#32     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#33     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#34     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#35     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#36     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#37     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#38     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#39     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#40     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#41     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#42     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#43     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#44     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#45     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#46     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#47     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#48     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#49     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#50     RenderOffstage.performLayout (package:flutter/src/rendering/proxy_box.dart:3923:13)
-#51     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#52     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#53     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#54     _RenderTheaterMixin.layoutChild (package:flutter/src/widgets/overlay.dart:1084:13)
-#55     _RenderTheater.performLayout (package:flutter/src/widgets/overlay.dart:1429:9)
-#56     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#57     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#58     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#59     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#60     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#61     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#62     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#63     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#64     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#65     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#66     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#67     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#68     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#69     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#70     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#71     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#72     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#73     RenderProxyBoxMixin.performLayout (package:flutter/src/rendering/proxy_box.dart:118:18)
-#74     RenderObject.layout (package:flutter/src/rendering/object.dart:2768:7)
-#75     RenderView.performLayout (package:flutter/src/rendering/view.dart:292:12)
-#76     RenderObject._layoutWithoutResize (package:flutter/src/rendering/object.dart:2616:7)
-#77     PipelineOwner.flushLayout (package:flutter/src/rendering/object.dart:1174:18)
-#78     PipelineOwner.flushLayout (package:flutter/src/rendering/object.dart:1187:15)
-#79     RendererBinding.drawFrame (package:flutter/src/rendering/binding.dart:629:23)
-#80     WidgetsBinding.drawFrame (package:flutter/src/widgets/binding.dart:1304:13)
-#81     RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:495:5)
-#82     SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1430:15)
-#83     SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1345:9)
-#84     SchedulerBinding.scheduleWarmUpFrame.<anonymous closure> (package:flutter/src/scheduler/binding.dart:1055:9)
-#85     PlatformDispatcher.scheduleWarmUpFrame.<anonymous closure> (dart:ui/platform_dispatcher.dart:906:16)
-#89     _RawReceivePort._handleMessage (dart:isolate-patch/isolate_patch.dart:193:12)
-(elided 5 frames from class _AssertionError, class _Timer, and dart:async-patch)
-
-The following RenderObject was being processed when the exception was fired: RenderStack#16885 relayoutBoundary=up5
-NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE:
-  creator: Stack ← SidePanel ← Positioned ← Stack ← Consumer2<ChatProvider, SettingsProvider> ←
-    ChatScreen ← ColoredBox ← Container ← Expanded ← Row ← HomeScreen ← Expanded ← ⋯
-  parentData: top=0.0; bottom=0.0; left=0.0; offset=Offset(0.0, 0.0) (can use size)
-  constraints: BoxConstraints(0.0<=w<=Infinity, h=688.7)
-  size: MISSING
-  alignment: AlignmentDirectional.topStart
-  textDirection: ltr
-  fit: loose
-  clipBehavior: none
-This RenderObject had the following descendants (showing up to depth 5):
-    child 1: RenderSemanticsGestureHandler#db2eb NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-      child: RenderPointerListener#7de0e NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-        child: RenderConstrainedBox#f5b56 NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-          child: RenderDecoratedBox#af020 NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-            child: RenderPadding#b387b NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-    child 2: RenderFractionalTranslation#9957e NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-      child: RenderConstrainedBox#2288b NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-        child: _RenderColoredBox#d4bc2 NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-          child: RenderFlex#4575d NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-            child 1: RenderPadding#fbef9 NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-            child 2: RenderPositionedBox#996f1 NEEDS-LAYOUT NEEDS-PAINT NEEDS-COMPOSITING-BITS-UPDATE
-            child 3: RenderConstrainedBox#a1e42 NEEDS-LAYOUT NEEDS-PAINT
-════════════════════════════════════════════════════════════════════════════════════════════════════
-
-Another exception was thrown: RenderBox was not laid out: RenderStack#16885 relayoutBoundary=up5 NEEDS-PAINT
-NEEDS-COMPOSITING-BITS-UPDATE
-Another exception was thrown: 'package:flutter/src/rendering/object.dart': Failed assertion: line 5737 pos 14:
-'!childSemantics.renderObject._needsLayout': is not true.
-Another exception was thrown: RenderBox was not laid out: RenderStack#16885 relayoutBoundary=up5
-Another exception was thrown: 'package:flutter/src/rendering/object.dart': Failed assertion: line 5737 pos 14:
-'!childSemantics.renderObject._needsLayout': is not true.
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart': Failed assertion: line 1280 pos 16:
-'debugFrameWasSentToEngine': is not true.
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart': Failed assertion: line 1280 pos 16:
-'debugFrameWasSentToEngine': is not true.
-Another exception was thrown: 'package:flutter/src/rendering/object.dart': Failed assertion: line 5737 pos 14:
-'!childSemantics.renderObject._needsLayout': is not true.
-Another exception was thrown: 'package:flutter/src/rendering/object.dart': Failed assertion: line 5493 pos 14:
-'!semantics.parentDataDirty': is not true.
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart': Failed assertion: line 1280 pos 16:
-'debugFrameWasSentToEngine': is not true.
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart': Failed assertion: line 1280 pos 16:
-'debugFrameWasSentToEngine': is not true.
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart': Failed assertion: line 1280 pos 16:
-'debugFrameWasSentToEngine': is not true.
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart': Failed assertion: line 1280 pos 16:
-'debugFrameWasSentToEngine': is not true.
-Syncing files to device Windows...                                 170ms
-
-Flutter run key commands.
-r Hot reload.
-R Hot restart.
-h List all available interactive commands.
-d Detach (terminate "flutter run" but leave application running).
-c Clear the screen
-q Quit (terminate the application on the device).
-
-A Dart VM Service on Windows is available at: http://127.0.0.1:54662/sDdqvq9Vwag=/
-The Flutter DevTools debugger and profiler on Windows is available at:
-http://127.0.0.1:54662/sDdqvq9Vwag=/devtools/?uri=ws://127.0.0.1:54662/sDdqvq9Vwag=/ws
+Live2D JS: "Live2D %s" "2.1.00_1"
+Live2D JS: "profile : Desktop"
+Live2D JS: "  [PROFILE_NAME] = Desktop"
+Live2D JS: "  [USE_ADJUST_TRANSLATION] = false"
+Live2D JS: "  [USE_CACHED_POLYGON_IMAGE] = false"
+Live2D JS: "  [EXPAND_W] = 2"
+Loading model: http://localhost:48888/models/live2d/Amiya/Amiya.model3.json
+Live2D JS: "[CSM][I]Live2D Cubism Core version: 05.00.0000 (83886080)\n"
+Live2D JS: "[CSM][I]CubismFramework.startUp() is complete.\n"
+Live2D JS: "[CSM][I]CubismFramework.initialize() is complete.\n"
+Live2D JS: "Live2D Cubism SDK Core Version 5.0.0"
+Loading model: http://localhost:48888/models/live2d/Amiya/Amiya.model3.json
+Live2D JS: "Live2D Cubism SDK Core Version 5.0.0"
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: Tried to build dirty widget in the wrong build scope.
+Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {

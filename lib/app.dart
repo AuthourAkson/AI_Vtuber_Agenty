@@ -135,6 +135,12 @@ class MyApp extends StatelessWidget {
           ),
           textStyle: const TextStyle(color: ShadColors.foreground, fontSize: 12),
         ),
+        // Text selection — visible highlight on dark background
+        textSelectionTheme: const TextSelectionThemeData(
+          selectionColor: Color(0x404CAF50),
+          cursorColor: ShadColors.primary,
+          selectionHandleColor: ShadColors.primary,
+        ),
       ),
       home: const AppShell(),
     );
