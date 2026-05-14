@@ -37,13 +37,56 @@ class ChatProvider extends ChangeNotifier {
 
   List<HistoryItem> get messages => List.unmodifiable(_messages);
   String? get sessionId => _sessionId;
+  String? get activeSessionId => _sessionId;
+  String get activeSessionTitle {
+    if (_sessionId == null) return 'New Session';
+    // Use first user message as title, or fallback
+    final firstMsg = _messages.isNotEmpty ? _messages.first : null;
+    if (firstMsg != null && firstMsg.role == 'user') {
+      final truncated = firstMsg.content.length > 30
+          ? '${firstMsg.content.substring(0, 30)}...'
+          : firstMsg.content;
+      return truncated;
+    }
+    return _sessionId!.substring(0, 8);
+  }
   String get systemPrompt => _systemPrompt;
   String get visionPrompt => _visionPrompt;
   String get ocrPrompt => _ocrPrompt;
   String get retrievedContext => _retrievedContext;
+  String get currentCaption => _visionPrompt;
+  String get currentOcrText => _ocrPrompt;
+  String get currentMemoryContext => _retrievedContext;
+  String get fullSystemPrompt {
+    final parts = <String>[];
+    if (_visionPrompt.isNotEmpty) parts.add('[SCREEN CONTEXT]\n$_visionPrompt');
+    if (_ocrPrompt.isNotEmpty) parts.add('[SCREEN TEXT]\n$_ocrPrompt');
+    if (_retrievedContext.isNotEmpty) parts.add('[RETRIEVED MEMORY]\n$_retrievedContext');
+    if (_systemPrompt.isNotEmpty) parts.add('[INSTRUCTIONS]\n$_systemPrompt');
+    return parts.join('\n\n');
+  }
   bool get enableMemoryRetrieval => _enableMemoryRetrieval;
   bool get connected => backend.connected;
   bool get isStreaming => _isStreaming;
+
+  /// All sessions list
+  List<Map<String, dynamic>> get sessions => sessionManager.getSessionsCache();
+
+  /// Create a new session and switch to it
+  Future<void> createNewSession() async {
+    final id = await sessionManager.createNewSession();
+    if (id != null) {
+      _sessionId = id;
+      _messages.clear();
+      // Persist as last active
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_session_id', id);
+      notifyListeners();
+    }
+  }
+
+  /// Load session by ID
+  Future<void> loadSession(String id) => setSessionId(id);
 
   // ─── Setters ───
 

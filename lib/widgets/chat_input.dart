@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../app.dart';
 
-/// Chat input bar with send button
+/// Chat input bar matching LocalAIVtuber2's chatbox input area:
+/// `bg-secondary rounded-lg px-4 py-6` with Input + Send/Square button.
 class ChatInput extends StatefulWidget {
   final Function(String) onSend;
   final bool isStreaming;
@@ -24,6 +26,7 @@ class _ChatInputState extends State<ChatInput> {
     if (text.isEmpty) return;
     widget.onSend(text);
     _controller.clear();
+    _focusNode.requestFocus();
   }
 
   @override
@@ -36,45 +39,63 @@ class _ChatInputState extends State<ChatInput> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        border: Border(top: BorderSide(color: Color(0xFF2C2C2C))),
+        border: Border(top: BorderSide(color: ShadColors.border)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              maxLines: 4,
-              minLines: 1,
-              style: const TextStyle(fontSize: 14),
-              decoration: const InputDecoration(
-                hintText: 'Type a message...',
-                hintStyle: TextStyle(color: Color(0xFF666666)),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-              onSubmitted: (_) => _send(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            child: IconButton(
-              onPressed: widget.isStreaming ? null : _send,
-              icon: Icon(
-                widget.isStreaming ? Icons.hourglass_top : Icons.send,
-                color: widget.isStreaming ? const Color(0xFF666666) : const Color(0xFF4CAF50),
-              ),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF2C2C2C),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: ShadColors.secondary,
+          borderRadius: BorderRadius.circular(8), // rounded-lg
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                maxLines: 4,
+                minLines: 1,
+                enabled: !widget.isStreaming,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: ShadColors.foreground,
+                ),
+                decoration: const InputDecoration(
+                  hintText: 'Type your message here.',
+                  hintStyle: TextStyle(color: ShadColors.mutedForeground),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onSubmitted: (_) => widget.isStreaming ? null : _send(),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            // Send / Stop button
+            GestureDetector(
+              onTap: widget.isStreaming ? null : _send,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: widget.isStreaming
+                      ? ShadColors.accent
+                      : ShadColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(
+                  widget.isStreaming ? Icons.stop : Icons.send,
+                  size: 16,
+                  color: widget.isStreaming
+                      ? ShadColors.mutedForeground
+                      : ShadColors.primaryForeground,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

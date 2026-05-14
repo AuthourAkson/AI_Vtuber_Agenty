@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import '../app.dart';
 import '../models/message.dart';
 
-/// Renders a single chat message bubble
+/// Chat message bubble matching LocalAIVtuber2's editable-chat-history.tsx style.
+/// - User messages: right-aligned, bg-secondary, opacity 0.8
+/// - AI messages: left-aligned, bg-secondary, full opacity
+/// - Minimal padding, rounded-md corners, text-sm font
 class ChatBubble extends StatelessWidget {
   final HistoryItem item;
 
@@ -11,56 +15,34 @@ class ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = item.role == 'user';
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            const CircleAvatar(
-              radius: 14,
-              backgroundColor: Color(0xFF4CAF50),
-              child: Icon(Icons.smart_toy, size: 16, color: Colors.white),
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 560),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: ShadColors.secondary,
+          borderRadius: BorderRadius.circular(6), // rounded-md = 6px
+          // box-shadow-xs equivalent — subtle shadow
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 1,
+              offset: Offset(0, 0.5),
             ),
-            const SizedBox(width: 8),
           ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isUser ? const Color(0xFF2C3A2C) : const Color(0xFF252525),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isUser ? 'You' : 'AI',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isUser ? const Color(0xFF4CAF50) : const Color(0xFF888888),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.content,
-                    style: const TextStyle(fontSize: 14, color: Color(0xFFDDDDDD)),
-                  ),
-                ],
-              ),
-            ),
+        ),
+        child: Text(
+          item.content,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: isUser
+                ? ShadColors.secondaryForeground.withAlpha(204) // opacity-80
+                : ShadColors.secondaryForeground,
+            height: 1.5,
           ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            const CircleAvatar(
-              radius: 14,
-              backgroundColor: Color(0xFF3A3A3A),
-              child: Icon(Icons.person, size: 16, color: Color(0xFF888888)),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

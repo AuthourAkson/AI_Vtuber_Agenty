@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app.dart';
 
 class StreamScreen extends StatefulWidget {
   const StreamScreen({super.key});

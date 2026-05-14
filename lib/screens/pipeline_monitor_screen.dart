@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../app.dart';
 import '../models/task.dart';
 import '../providers/chat_provider.dart';
 
@@ -24,7 +25,7 @@ class _PipelineMonitorScreenState extends State<PipelineMonitorScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFF2C2C2C))),
+                border: Border(bottom: BorderSide(color: ShadColors.border)),
               ),
               child: Row(
                 children: [
@@ -74,7 +75,7 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: const Color(0xFF1E1E1E),
+      color: ShadColors.card,
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -89,7 +90,7 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task.id.length > 12 ? '${task.id.substring(0, 12)}...' : task.id,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF666666), fontFamily: 'monospace'),
+                    style: const TextStyle(fontSize: 11, color: ShadColors.mutedForeground, fontFamily: 'monospace'),
                   ),
                 ),
                 if (task.status == TaskStatus.pendingInterruption)

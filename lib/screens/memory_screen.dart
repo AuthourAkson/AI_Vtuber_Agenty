@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../app.dart';
 import '../providers/chat_provider.dart';
 
+/// Memory page — matches LocalAIVtuber2's SessionList / MemoryPage.
+/// Shows session cards with search, filters, index/delete actions.
 class MemoryScreen extends StatefulWidget {
   const MemoryScreen({super.key});
 
@@ -10,121 +13,297 @@ class MemoryScreen extends StatefulWidget {
 }
 
 class _MemoryScreenState extends State<MemoryScreen> {
-  List<Map<String, dynamic>> _sessions = [];
+  final _searchCtrl = TextEditingController();
+  String _searchTerm = '';
   bool _loading = false;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ChatProvider>(
       builder: (context, chat, _) {
-        return Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFF2C2C2C))),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.memory, color: Color(0xFF4CAF50)),
-                  const SizedBox(width: 8),
-                  const Text('Memory & Sessions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  // Memory retrieval toggle
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Memory:', style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
-                      Switch(
-                        value: chat.enableMemoryRetrieval,
-                        onChanged: (v) => chat.enableMemoryRetrieval = v,
-                        activeColor: const Color(0xFF4CAF50),
+        final sessions = chat.sessions;
+
+        // Filter by search term
+        final filtered = sessions.where((s) {
+          final title = (s['title'] as String?) ?? '';
+          return title.toLowerCase().contains(_searchTerm.toLowerCase());
+        }).toList();
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 40, left: 48, right: 48, bottom: 40),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Page header — matches LAV2 style
+                const Text(
+                  'Chat Sessions',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: ShadColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Manage and review your conversation sessions',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: ShadColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Search & filter bar
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: ShadColors.card,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: ShadColors.border),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x08000000),
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _loadSessions,
-                    tooltip: 'Refresh',
-                  ),
-                ],
-              ),
-            ),
-            // Memory context display
-            if (chat.retrievedContext.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E2A1E),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF2C4A2C)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Retrieved Context', style: TextStyle(color: Color(0xFF4CAF50), fontSize: 12, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(chat.retrievedContext, style: const TextStyle(fontSize: 12, color: Color(0xFFBBBBBB))),
-                  ],
-                ),
-              ),
-            // Session list
-            Expanded(
-              child: _sessions.isEmpty
-                  ? const Center(child: Text('No sessions yet', style: TextStyle(color: Color(0xFF888888))))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _sessions.length,
-                      itemBuilder: (_, index) {
-                        final s = _sessions[index];
-                        final id = s['id'] as String;
-                        final title = s['title'] as String? ?? 'Untitled';
-                        final isActive = chat.sessionId == id;
-                        return Card(
-                          color: isActive ? const Color(0xFF1E3A1E) : const Color(0xFF1E1E1E),
-                          child: ListTile(
-                            leading: const Icon(Icons.chat_bubble_outline, color: Color(0xFF888888)),
-                            title: Text(title),
-                            subtitle: Text(id, style: const TextStyle(fontSize: 11, color: Color(0xFF666666))),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(Icons.delete_outline, color: Colors.red[400], size: 18),
-                                  onPressed: () async {
-                                    await chat.backend.deleteSession(id);
-                                    _loadSessions();
-                                  },
-                                ),
-                              ],
+                  child: Row(
+                    children: [
+                      // Search field
+                      Expanded(
+                        child: SizedBox(
+                          height: 36,
+                          child: TextField(
+                            controller: _searchCtrl,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: ShadColors.foreground,
                             ),
-                            onTap: () => chat.setSessionId(id),
+                            decoration: InputDecoration(
+                              hintText: 'Search sessions...',
+                              hintStyle: const TextStyle(
+                                color: ShadColors.mutedForeground,
+                                fontSize: 13,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.search,
+                                size: 16,
+                                color: ShadColors.mutedForeground,
+                              ),
+                              filled: true,
+                              fillColor: ShadColors.secondary,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(color: ShadColors.input),
+                              ),
+                            ),
+                            onChanged: (v) => setState(() => _searchTerm = v),
                           ),
-                        );
-                      },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Refresh button
+                      GestureDetector(
+                        onTap: _loading
+                            ? null
+                            : () async {
+                                setState(() => _loading = true);
+                                // Trigger session list refresh
+                                await chat.sessionManager.listSessions();
+                                setState(() => _loading = false);
+                              },
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: ShadColors.input),
+                          ),
+                          child: _loading
+                              ? const Center(
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: ShadColors.mutedForeground,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.refresh,
+                                  size: 16,
+                                  color: ShadColors.mutedForeground,
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Session cards
+                if (filtered.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 48),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.storage_rounded,
+                            size: 48,
+                            color: ShadColors.mutedForeground,
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No sessions found',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: ShadColors.foreground,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Try adjusting your search criteria',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: ShadColors.mutedForeground,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  )
+                else
+                  ...filtered.map((session) {
+                    final id = session['id'] as String? ?? '';
+                    final title = (session['title'] as String?) ?? 'Untitled';
+                    final createdAt =
+                        (session['created_at'] as String?) ?? '';
+                    return _sessionCard(
+                      id: id,
+                      title: title,
+                      createdAt: createdAt,
+                      chat: chat,
+                    );
+                  }),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
   }
 
-  Future<void> _loadSessions() async {
-    setState(() => _loading = true);
-    try {
-      final chat = context.read<ChatProvider>();
-      _sessions = await chat.backend.listSessions();
-    } catch (_) {}
-    setState(() => _loading = false);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSessions());
+  Widget _sessionCard({
+    required String id,
+    required String title,
+    required String createdAt,
+    required ChatProvider chat,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ShadColors.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ShadColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Session info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: ShadColors.foreground,
+                  ),
+                ),
+                if (createdAt.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Created: $createdAt',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: ShadColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Actions
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Load button
+              GestureDetector(
+                onTap: () => chat.loadSession(id),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: ShadColors.input),
+                  ),
+                  child: const Text(
+                    'Load',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: ShadColors.foreground,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Delete button
+              GestureDetector(
+                onTap: () {
+                  chat.sessionManager.deleteSession(id);
+                  setState(() {});
+                },
+                child: const Icon(
+                  Icons.close,
+                  size: 16,
+                  color: ShadColors.mutedForeground,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -752,3 +752,60 @@ Flutter App 启动
 | 自动缩放 | 90% | 80% | 匹配 AUAK，模型完整显示 |
 | 进程清理 | sigterm watch | ParentAliveChecker + sigterm | 双重兜底：Python 自主检测 + 信号 |
 
+---
+
+## 变更汇总 (2026-05-14 — Frontend 视觉重构：1:1 复刻 LocalAIVtuber2)
+
+### 目标
+将 AiVtuber_Agent 的 Flutter 前端视觉设计 1:1 复刻 LocalAIVtuber2 的 React + shadcn/ui 前端。
+
+### 视觉设计系统 (shadcn Dark Theme)
+- **背景**: `#1A1A1A` (oklch 0.145)
+- **卡片**: `#252525` (oklch 0.205)
+- **次要色**: `#2E2E2E` (oklch 0.269)
+- **边框**: `rgba(255,255,255,0.1)`
+- **圆角**: 6px (shadcn rounded-md), 8px (rounded-lg), 10px (input border-radius)
+- **字体色**: `#F5F5F5` (foreground), `#9E9E9E` (muted)
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/app.dart` | **重写** 新增 `ShadColors` 颜色常量类，主题完全匹配 shadcn dark palette |
+| `lib/widgets/app_sidebar.dart` | **重写** 可折叠 sidebar (200px/48px)，双段布局 (Test pipeline + footer)，匹配 shadcn Sidebar |
+| `lib/widgets/side_panel.dart` | **新增** 滑动侧面板组件，匹配 LAV2 SidePanel（左右滑入/滑出 + 边缘切换按钮） |
+| `lib/widgets/chat_bubble.dart` | **重写** 匹配 LAV2 chatbox 样式（bg-secondary, rounded-md, 小字浅色） |
+| `lib/widgets/chat_input.dart` | **重写** 匹配 LAV2 输入区（bg-secondary, rounded-lg, Input+Send button） |
+| `lib/widgets/llm_monitor.dart` | **新增** LLM 监控面板，显示 System/Vision/OCR/Memory 上下文 |
+| `lib/screens/home_screen.dart` | **重写** 简化为 sidebar + IndexedStack 内容区布局 |
+| `lib/screens/chat_screen.dart` | **重写** 三区布局 (session sidebar | chat | LLM monitor) + 设置侧面板 |
+| `lib/screens/memory_screen.dart` | **重写** 匹配 SessionList 卡片式布局 + 搜索过滤 |
+| `lib/screens/tts_screen.dart` | **重写** ShadColors 主题 + 卡片式布局 |
+| `lib/screens/vision_screen.dart` | 添加 ShadColors import |
+| `lib/screens/settings_screen.dart` | 添加 ShadColors import |
+| `lib/screens/stream_screen.dart` | 添加 ShadColors import |
+| `lib/screens/pipeline_monitor_screen.dart` | 更新卡片/边框色为 ShadColors |
+| `lib/screens/llm_screen.dart` | ~~移除引用~~ (LLM 设置已整合进 ChatScreen 侧面板) |
+| `lib/models/settings.dart` | + `copyWith()` 方法 |
+| `lib/providers/chat_provider.dart` | + 新增 getters: `activeSessionTitle`, `sessions`, `fullSystemPrompt`, `currentCaption`, `currentOcrText`, `currentMemoryContext`, `createNewSession()`, `loadSession()` |
+| `lib/services/session_manager.dart` | + `getSessionsCache()` 同步缓存 + `_refreshCache()` |
+
+### 布局对照表
+
+| LAV2 (React) | AiVtuber_Agent (Flutter) |
+|---|---|
+| `AppSidebar` + `SidebarProvider` | `AppSidebar` (可折叠，AnimatedBuilder) |
+| `llmPage.tsx` (Home) | `ChatScreen` (chat + LLM monitor + 侧面板) |
+| `SidePanel` (left, sessions) | `SidePanel(side=Side.left)` |
+| `SidePanel` (right, settings) | `SidePanel(side=Side.right, openLabel/closeLabel='Settings')` |
+| `chatbox.tsx` Input + Send | `ChatInput` (bg-secondary + TextField + IconButton) |
+| `editable-chat-history.tsx` | `ChatBubble` (bg-secondary, rounded-md, 13px) |
+| `llm-monitor.tsx` | `LLMMonitor` (只读 TextArea) |
+| `session-list.tsx` | `MemoryScreen` (搜索 + 卡片列表) |
+| `ttsPage.tsx` + Card | `TTSScreen` (shadCard 卡片式) |
+| `page-mapping.ts` 10 页面路由 | `HomeScreen._pageMap` (10 页面 IndexedStack) |
+
+### 窗口框架
+保持不变：`bitsdojo_window` (BDW_CUSTOM_FRAME) + `flutter_acrylic` (Mica 毛玻璃) + Windows 11 原生圆角。
+
+

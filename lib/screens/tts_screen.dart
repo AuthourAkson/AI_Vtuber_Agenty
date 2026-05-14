@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../app.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
+/// TTS Settings page — matches LocalAIVtuber2's TTSPage style.
 class TTSScreen extends StatefulWidget {
   const TTSScreen({super.key});
 
@@ -16,30 +18,13 @@ class _TTSScreenState extends State<TTSScreen> {
     bool? useRvc,
     int? rvcF0UpKey,
   }) {
-    sp.saveSettings(AppSettings(
-      ttsProvider: ttsProvider ?? s.ttsProvider,
-      useRvc: useRvc ?? s.useRvc,
-      rvcF0UpKey: rvcF0UpKey ?? s.rvcF0UpKey,
-      ttsVoice: s.ttsVoice,
-      systemPrompt: s.systemPrompt,
-      enableMemoryRetrieval: s.enableMemoryRetrieval,
-      keepModelLoaded: s.keepModelLoaded,
-      apiRelayEnabled: s.apiRelayEnabled,
-      apiRelayBaseUrl: s.apiRelayBaseUrl,
-      apiRelayApiKey: s.apiRelayApiKey,
-      apiRelayModel: s.apiRelayModel,
-      llmModelFilename: s.llmModelFilename,
-      showMonitor: s.showMonitor,
-      selectedLive2DModel: s.selectedLive2DModel,
-      selectedVRMModel: s.selectedVRMModel,
-      renderModel: s.renderModel,
-      live2DXPosition: s.live2DXPosition,
-      live2DYPosition: s.live2DYPosition,
-      live2DScale: s.live2DScale,
-      use3D: s.use3D,
-      backendUrl: s.backendUrl,
+    sp.saveSettings(s.copyWith(
+      ttsProvider: ttsProvider,
+      useRvc: useRvc,
+      rvcF0UpKey: rvcF0UpKey,
     ));
   }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
@@ -47,112 +32,232 @@ class _TTSScreenState extends State<TTSScreen> {
         final s = sp.settings;
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('TTS Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 24),
+          padding: const EdgeInsets.only(top: 40, left: 48, right: 48, bottom: 40),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'TTS Settings',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: ShadColors.foreground,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Configure text-to-speech engine and voice settings',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: ShadColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(height: 28),
 
-              // Provider selection
-              const Text('TTS Engine', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _providerCard('GPT-SoVITS', s.ttsProvider == 'gpt-sovits', () {
-                    _update(sp, s, ttsProvider: 'gpt-sovits');
-                  }),
-                  const SizedBox(width: 12),
-                  _providerCard('RVC', s.ttsProvider == 'rvc', () {
-                    _update(sp, s, ttsProvider: 'rvc');
-                  }),
+                // Provider selection card
+                _shadCard(
+                  title: 'TTS Provider Selection',
+                  icon: Icons.settings,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          _providerChip(
+                            'GPT-SoVITS',
+                            s.ttsProvider == 'gpt-sovits',
+                            () => _update(sp, s, ttsProvider: 'gpt-sovits'),
+                          ),
+                          const SizedBox(width: 8),
+                          _providerChip(
+                            'RVC',
+                            s.ttsProvider == 'rvc',
+                            () => _update(sp, s, ttsProvider: 'rvc'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Voice selection card
+                _shadCard(
+                  title: 'Active Voice',
+                  icon: Icons.record_voice_over,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: ShadColors.secondary,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: ShadColors.input),
+                    ),
+                    child: Text(
+                      s.ttsVoice.isEmpty ? 'No voice selected' : s.ttsVoice,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: ShadColors.foreground,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // RVC settings
+                if (s.ttsProvider == 'rvc') ...[
+                  _shadCard(
+                    title: 'RVC Settings',
+                    icon: Icons.tune,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Enable RVC switch
+                        Row(
+                          children: [
+                            SizedBox(
+                              height: 24,
+                              child: Switch(
+                                value: s.useRvc,
+                                onChanged: (v) => _update(sp, s, useRvc: v),
+                                activeColor: ShadColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Enable RVC',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: ShadColors.foreground,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Pitch shift slider
+                        Row(
+                          children: [
+                            const Text(
+                              'Pitch Shift (semitones): ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: ShadColors.mutedForeground,
+                              ),
+                            ),
+                            Text(
+                              '${s.rvcF0UpKey}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: ShadColors.foreground,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Slider(
+                          value: s.rvcF0UpKey.toDouble(),
+                          min: -12,
+                          max: 12,
+                          divisions: 24,
+                          activeColor: ShadColors.primary,
+                          inactiveColor: ShadColors.secondary,
+                          onChanged: (v) =>
+                              _update(sp, s, rvcF0UpKey: v.round()),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
-              ),
 
-              const SizedBox(height: 24),
-              const Text('Voice', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF2C2C2C)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.record_voice_over, color: Color(0xFF4CAF50)),
-                    const SizedBox(width: 12),
-                    Text(s.ttsVoice.isEmpty ? 'No voice selected' : s.ttsVoice,
-                        style: const TextStyle(fontSize: 14)),
-                    const Spacer(),
-                    const Icon(Icons.chevron_right, color: Color(0xFF888888)),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // RVC Settings
-              if (s.ttsProvider == 'rvc') ...[
-                const Text('RVC Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                // Upload voice
                 const SizedBox(height: 12),
-                SwitchListTile(
-                  title: const Text('Enable RVC'),
-                  value: s.useRvc,
-                    onChanged: (v) => _update(sp, s, useRvc: v),
-                  activeColor: const Color(0xFF4CAF50),
-                ),
-                Row(
-                  children: [
-                    const Text('Pitch Shift (semitones): '),
-                    Text('${s.rvcF0UpKey}', style: const TextStyle(color: Color(0xFF4CAF50))),
-                  ],
-                ),
-                Slider(
-                  value: s.rvcF0UpKey.toDouble(),
-                  min: -12,
-                  max: 12,
-                  divisions: 24,
-                  activeColor: const Color(0xFF4CAF50),
-                  onChanged: (v) => _update(sp, s, rvcF0UpKey: v.round()),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.upload_file, size: 16),
+                    label: const Text('Upload Voice Model'),
+                  ),
                 ),
               ],
-
-              const SizedBox(height: 16),
-              const Text('Upload Voice Model',
-                  style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () {}, // TODO: upload voice
-                icon: const Icon(Icons.upload_file, size: 18),
-                label: const Text('Upload Voice Model'),
-              ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _providerCard(String name, bool selected, VoidCallback onTap) {
+  Widget _providerChip(String name, bool selected, VoidCallback onTap) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFF1E3A1E) : const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(10),
+            color: selected ? ShadColors.primary.withAlpha(25) : ShadColors.secondary,
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? const Color(0xFF4CAF50) : const Color(0xFF2C2C2C),
+              color: selected ? ShadColors.primary : ShadColors.input,
+              width: selected ? 1.5 : 1,
             ),
           ),
-          child: Center(child: Text(name, style: TextStyle(
-            color: selected ? const Color(0xFF4CAF50) : const Color(0xFF888888),
-            fontWeight: FontWeight.w600,
-          ))),
+          child: Center(
+            child: Text(
+              name,
+              style: TextStyle(
+                fontSize: 14,
+                color: selected ? ShadColors.foreground : ShadColors.mutedForeground,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _shadCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ShadColors.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ShadColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: ShadColors.foreground),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: ShadColors.foreground,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
       ),
     );
   }
