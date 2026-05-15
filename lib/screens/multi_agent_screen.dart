@@ -1125,6 +1125,42 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
           ),
         ),
         const Divider(height: 1, color: ShadColors.border),
+        // Profile switcher
+        if (mgr.activeProfile != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(
+                onTap: () {
+                  final dummy = _DummyAgent(mgr.activeEmployeeId ?? '', mgr.activeEmployeeName ?? '');
+                  _showProfilePicker(dummy, mgr);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ShadColors.sidebarPrimary.withAlpha(20),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: ShadColors.sidebarPrimary.withAlpha(50)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.api, size: 13, color: ShadColors.sidebarPrimary),
+                      const SizedBox(width: 5),
+                      Text(mgr.activeProfile!.name,
+                          style: const TextStyle(fontSize: 11, color: ShadColors.sidebarPrimary)),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.swap_horiz, size: 12, color: ShadColors.mutedForeground),
+                      const SizedBox(width: 4),
+                      Text(mgr.activeProfile!.model,
+                          style: const TextStyle(fontSize: 10, color: ShadColors.mutedForeground)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Input
         _buildChatInput(mgr),
       ],
@@ -1230,41 +1266,63 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
 
   void _selectAgent(dynamic agent, AgentManager mgr) {
     final profiles = mgr.providerProfiles;
+    if (profiles.isEmpty) return;
+
+    // Check if this employee has a last-used profile
+    final lastIdx = mgr.getLastProfileIndex(agent.uuid as String);
+    if (lastIdx != null && lastIdx < profiles.length) {
+      // Auto-use the last profile
+      mgr.openAgentWithProfile(agent.uuid, agent.name, lastIdx);
+      return;
+    }
+
+    // Single profile: auto-select
     if (profiles.length == 1) {
-      // Auto-select the only profile
-      mgr.openAgentWithProfile(agent.uuid, agent.name, profiles.first);
-    } else {
-      // Show profile picker dialog
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: ShadColors.card,
-          title: Text('Select Profile for "${agent.name}"', style: const TextStyle(color: ShadColors.foreground, fontSize: 15)),
-          content: SizedBox(
-            width: 350,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: profiles.length,
-              itemBuilder: (_, i) {
-                final p = profiles[i];
-                return ListTile(
-                  leading: const Icon(Icons.api, color: ShadColors.sidebarPrimary),
-                  title: Text(p.name, style: const TextStyle(color: ShadColors.foreground, fontSize: 14)),
-                  subtitle: Text('${p.model}  •  ${p.baseUrl}',
-                      style: const TextStyle(fontSize: 11, color: ShadColors.mutedForeground)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  tileColor: ShadColors.secondary,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    mgr.openAgentWithProfile(agent.uuid, agent.name, p);
-                  },
-                );
-              },
-            ),
+      mgr.openAgentWithProfile(agent.uuid, agent.name, 0);
+      return;
+    }
+
+    // Multiple profiles, no last-used: show picker
+    _showProfilePicker(agent, mgr);
+  }
+
+  void _showProfilePicker(dynamic agent, AgentManager mgr) {
+    final profiles = mgr.providerProfiles;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ShadColors.card,
+        title: Text('Select Profile for "${agent.name}"', style: const TextStyle(color: ShadColors.foreground, fontSize: 15)),
+        content: SizedBox(
+          width: 350,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: profiles.length,
+            itemBuilder: (_, i) {
+              final p = profiles[i];
+              return ListTile(
+                leading: const Icon(Icons.api, color: ShadColors.sidebarPrimary),
+                title: Text(p.name, style: const TextStyle(color: ShadColors.foreground, fontSize: 14)),
+                subtitle: Text('${p.model}  •  ${p.baseUrl}',
+                    style: const TextStyle(fontSize: 11, color: ShadColors.mutedForeground)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                tileColor: ShadColors.secondary,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  mgr.openAgentWithProfile(agent.uuid, agent.name, i);
+                },
+              );
+            },
           ),
         ),
-      );
-    }
+      ),
+    );
   }
+}
+
+class _DummyAgent {
+  final String uuid;
+  final String name;
+  _DummyAgent(this.uuid, this.name);
 }

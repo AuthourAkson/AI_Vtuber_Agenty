@@ -251,10 +251,25 @@ class AgentManager extends ChangeNotifier {
     try {
       final file = File(_profilesPath);
       if (file.existsSync()) {
-        final json = jsonDecode(file.readAsStringSync()) as List;
-        _providerProfiles = json
-            .map((e) => ProviderProfile.fromJson(e as Map<String, dynamic>))
-            .toList();
+        final raw = jsonDecode(file.readAsStringSync());
+        if (raw is Map<String, dynamic>) {
+          // New format: {"profiles": [...], "lastProfileIndex": {...}}
+          final profiles = (raw['profiles'] as List?)
+              ?.map((e) => ProviderProfile.fromJson(e as Map<String, dynamic>))
+              .toList() ?? [];
+          if (profiles.isNotEmpty) _providerProfiles = profiles;
+          final lastIdx = raw['lastProfileIndex'] as Map<String, dynamic>?;
+          if (lastIdx != null) {
+            _lastProfileIndex.clear();
+            lastIdx.forEach((k, v) => _lastProfileIndex[k] = (v as num).toInt());
+          }
+        } else if (raw is List) {
+          // Legacy format: plain list of profiles
+          final profiles = raw
+              .map((e) => ProviderProfile.fromJson(e as Map<String, dynamic>))
+              .toList();
+          if (profiles.isNotEmpty) _providerProfiles = profiles;
+        }
       }
     } catch (e) {
       print('[AgentManager] loadProfiles failed: $e');
@@ -265,7 +280,10 @@ class AgentManager extends ChangeNotifier {
     try {
       final file = File(_profilesPath);
       file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode(_providerProfiles.map((p) => p.toJson()).toList()));
+      file.writeAsStringSync(jsonEncode({
+        'profiles': _providerProfiles.map((p) => p.toJson()).toList(),
+        'lastProfileIndex': _lastProfileIndex,
+      }));
     } catch (e) {
       print('[AgentManager] saveProfiles failed: $e');
     }
@@ -339,12 +357,28 @@ class AgentManager extends ChangeNotifier {
 
   // ─── Active Chat ────────────────────────────
 
-  /// Open agent with provider profile.
-  /// First updates the Employee entity with provider info, then opens the agent.
-  Future<void> openAgentWithProfile(String employeeId, String name, ProviderProfile profile) async {
-    // CRITICAL: Update Employee entity BEFORE creating agent proxy.
-    // The local agent reads Employee.provider/model/apiKey during initialization.
-    // setProvider after proxy creation happens too late.
+  /// Last used profile index per employee.
+  final Map<String, int> _lastProfileIndex = {};
+  int? _activeProfileIndex;
+
+  int? get activeProfileIndex => _activeProfileIndex;
+  ProviderProfile? get activeProfile =>
+      _activeProfileIndex != null && _activeProfileIndex! < _providerProfiles.length
+          ? _providerProfiles[_activeProfileIndex!]
+          : (_providerProfiles.isNotEmpty ? _providerProfiles.first : null);
+
+  /// Get the last-used profile index for an employee.
+  int? getLastProfileIndex(String employeeId) => _lastProfileIndex[employeeId];
+
+  /// Open agent with profile. Remembers the choice for next time.
+  Future<void> openAgentWithProfile(String employeeId, String name, int profileIndex) async {
+    _lastProfileIndex[employeeId] = profileIndex;
+    _activeProfileIndex = profileIndex;
+    _saveProfiles(); // includes _lastProfileIndex
+
+    if (profileIndex < 0 || profileIndex >= _providerProfiles.length) return;
+    final profile = _providerProfiles[profileIndex];
+
     try {
       await wenzagent.updateEmployeeProvider(
         employeeId: employeeId,
@@ -356,7 +390,6 @@ class AgentManager extends ChangeNotifier {
     } catch (e) {
       print('[AgentManager] updateEmployeeProvider failed: $e');
     }
-    // Now open agent — it reads the updated Employee config
     await openAgent(employeeId, name);
   }
 
