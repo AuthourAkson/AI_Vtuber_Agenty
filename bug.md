@@ -1,255 +1,5 @@
 # AI VTuber Agent — Bug Tracker
 
-## ✅ 已修复 (2026-05-10)
-
-### Bug #1: memory_service.dart:86 正则表达式语法错误
-
-**现象**: `error G97324ACF: String starting with " must end with "`
-**根因**: Dart raw string `r'...'` 中 `\'` 无法转义单引号 — raw string 中 `'` 直接结束字符串
-**修复**: 改用非 raw 双引号字符串 `RegExp("[...]")` 并正确转义反斜杠
-
-### Bug #2: tts_service.dart:12 `_profileDir` 私有访问
-
-**现象**: `error G75B77105: Member not found: '_profileDir'`
-**根因**: `StorageService._profileDir` 是 Dart 私有静态成员 (`_` 前缀)，外部类不可访问
-**修复**: 在 `StorageService` 添加 `static String get profileDir => _profileDir` 公开 getter
-
-### Bug #3: vision_service.dart:11 `profileDir` 不存在
-
-**现象**: `error G75B77105: Member not found: 'profileDir'`
-**根因**: 同 Bug #2，原本 `StorageService.profileDir` 不存在（public getter 缺失）
-**修复**: 同上，添加 public getter 后自动修复
-
-### Bug #4: settings_screen.dart:57 `updateBackendUrl` 方法缺失
-
-**现象**: `error GE5CFE876: The method 'updateBackendUrl' isn't defined for the type 'SettingsProvider'`
-**根因**: `SettingsProvider` 未定义该方法
-**修复**: 在 `SettingsProvider` 添加 `void updateBackendUrl(String url)` 方法
-
-### Bug #5: 窗口四角矩形 + 顶部标题栏
-
-**现象**: `flutter run` 生成的窗口有标准 Windows 标题栏 + 四角矩形
-**期望**: 四角圆端 + 无窗口上边框（现代 Flutter app 风格）
-**修复**:
-
-- Win32 层: `flutter_window.cpp` 添加 `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND`
-- Flutter 层: `main.dart` 使用 `TitleBarStyle.hidden` + `windowButtonVisibility: false`
-- UI 层: `app.dart` 新增 `AppShell` 自定义标题栏（可拖拽 + min/max/close 按钮）
-
----
-
-## ✅ 已修复 (2026-05-11)
-
-### Bug #6: window_manager 0.5.1 API 变更 — maximizeOrRestore 不存在
-
-**日期**: 2026-05-11
-
-**现象**: 
-
-```
-lib/app.dart(113,42): error: 'maximizeOrRestore' isn't defined for 'WindowManager'.
-lib/app.dart(83,40): error: 'maximizeOrRestore' isn't defined for 'WindowManager'.
-```
-
-**触发条件**: `flutter pub upgrade --major-versions` 将 `window_manager` 从 `^0.3.9` 升级到 `^0.5.1` 后编译失败。
-
-**根因**: window_manager 0.4.0+ 重构了 API，移除了 `maximizeOrRestore()` 方法。替代 API：
-
-- `windowManager.maximize()` — 最大化
-- `windowManager.unmaximize()` — 还原
-
-**修复**: `lib/app.dart` 两处调用替换为条件分支：
-
-- 行 83: `() { if (_isMaximized) { unmaximize(); } else { maximize(); } }`
-- 行 113: 同上
-
----
-
-### Bug #7: flutter_window.cpp 类型转换错误 — int → DWM_WINDOW_CORNER_PREFERENCE
-
-**日期**: 2026-05-11
-
-**现象**:
-
-```
-error C2440: "初始化": 无法从"int"转换为"DWM_WINDOW_CORNER_PREFERENCE"
-```
-
-**根因**: `#define DWMWCP_ROUND 1` 是 `int` 字面量，新版 Windows SDK 要求强类型枚举。
-
-**修复**: `static_cast<DWM_WINDOW_CORNER_PREFERENCE>(DWMWCP_ROUND)`
-
-**受影响文件**: `windows/runner/flutter_window.cpp:42`
-
----
-
-### Bug #8: InkWell 缺少 Material 祖先 — 标题栏按钮运行时崩溃
-
-**日期**: 2026-05-11
-
-**现象**:
-
-```
-No Material widget found.
-_InkResponseStateWidget widgets require a Material widget ancestor
-  InkWell:file:///D:/AiVtuber_Agent/lib/app.dart:148:14
-```
-
-**根因**: `AppShell` 是裸 `Column`，`InkWell` 向上查找 `Material` 祖先失败。
-
-**修复**: `_windowButton()` 中 `InkWell` → `GestureDetector` + `MouseRegion`
-
-**受影响文件**: `lib/app.dart:148`
-
----
-
-### Bug #9: RenderFlex 溢出 298722 像素 (由 Bug #8 级联触发)
-
-**日期**: 2026-05-11
-
-**现象**:
-
-```
-A RenderFlex overflowed by 298722 pixels on the right.
-Row:file:///D:/AiVtuber_Agent/lib/app.dart:96:16
-```
-
-**根因**: Bug #8 的 Material 错误导致布局引擎计算异常。修复 #8 后自动解决。
-
-**修复**: 无需单独修复。
-
----
-
-### Bug #10: 窗口四角矩形 + 有边框 — DWM 圆角未生效
-
-**日期**: 2026-05-11
-
-**现象**: 窗口仍显示标准 Windows 边框，四角为矩形。
-
-**根因**: window_manager 0.5.1 的 `TitleBarStyle.hidden` 可能保留了 `WS_CAPTION` / `WS_THICKFRAME` 样式。
-
-**修复**: 在 `flutter_window.cpp` 原生层移除窗口框架样式：
-
-```cpp
-LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
-style &= ~(WS_CAPTION | WS_THICKFRAME);
-SetWindowLongPtr(hwnd, GWL_STYLE, style);
-SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-    SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-```
-
-**受影响文件**: `windows/runner/flutter_window.cpp`
-
----
-
-## ✅ 已修复 (2026-05-11 第二批次)
-
-### Bug #11: 窗口 overlay 大于窗口 + 四角矩形（Bug #10 修复不完整）
-
-**日期**: 2026-05-11
-
-**现象**: 窗口四角仍为矩形，且存在一个透明的 overlay 层大于实际窗口。
-
-**根因**: 同时移除 `WS_CAPTION | WS_THICKFRAME` 导致 DWM 停止对该窗口进行合成（compositing），圆角和阴影均失效。移除样式后旧的非客户区（标题栏+边框）未回收，形成透明 ghost overlay。
-
-**修复**: 
-
-- **只移除 `WS_CAPTION`**，保留 `WS_THICKFRAME` — DWM 需要 `WS_THICKFRAME` 来识别该窗口需要合成（圆角、阴影）
-- 新增 `DwmExtendFrameIntoClientArea(hwnd, &margins)` — 将 DWM 框架延伸至客户区，使圆角与窗口内容无缝融合（消除边框线）
-
-```cpp
-// Correct: keep WS_THICKFRAME for DWM compositing
-LONG_PTR style = GetWindowLongPtr(hwnd, GWL_STYLE);
-style &= ~WS_CAPTION;  // only remove caption, keep thickframe
-SetWindowLongPtr(hwnd, GWL_STYLE, style);
-
-MARGINS margins = {0, 0, 0, 1};
-DwmExtendFrameIntoClientArea(hwnd, &margins);
-
-SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-    SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-```
-
-**受影响文件**: `windows/runner/flutter_window.cpp`
-
----
-
-### Bug #12: 标题栏文字下方出现丑下划线
-
-**日期**: 2026-05-11
-
-**现象**: 左上角自定义标题栏 "AI VTuber Agent" 文字下方出现下划线。
-
-**根因**: `TextDecoration` 可能从祖先 Widget 继承了下划线样式（`AppShell` 为裸 `Column`，无 `Material` 祖先隔离 style 继承）。
-
-**修复**: 在标题 `Text` 的 `TextStyle` 显式添加 `decoration: TextDecoration.none`。
-
-**受影响文件**: `lib/app.dart`
-
----
-
-## ✅ 已修复 (2026-05-14)
-
-### Bug #34: debugFrameWasSentToEngine 断言失败 — 无限重建循环
-
-**日期**: 2026-05-14
-
-**现象**: `flutter run` 启动后立即抛出：
-
-```
-Another exception was thrown: 'package:flutter/src/widgets/binding.dart':
-Failed assertion: line 1280 pos 16: 'debugFrameWasSentToEngine': is not true.
-```
-
-错误不断重复生成，直到关闭终端。
-
-**根因（两个独立问题）**:
-
-1. **IndexedStack 构建全部 10 页面**: `HomeScreen` 使用 `IndexedStack` 同时构建所有 10 个子页面。当任一页面的 `build()` 方法中发生异常时，整个帧管线中断，触发断言。错误会级联——每个子页面的 Consumer 重建都会尝试新帧，再次失败。
-
-2. **手动 AnimationController 链**: `app_sidebar.dart` 和 `side_panel.dart` 使用 `AnimationController` + `Tween` + `CurvedAnimation` + 显式动画 Widget（`AnimatedBuilder` / `SlideTransition`）。这些手动动画链在某些帧时序下与 `SchedulerBinding` 帧调度不同步。
-
-**修复**:
-
-| #   | 文件                             | 变更                                                                    |
-| --- | ------------------------------ | --------------------------------------------------------------------- |
-| 1   | `lib/screens/home_screen.dart` | `IndexedStack` → 条件 `switch`，每次只构建一个活跃页面                              |
-| 2   | `lib/widgets/app_sidebar.dart` | `AnimationController` + `AnimatedBuilder` → `AnimatedContainer`（隐式动画） |
-| 3   | `lib/widgets/side_panel.dart`  | `AnimationController` + `SlideTransition` → `AnimatedSlide`（隐式动画）     |
-
-**结果**: 代码中零个 `AnimationController` / `TickerProvider` / `Tween` / `CurvedAnimation`。所有动画由框架隐式动画系统管理。
-
----
-
-## ✅ 已修复 (2026-05-13)
-
-### Bug #30: WebView2.h not found — C++ overlay compilation blocks build
-
-**日期**: 2026-05-13
-
-**现象**:
-
-```
-windows/runner/live2d_overlay_window.cpp(4,10): error C1083:
-  无法打开包括文件: "WebView2.h": No such file or directory
-CMake Warning: WebView2 SDK not found. Live2D overlay will not compile.
-```
-
-**根因**: `live2d_overlay_window.cpp` 和 `live2d_overlay_bridge.cpp` 仍在 CMakeLists.txt 中编译，
-但 WebView2 SDK 未安装在预期路径。项目已决定使用 PyQt6 子进程方案替代 C++ overlay（详见 `project.md` 2026-05-13 变更汇总）。
-
-**修复**: `windows/runner/CMakeLists.txt`
-
-1. 注释 `add_executable` 中的 `live2d_overlay_window.cpp` 和 `live2d_overlay_bridge.cpp`
-2. 注释整个 WebView2 SDK 查找/链接块
-3. 保留注释中的恢复说明（如需重新启用 C++ overlay）
-
----
-
-### 
-
----
-
 ## ✅ 已修复 (2026-05-13 下午)
 
 ### Bug #31: didRequestAppExit 返回类型不匹配
@@ -359,79 +109,61 @@ A Stack requires bounded constraints from its parent.
 3. **状态未外露**: `SidePanel` 的 `_isOpen` 是内部状态，外部无法控制
 4. **Positioned 无显式 width**: 需 `SizedBox` 包裹提供有界宽度
 
-**待修复**: Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter_markdown/src/builder.dart': Failed assertion: line 267 pos 12:
-'_inlines.isEmpty': is not true.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6268 pos 12:
-'_dependents.isEmpty': is not true.
-[ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: 'package:flutter/src/rendering/object.dart': Failed assertion: line 3536 pos 12: 'attached': is not true.
-#0      _AssertionError._doThrowNew (dart:core-patch/errors_patch.dart:67:4)
-#1      _AssertionError._throwNew (dart:core-patch/errors_patch.dart:49:5)
-#2      RenderObject.getTransformTo (package:flutter/src/rendering/object.dart:3536:12)
-#3      RenderBox.localToGlobal (package:flutter/src/rendering/box.dart:3092:39)
-#4      _CustomPlatformViewState._reportWidgetPosition (package:flutter_inappwebview_windows/src/in_app_webview/custom_platform_view.dart:426:28)
-<asynchronous suspension>
+**待修复**:
 
-Live2D JS: "Live2D %s" "2.1.00_1"
-Live2D JS: "profile : Desktop"
-Live2D JS: "  [PROFILE_NAME] = Desktop"
-Live2D JS: "  [USE_ADJUST_TRANSLATION] = false"
-Live2D JS: "  [USE_CACHED_POLYGON_IMAGE] = false"
-Live2D JS: "  [EXPAND_W] = 2"
-Loading model: http://localhost:48888/models/live2d/Amiya/Amiya.model3.json
-Live2D JS: "[CSM][I]Live2D Cubism Core version: 05.00.0000 (83886080)\n"
-Live2D JS: "[CSM][I]CubismFramework.startUp() is complete.\n"
-Live2D JS: "[CSM][I]CubismFramework.initialize() is complete.\n"
-Live2D JS: "Live2D Cubism SDK Core Version 5.0.0"
-Loading model: http://localhost:48888/models/live2d/Amiya/Amiya.model3.json
-Live2D JS: "Live2D Cubism SDK Core Version 5.0.0"
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: Tried to build dirty widget in the wrong build scope.
-Another exception was thrown: 'package:flutter/src/widgets/framework.dart': Failed assertion: line 6417 pos 14: '() {
+D:\AiVtuber_Agent> flutter run -d windows
+Launching lib\main.dart on Windows in debug mode...
+CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/windows/CMakeLists.txt:31 (add_custom_command):
+  The following keywords are not supported when using
+  add_custom_command(TARGET): DEPENDS.
+
+  Policy CMP0175 is not set: add_custom_command() rejects invalid arguments.
+  Run "cmake --help-policy CMP0175" for policy details.  Use the cmake_policy
+  command to set the policy and suppress this warning.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+lib/services/wenzagent_service.dart(175,15): error GE5CFE876: The method 'markMessagesAsRead' isn't defined for the type 'CachedAgentProxy'. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+D:\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\Microsoft.CppCommon.targets(254,5): error MSB8066: “D:\AiVtuber_Agent\build\windows\x64\CMakeFiles\c34551fe35923833d11a024e38cb5a47\flutter_windows.dll.rule;D:\AiVtuber_Agent\build\windows\x64\CMakeFiles\d93f91fab4440261b871f34779069aea\flutter_assemble.rule”的自定义生成已退出，代码为 1。 [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+Building Windows application...                                    16.0s
+Error: Build process failed.
+
+---
+
+## ✅ 已修复 (2026-05-15)
+
+### Bug #37: WenzAgent 集成构建错误 — 7 个类型/方法不匹配
+
+**日期**: 2026-05-15
+
+**现象**: WenzAgent 多Agent 集成首次构建失败，7 个编译错误：
+
+- `DeviceInfo` / `MultiAgentInfo` 类型在 multi_agent_screen.dart 中不可见
+- `CachedAgentProxy.markMessagesAsRead()` 方法签名不匹配（缺少 `readerDeviceId` 参数）
+- `LanDeviceInfo` 实际字段为 `id` / `name` 而非 `deviceId` / `deviceName`
+- `SessionSummaryEntity` 实际字段为 `lastMsgContent` 而非 `latestMessageContent`，无 `agentStatus` 字段
+
+**根因**: 代码基于 wenzagent 文档（frontend-integration-guide.md）而非实际 API 签名编写。实际 wenzagent SDK 的类字段名称与文档描述不一致。
+
+**修复**:
+
+| #    | 文件                                    | 变更                                                                                      |
+| ---- | ------------------------------------- | --------------------------------------------------------------------------------------- |
+| B37a | `lib/screens/multi_agent_screen.dart` | 添加 `import '../services/wenzagent_service.dart'` 以引入 `DeviceInfo` / `MultiAgentInfo` 类型 |
+| B37b | `lib/services/wenzagent_service.dart` | `markMessagesAsRead()` → `markMessagesAsRead(readerDeviceId: _deviceId)`                |
+| B37c | `lib/services/wenzagent_service.dart` | `d.deviceId` → `d.id`，`d.deviceName ?? 'Unknown'` → `d.name ?? 'Unknown'`               |
+| B37d | `lib/services/wenzagent_service.dart` | `s.latestMessageContent` → `s.lastMsgContent`，移除不存在的 `agentStatus`，固定为 `'idle'`         |
+
+---
+
+### Bug #37 续: CachedAgentProxy 无 markMessagesAsRead 方法
+
+**现象** (第二次构建):
+
+```
+lib/services/wenzagent_service.dart(175,15): error: The method 'markMessagesAsRead' isn't defined
+for the type 'CachedAgentProxy'.
+```
+
+**根因**: `markMessagesAsRead(readerDeviceId:)` 只存在于底层 `AgentProxy` 类，`CachedAgentProxy` 没有暴露此方法。前端文档说 `proxy.markMessagesAsRead()` 但实际 API 需要通过 DeviceClient 层调用。
+
+**修复**: `wenzagent_service.dart` — 改用 `DeviceClient.markAllMessagesAsRead(employeeId: employeeId)` 替代 `proxy.markMessagesAsRead(readerDeviceId:)`。

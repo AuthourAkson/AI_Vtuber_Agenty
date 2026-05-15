@@ -23,7 +23,7 @@ class _AppSidebarState extends State<AppSidebar> {
   bool _expanded = true;
 
   // Match LAV2 page-mapping sections exactly
-  static const _testPipeline = ['home', 'character', 'memory'];
+  static const _testPipeline = ['home', 'character', 'memory', 'agents'];
   static const _footer = [
     'input',
     'vision',
@@ -37,6 +37,7 @@ class _AppSidebarState extends State<AppSidebar> {
     'home': Icons.home,
     'character': Icons.person,
     'memory': Icons.storage_rounded,
+    'agents': Icons.hub,
     'input': Icons.mic,
     'vision': Icons.remove_red_eye,
     'tts': Icons.record_voice_over,
@@ -49,6 +50,7 @@ class _AppSidebarState extends State<AppSidebar> {
     'home': 'Home',
     'character': 'Character',
     'memory': 'Memory',
+    'agents': 'Multi-Agent',
     'input': 'Input',
     'vision': 'Vision',
     'tts': 'TTS',

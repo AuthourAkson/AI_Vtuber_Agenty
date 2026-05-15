@@ -33,6 +33,13 @@ class AppSettings {
   // Server
   String backendUrl;
 
+  // WenzAgent multi-agent LAN
+  bool wenzagentEnabled;
+  String wenzagentHost;
+  int wenzagentPort;
+  String wenzagentDeviceName;
+  String wenzagentTopic;
+
   AppSettings({
     this.llmModelFilename = '',
     this.keepModelLoaded = true,
@@ -55,6 +62,11 @@ class AppSettings {
     this.apiRelayModel = '',
     this.apiRelayEnabled = true,
     this.backendUrl = '', // No external backend — self-contained
+    this.wenzagentEnabled = false,
+    this.wenzagentHost = '127.0.0.1',
+    this.wenzagentPort = 9090,
+    this.wenzagentDeviceName = 'AI VTuber',
+    this.wenzagentTopic = '',
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -79,6 +91,12 @@ class AppSettings {
       apiRelayApiKey: json['api_relay']?['api_key'] as String? ?? '',
       apiRelayModel: json['api_relay']?['model'] as String? ?? '',
       apiRelayEnabled: json['api_relay']?['enabled'] as bool? ?? true,
+      // WenzAgent LAN
+      wenzagentEnabled: json['wenzagent']?['enabled'] as bool? ?? false,
+      wenzagentHost: json['wenzagent']?['host'] as String? ?? '127.0.0.1',
+      wenzagentPort: json['wenzagent']?['port'] as int? ?? 9090,
+      wenzagentDeviceName: json['wenzagent']?['device_name'] as String? ?? 'AI VTuber',
+      wenzagentTopic: json['wenzagent']?['topic'] as String? ?? '',
     );
   }
 
@@ -105,6 +123,11 @@ class AppSettings {
     String? apiRelayModel,
     bool? apiRelayEnabled,
     String? backendUrl,
+    bool? wenzagentEnabled,
+    String? wenzagentHost,
+    int? wenzagentPort,
+    String? wenzagentDeviceName,
+    String? wenzagentTopic,
   }) {
     return AppSettings(
       llmModelFilename: llmModelFilename ?? this.llmModelFilename,
@@ -128,6 +151,11 @@ class AppSettings {
       apiRelayModel: apiRelayModel ?? this.apiRelayModel,
       apiRelayEnabled: apiRelayEnabled ?? this.apiRelayEnabled,
       backendUrl: backendUrl ?? this.backendUrl,
+      wenzagentEnabled: wenzagentEnabled ?? this.wenzagentEnabled,
+      wenzagentHost: wenzagentHost ?? this.wenzagentHost,
+      wenzagentPort: wenzagentPort ?? this.wenzagentPort,
+      wenzagentDeviceName: wenzagentDeviceName ?? this.wenzagentDeviceName,
+      wenzagentTopic: wenzagentTopic ?? this.wenzagentTopic,
     );
   }
 
@@ -153,6 +181,13 @@ class AppSettings {
       'api_key': apiRelayApiKey,
       'model': apiRelayModel,
       'enabled': apiRelayEnabled,
+    },
+    'wenzagent': {
+      'enabled': wenzagentEnabled,
+      'host': wenzagentHost,
+      'port': wenzagentPort,
+      'device_name': wenzagentDeviceName,
+      'topic': wenzagentTopic,
     },
   };
 }

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/multi_agent_provider.dart';
 import 'services/live2d_server.dart';
 import 'services/live2d_overlay_ffi.dart';
 
@@ -42,6 +43,7 @@ void main(List<String> args) async {
       providers: [
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => MultiAgentProvider()),
       ],
       child: const MyApp(),
     ),

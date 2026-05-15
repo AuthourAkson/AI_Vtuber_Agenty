@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../providers/settings_provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/multi_agent_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,23 +14,35 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _serverCtrl;
+  late TextEditingController _waHostCtrl;
+  late TextEditingController _waDeviceNameCtrl;
+  late TextEditingController _waTopicCtrl;
+  bool _waEnabled = false;
+  int _waPort = 9090;
 
   @override
   void initState() {
     super.initState();
     _serverCtrl = TextEditingController();
+    _waHostCtrl = TextEditingController(text: '127.0.0.1');
+    _waDeviceNameCtrl = TextEditingController(text: 'AI VTuber');
+    _waTopicCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _serverCtrl.dispose();
+    _waHostCtrl.dispose();
+    _waDeviceNameCtrl.dispose();
+    _waTopicCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<SettingsProvider, ChatProvider>(
-      builder: (context, sp, chat, _) {
+    return Consumer3<SettingsProvider, ChatProvider, MultiAgentProvider>(
+      builder: (context, sp, chat, wa, _) {
+        // Sync text controllers with settings on first load
         if (_serverCtrl.text.isEmpty) {
           _serverCtrl.text = sp.settings.backendUrl;
         }
@@ -42,7 +55,145 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
               const SizedBox(height: 24),
 
-              // Server Connection
+              // ─── WenzAgent Multi-Agent LAN ──────────────────
+              _sectionHeader('WenzAgent Multi-Agent Network'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: ShadColors.card,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: ShadColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Enable toggle
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Enable multi-agent LAN',
+                          style: TextStyle(fontSize: 14)),
+                      subtitle: const Text(
+                        'Connect to a WenzAgent LAN server for multi-device AI collaboration',
+                        style: TextStyle(fontSize: 12, color: ShadColors.mutedForeground),
+                      ),
+                      value: sp.settings.wenzagentEnabled,
+                      onChanged: (v) {
+                        sp.settings.wenzagentEnabled = v;
+                        sp.saveSettings(sp.settings);
+                        setState(() {});
+                      },
+                    ),
+                    if (sp.settings.wenzagentEnabled) ...[
+                      const SizedBox(height: 12),
+                      // Host
+                      TextField(
+                        controller: _waHostCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Server Host',
+                          hintText: '127.0.0.1 or LAN IP',
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: ShadColors.secondary,
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        onChanged: (v) {
+                          sp.settings.wenzagentHost = v;
+                          sp.saveSettings(sp.settings);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // Port
+                      Row(
+                        children: [
+                          const Text('Port: ', style: TextStyle(fontSize: 13, color: ShadColors.foreground)),
+                          SizedBox(
+                            width: 100,
+                            child: TextField(
+                              controller: TextEditingController(text: '${sp.settings.wenzagentPort}'),
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                filled: true,
+                                fillColor: ShadColors.secondary,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                isDense: true,
+                              ),
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontSize: 13),
+                              onChanged: (v) {
+                                sp.settings.wenzagentPort = int.tryParse(v) ?? 9090;
+                                sp.saveSettings(sp.settings);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Device name
+                      TextField(
+                        controller: _waDeviceNameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Device Name',
+                          hintText: 'AI VTuber',
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: ShadColors.secondary,
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        onChanged: (v) {
+                          sp.settings.wenzagentDeviceName = v;
+                          sp.saveSettings(sp.settings);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      // Topic
+                      TextField(
+                        controller: _waTopicCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Topic (optional)',
+                          hintText: 'Group topic for device isolation',
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: ShadColors.secondary,
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        onChanged: (v) {
+                          sp.settings.wenzagentTopic = v;
+                          sp.saveSettings(sp.settings);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      // Connection status
+                      Row(
+                        children: [
+                          Icon(
+                            wa.connected ? Icons.check_circle : Icons.cancel,
+                            size: 16,
+                            color: wa.connected ? const Color(0xFF4CAF50) : const Color(0xFFCF6679),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            wa.connected ? 'Connected to LAN' : wa.statusMessage,
+                            style: TextStyle(
+                              color: wa.connected ? const Color(0xFF4CAF50) : ShadColors.mutedForeground,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (wa.connected)
+                            _miniButton('Disconnect', () => wa.disconnect())
+                          else
+                            _miniButton('Connect', () => wa.connect()),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ─── Server Connection ────────────────────────
               _sectionHeader('Server Connection'),
               const SizedBox(height: 8),
               TextField(
@@ -52,29 +203,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   hintText: 'D:\\AiVtuber_Agent_profile',
                   border: OutlineInputBorder(),
                   filled: true,
-                  fillColor: Color(0xFF1E1E1E),
+                  fillColor: ShadColors.secondary,
                 ),
                 style: const TextStyle(fontSize: 13),
                 onChanged: (v) => sp.updateBackendUrl(v),
               ),
               const SizedBox(height: 12),
-              Row(
+              const Row(
                 children: [
-                  const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
-                  const SizedBox(width: 6),
-                  const Text('Self-contained — no external backend needed',
+                  Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
+                  SizedBox(width: 6),
+                  Text('Self-contained — no external backend needed',
                       style: TextStyle(color: Color(0xFF4CAF50), fontSize: 13)),
                 ],
               ),
               const SizedBox(height: 24),
+
+              // ─── About ────────────────────────────────────
               _sectionHeader('About'),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
+                  color: ShadColors.card,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF2C2C2C)),
+                  border: Border.all(color: ShadColors.border),
                 ),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text('• Screenshot vision + OCR'),
                     Text('• Local keyword-based memory'),
                     Text('• Session history management'),
-                    Text('• YouTube live chat integration (WIP)'),
+                    Text('• WenzAgent multi-agent LAN networking'),
                     SizedBox(height: 12),
                     Text('Backend: Self-contained Dart services',
                         style: TextStyle(color: Color(0xFF666666), fontSize: 12)),
@@ -124,5 +277,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       fontWeight: FontWeight.w600,
       color: Color(0xFF4CAF50),
     ));
+  }
+
+  Widget _miniButton(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: ShadColors.secondary,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: ShadColors.border),
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 12, color: ShadColors.foreground)),
+      ),
+    );
   }
 }

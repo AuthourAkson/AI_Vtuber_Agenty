@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.2.0 <4.0.0'
+  sdk: '>=3.11.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -34,6 +34,9 @@ dependencies:
   ffi: ^2.1.0
   desktop_multi_window: ^0.3.0
   window_manager: ^0.5.1
+  # WenzAgent multi-agent SDK
+  wenzagent:
+    path: D:/wenzagent-1.0.0
 
 dev_dependencies:
   flutter_test:
