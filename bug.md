@@ -111,7 +111,7 @@ A Stack requires bounded constraints from its parent.
 
 **待修复**:
 
-D:\AiVtuber_Agent> flutter run -d windows
+D:\AiVtuber_Agent>flutter run -d windows
 Launching lib\main.dart on Windows in debug mode...
 CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_windows/windows/CMakeLists.txt:31 (add_custom_command):
   The following keywords are not supported when using
@@ -122,48 +122,14 @@ CMake Warning (dev) at flutter/ephemeral/.plugin_symlinks/flutter_inappwebview_w
   command to set the policy and suppress this warning.
 This warning is for project developers.  Use -Wno-dev to suppress it.
 
-lib/services/wenzagent_service.dart(175,15): error GE5CFE876: The method 'markMessagesAsRead' isn't defined for the type 'CachedAgentProxy'. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/screens/multi_agent_screen.dart(556,7): error G67247B7E: Expected ';' after this. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/screens/multi_agent_screen.dart(556,8): error G25387D61: Expected an identifier, but got ','. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/screens/multi_agent_screen.dart(556,8): error G5BADBE1C: Unexpected token ';'. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/screens/multi_agent_screen.dart(557,5): error G25387D61: Expected an identifier, but got ')'. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/screens/multi_agent_screen.dart(556,8): error G67247B7E: Expected ';' after this. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
+lib/screens/multi_agent_screen.dart(557,5): error G5BADBE1C: Unexpected token ';'. [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
 D:\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\Microsoft.CppCommon.targets(254,5): error MSB8066: “D:\AiVtuber_Agent\build\windows\x64\CMakeFiles\c34551fe35923833d11a024e38cb5a47\flutter_windows.dll.rule;D:\AiVtuber_Agent\build\windows\x64\CMakeFiles\d93f91fab4440261b871f34779069aea\flutter_assemble.rule”的自定义生成已退出，代码为 1。 [D:\AiVtuber_Agent\build\windows\x64\flutter\flutter_assemble.vcxproj]
-Building Windows application...                                    16.0s
+Building Windows application...                                    16.2s
 Error: Build process failed.
 
----
 
-## ✅ 已修复 (2026-05-15)
-
-### Bug #37: WenzAgent 集成构建错误 — 7 个类型/方法不匹配
-
-**日期**: 2026-05-15
-
-**现象**: WenzAgent 多Agent 集成首次构建失败，7 个编译错误：
-
-- `DeviceInfo` / `MultiAgentInfo` 类型在 multi_agent_screen.dart 中不可见
-- `CachedAgentProxy.markMessagesAsRead()` 方法签名不匹配（缺少 `readerDeviceId` 参数）
-- `LanDeviceInfo` 实际字段为 `id` / `name` 而非 `deviceId` / `deviceName`
-- `SessionSummaryEntity` 实际字段为 `lastMsgContent` 而非 `latestMessageContent`，无 `agentStatus` 字段
-
-**根因**: 代码基于 wenzagent 文档（frontend-integration-guide.md）而非实际 API 签名编写。实际 wenzagent SDK 的类字段名称与文档描述不一致。
-
-**修复**:
-
-| #    | 文件                                    | 变更                                                                                      |
-| ---- | ------------------------------------- | --------------------------------------------------------------------------------------- |
-| B37a | `lib/screens/multi_agent_screen.dart` | 添加 `import '../services/wenzagent_service.dart'` 以引入 `DeviceInfo` / `MultiAgentInfo` 类型 |
-| B37b | `lib/services/wenzagent_service.dart` | `markMessagesAsRead()` → `markMessagesAsRead(readerDeviceId: _deviceId)`                |
-| B37c | `lib/services/wenzagent_service.dart` | `d.deviceId` → `d.id`，`d.deviceName ?? 'Unknown'` → `d.name ?? 'Unknown'`               |
-| B37d | `lib/services/wenzagent_service.dart` | `s.latestMessageContent` → `s.lastMsgContent`，移除不存在的 `agentStatus`，固定为 `'idle'`         |
-
----
-
-### Bug #37 续: CachedAgentProxy 无 markMessagesAsRead 方法
-
-**现象** (第二次构建):
-
-```
-lib/services/wenzagent_service.dart(175,15): error: The method 'markMessagesAsRead' isn't defined
-for the type 'CachedAgentProxy'.
-```
-
-**根因**: `markMessagesAsRead(readerDeviceId:)` 只存在于底层 `AgentProxy` 类，`CachedAgentProxy` 没有暴露此方法。前端文档说 `proxy.markMessagesAsRead()` 但实际 API 需要通过 DeviceClient 层调用。
-
-**修复**: `wenzagent_service.dart` — 改用 `DeviceClient.markAllMessagesAsRead(employeeId: employeeId)` 替代 `proxy.markMessagesAsRead(readerDeviceId:)`。

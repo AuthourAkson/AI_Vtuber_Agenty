@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../app.dart';
 import '../providers/chat_provider.dart';
 import '../providers/settings_provider.dart';
-import '../providers/multi_agent_provider.dart';
+import '../providers/multi_agent_provider.dart'; // AgentManager
 import '../widgets/app_sidebar.dart';
 import 'chat_screen.dart';
 import 'character_screen.dart';

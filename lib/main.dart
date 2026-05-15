@@ -43,7 +43,7 @@ void main(List<String> args) async {
       providers: [
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => MultiAgentProvider()),
+        ChangeNotifierProvider(create: (_) => AgentManager()),
       ],
       child: const MyApp(),
     ),

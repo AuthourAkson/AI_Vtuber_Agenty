@@ -1,49 +1,123 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:wenzagent/wenzagent.dart';
 import '../services/wenzagent_service.dart';
 
-/// MultiAgentProvider — manages multi-agent network state for the UI.
+/// Agent model for the contacts/employee list.
+class AgentModel {
+  final String uuid;
+  final String name;
+  final String? description;
+  final String? deviceId;
+  final String? provider;
+  final String? model;
+  final String status;
+
+  const AgentModel({
+    required this.uuid,
+    required this.name,
+    this.description,
+    this.deviceId,
+    this.provider,
+    this.model,
+    this.status = 'offline',
+  });
+}
+
+/// A named AI provider configuration profile.
+class ProviderProfile {
+  String name;
+  String baseUrl;
+  String apiKey;
+  String model;
+
+  ProviderProfile({
+    required this.name,
+    this.baseUrl = 'https://api.openai.com/v1',
+    this.apiKey = '',
+    this.model = 'gpt-4o',
+  });
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'baseUrl': baseUrl,
+    'apiKey': apiKey,
+    'model': model,
+  };
+
+  factory ProviderProfile.fromJson(Map<String, dynamic> json) => ProviderProfile(
+    name: json['name'] ?? '',
+    baseUrl: json['baseUrl'] ?? 'https://api.openai.com/v1',
+    apiKey: json['apiKey'] ?? '',
+    model: json['model'] ?? 'gpt-4o',
+  );
+}
+
+/// Central state manager for Multi-Agent page (replaces old MultiAgentProvider).
 ///
-/// Wraps WenzAgentService with ChangeNotifier so widgets can reactively
-/// update to connection changes, new messages, and agent status updates.
-class MultiAgentProvider extends ChangeNotifier {
+/// Manages LAN connection, agent/employee lists, active chat, and employee creation.
+class AgentManager extends ChangeNotifier {
   final WenzAgentService wenzagent = WenzAgentService();
 
-  // State
-  bool _enabled = false;
-  bool _connected = false;
-  bool _connecting = false;
-  String _statusMessage = 'Not connected';
+  // ─── LAN Connection State ───────────────────
 
-  // Data
-  List<MultiAgentInfo> _agentSummaries = [];
+  bool _initialized = false;
+  bool _connecting = false;
+  bool _connected = false;
+  String _statusMessage = 'Disconnected';
+  String _host = '127.0.0.1';
+  int _port = 9090;
+  String _deviceName = 'AI VTuber';
+  String _topic = '';
+
+  // ─── Multi-Agent Data ───────────────────────
+
+  List<ProviderProfile> _providerProfiles = [
+    ProviderProfile(name: 'Default OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o'),
+  ];
+  List<AgentModel> _employees = [];
+  List<AgentModel> _agentSummaries = [];
   List<DeviceInfo> _onlineDevices = [];
 
-  // Active agent chat
-  String? _activeEmployeeId;
-  List<Map<String, dynamic>> _activeMessages = [];
-  String _activeAgentStatus = 'idle';
+  // ─── Getters ────────────────────────────────
 
-  // Subscriptions
+  String? _activeEmployeeId;
+  String? _activeEmployeeName;
+  List<Map<String, dynamic>> _activeMessages = [];
+
+  // ─── Subscriptions ──────────────────────────
+
   StreamSubscription? _msgSub;
   StreamSubscription? _statusSub;
   StreamSubscription? _connSub;
 
-  // ─── Getters ─────────────────────────────────────────────
+  // ─── Getters ────────────────────────────────
 
-  bool get enabled => _enabled;
-  bool get connected => _connected;
+  bool get initialized => _initialized;
   bool get connecting => _connecting;
+  bool get connected => _connected;
   String get statusMessage => _statusMessage;
-  List<MultiAgentInfo> get agentSummaries => _agentSummaries;
+  String get host => _host;
+  int get port => _port;
+  String get deviceName => _deviceName;
+  String get topic => _topic;
+
+  List<AgentModel> get employees => _employees;
+  List<AgentModel> get agentSummaries => _agentSummaries;
   List<DeviceInfo> get onlineDevices => _onlineDevices;
+  List<ProviderProfile> get providerProfiles => _providerProfiles;
+
   String? get activeEmployeeId => _activeEmployeeId;
+  String? get activeEmployeeName => _activeEmployeeName;
   List<Map<String, dynamic>> get activeMessages => _activeMessages;
-  String get activeAgentStatus => _activeAgentStatus;
+  String get activeAgentStatus => wenzagent.activeAgentStatus;
 
-  // ─── Lifecycle ───────────────────────────────────────────
+  bool get hasUnreadMessages => _agentSummaries.any((a) => a.status == 'unread');
 
-  /// Initialize the WenzAgent client. Call once at startup if enabled.
+  // ─── Lifecycle ──────────────────────────────
+
   Future<void> initIfEnabled({
     required String storagePath,
     required String host,
@@ -51,10 +125,17 @@ class MultiAgentProvider extends ChangeNotifier {
     required String deviceName,
     String? topic,
   }) async {
-    _enabled = true;
+    _host = host;
+    _port = port;
+    _deviceName = deviceName;
+    _topic = topic ?? '';
+
     _connecting = true;
     _statusMessage = 'Connecting...';
     notifyListeners();
+
+    // Load saved profiles from disk
+    _loadProfiles();
 
     final config = WenzAgentConfig(
       storagePath: storagePath,
@@ -66,33 +147,25 @@ class MultiAgentProvider extends ChangeNotifier {
 
     final ok = await wenzagent.initialize(config);
     if (!ok) {
-      _statusMessage = 'Failed to initialize WenzAgent SDK';
+      _statusMessage = 'SDK init failed';
       _connecting = false;
       notifyListeners();
       return;
     }
 
-    // Subscribe to events
     _msgSub = wenzagent.onMessage.listen(_onMessage);
     _statusSub = wenzagent.onStatusChange.listen(_onStatusChange);
     _connSub = wenzagent.onConnectionChange.listen(_onConnectionChange);
 
-    // Connect
-    final connected = await wenzagent.connect();
-    _connected = connected;
-    _connecting = false;
-    _statusMessage = connected ? 'Connected' : 'Connection failed';
-    notifyListeners();
-
-    if (connected) {
-      await refreshDevices();
-      await refreshSummaries();
-    }
+    _initialized = true;
+    await joinLAN();
   }
 
-  /// Connect to LAN server.
-  Future<void> connect() async {
-    if (!_enabled) return;
+  /// Join an existing LAN server.
+  Future<void> joinLAN({String? host, int? port}) async {
+    if (host != null) _host = host;
+    if (port != null) _port = port;
+
     _connecting = true;
     _statusMessage = 'Connecting...';
     notifyListeners();
@@ -103,23 +176,24 @@ class MultiAgentProvider extends ChangeNotifier {
     _statusMessage = ok ? 'Connected' : 'Connection failed';
     notifyListeners();
 
-    if (ok) {
-      await refreshDevices();
-      await refreshSummaries();
-    }
+    if (ok) await refreshAll();
   }
 
-  /// Disconnect from LAN.
+  /// "Create LAN" — same as joinLAN since the server is separate.
+  /// The user runs wenzagent_server.exe externally; this just connects.
+  Future<void> createLAN({String? host, int? port, String? topic}) async {
+    await joinLAN(host: host ?? '127.0.0.1', port: port ?? 9090);
+  }
+
   Future<void> disconnect() async {
     await wenzagent.disconnect();
     _connected = false;
     _statusMessage = 'Disconnected';
-    _agentSummaries = [];
     _onlineDevices = [];
+    _agentSummaries = [];
     notifyListeners();
   }
 
-  /// Full cleanup.
   @override
   void dispose() {
     _msgSub?.cancel();
@@ -129,11 +203,174 @@ class MultiAgentProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  // ─── Active Agent Chat ───────────────────────────────────
+  // ─── Refresh Data ───────────────────────────
 
-  /// Open an agent session.
-  Future<void> openAgent(String employeeId) async {
+  Future<void> refreshAll() async {
+    await Future.wait([
+      refreshDevices(),
+      refreshEmployees(),
+      refreshSummaries(),
+    ]);
+  }
+
+  Future<void> refreshDevices() async {
+    _onlineDevices = await wenzagent.getOnlineDevices();
+    notifyListeners();
+  }
+
+  Future<void> refreshEmployees() async {
+    try {
+      final emps = await wenzagent.getAllEmployees();
+      _employees = emps.map((e) => AgentModel(
+        uuid: e.uuid,
+        name: e.name,
+        description: e.description,
+        deviceId: e.currentDeviceId,
+        provider: e.provider,
+        model: e.model,
+        status: e.status,
+      )).toList();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> refreshSummaries() async {
+    _agentSummaries = wenzagent.getAgentSummaries().map((a) => AgentModel(
+      uuid: a.employeeId,
+      name: a.name,
+      deviceId: a.deviceId,
+    )).toList();
+    notifyListeners();
+  }
+
+  // ─── Profile Management ─────────────────────
+
+  String get _profilesPath => r'D:\AiVtuber_Agent_profile\wenzagent_profiles.json';
+
+  void _loadProfiles() {
+    try {
+      final file = File(_profilesPath);
+      if (file.existsSync()) {
+        final json = jsonDecode(file.readAsStringSync()) as List;
+        _providerProfiles = json
+            .map((e) => ProviderProfile.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      print('[AgentManager] loadProfiles failed: $e');
+    }
+  }
+
+  void _saveProfiles() {
+    try {
+      final file = File(_profilesPath);
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(jsonEncode(_providerProfiles.map((p) => p.toJson()).toList()));
+    } catch (e) {
+      print('[AgentManager] saveProfiles failed: $e');
+    }
+  }
+
+  void addProfile(ProviderProfile profile) {
+    _providerProfiles.add(profile);
+    _saveProfiles();
+    notifyListeners();
+  }
+
+  void updateProfile(int index, ProviderProfile profile) {
+    if (index >= 0 && index < _providerProfiles.length) {
+      _providerProfiles[index] = profile;
+      _saveProfiles();
+      notifyListeners();
+    }
+  }
+
+  void removeProfile(int index) {
+    if (index >= 0 && index < _providerProfiles.length) {
+      _providerProfiles.removeAt(index);
+      _saveProfiles();
+      notifyListeners();
+    }
+  }
+
+  // ─── Employee CRUD ──────────────────────────
+
+  /// Create a new AI employee and sync to contacts.
+  Future<AgentModel?> createEmployee({
+    required String name,
+    String? description,
+    String? deviceId,
+    String? provider,
+    String? model,
+  }) async {
+    try {
+      final entity = await wenzagent.createEmployee(
+        name: name,
+        description: description ?? '',
+        deviceId: deviceId,
+        provider: provider ?? 'openai',
+        model: model ?? 'gpt-4o',
+      );
+      if (entity != null) {
+        await refreshEmployees();
+        return AgentModel(
+          uuid: entity.uuid,
+          name: entity.name,
+          description: entity.description,
+          deviceId: entity.currentDeviceId,
+          provider: entity.provider,
+          model: entity.model,
+          status: entity.status,
+        );
+      }
+    } catch (e) {
+      print('[AgentManager] createEmployee failed: $e');
+    }
+    return null;
+  }
+
+  /// Delete an employee.
+  Future<void> deleteEmployee(String uuid) async {
+    try {
+      await wenzagent.deleteEmployee(uuid);
+      await refreshEmployees();
+    } catch (_) {}
+  }
+
+  // ─── Active Chat ────────────────────────────
+
+  /// Open agent with provider profile.
+  /// First updates the Employee entity with provider info, then opens the agent.
+  Future<void> openAgentWithProfile(String employeeId, String name, ProviderProfile profile) async {
+    // CRITICAL: Update Employee entity BEFORE creating agent proxy.
+    // The local agent reads Employee.provider/model/apiKey during initialization.
+    // setProvider after proxy creation happens too late.
+    try {
+      await wenzagent.updateEmployeeProvider(
+        employeeId: employeeId,
+        provider: _parseProviderName(profile.baseUrl),
+        model: profile.model,
+        apiKey: profile.apiKey,
+        baseUrl: profile.baseUrl,
+      );
+    } catch (e) {
+      print('[AgentManager] updateEmployeeProvider failed: $e');
+    }
+    // Now open agent — it reads the updated Employee config
+    await openAgent(employeeId, name);
+  }
+
+  String _parseProviderName(String baseUrl) {
+    if (baseUrl.contains('openai')) return 'openai';
+    if (baseUrl.contains('anthropic')) return 'anthropic';
+    if (baseUrl.contains('deepseek')) return 'deepseek';
+    if (baseUrl.contains('ollama') || baseUrl.contains('11434')) return 'ollama';
+    return 'openai';
+  }
+
+  Future<void> openAgent(String employeeId, String name) async {
     _activeEmployeeId = employeeId;
+    _activeEmployeeName = name;
     _activeMessages = [];
     notifyListeners();
 
@@ -141,16 +378,13 @@ class MultiAgentProvider extends ChangeNotifier {
     if (proxy != null) {
       final messages = await wenzagent.getActiveMessages();
       _activeMessages = messages;
-      _activeAgentStatus = wenzagent.activeAgentStatus;
       notifyListeners();
     }
   }
 
-  /// Send a message to the active agent.
   Future<void> sendMessage(String text) async {
     if (_activeEmployeeId == null || text.trim().isEmpty) return;
 
-    // Add user message locally
     _activeMessages.add({
       'role': 'user',
       'content': text,
@@ -159,62 +393,36 @@ class MultiAgentProvider extends ChangeNotifier {
     });
     notifyListeners();
 
-    final messageId = await wenzagent.sendMessage(text);
-    if (messageId != null) {
-      // Refresh messages after a short delay to get the response
-      await Future.delayed(const Duration(milliseconds: 500));
-      await refreshActiveMessages();
-    }
+    await wenzagent.sendMessage(text);
+    await Future.delayed(const Duration(milliseconds: 500));
+    await _refreshActiveMessages();
   }
 
-  /// Refresh messages for the active agent.
-  Future<void> refreshActiveMessages() async {
+  Future<void> _refreshActiveMessages() async {
     if (_activeEmployeeId == null) return;
     final messages = await wenzagent.getActiveMessages();
     _activeMessages = messages;
-    _activeAgentStatus = wenzagent.activeAgentStatus;
     notifyListeners();
   }
 
-  /// Interrupt the active agent.
   Future<void> interruptAgent() async {
     await wenzagent.interrupt();
-    _activeAgentStatus = 'idle';
     notifyListeners();
   }
 
-  /// Clear the active session.
-  Future<void> clearSession() async {
-    await wenzagent.clearSession();
+  void closeAgent() {
+    _activeEmployeeId = null;
+    _activeEmployeeName = null;
     _activeMessages = [];
     notifyListeners();
   }
 
-  // ─── Device / Employee Queries ───────────────────────────
-
-  /// Refresh the list of online devices.
-  Future<void> refreshDevices() async {
-    _onlineDevices = await wenzagent.getOnlineDevices();
-    notifyListeners();
-  }
-
-  /// Refresh session summaries.
-  Future<void> refreshSummaries() async {
-    _agentSummaries = wenzagent.getSessionSummaries();
-    notifyListeners();
-  }
-
-  /// Mark all messages as read for an employee.
-  void markAllRead(String employeeId) {
-    wenzagent.markAllRead(employeeId);
-  }
-
-  // ─── Event Handlers ──────────────────────────────────────
+  // ─── Event Handlers ─────────────────────────
 
   void _onMessage(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     if (type == 'message' && event['employeeId'] == _activeEmployeeId) {
-      refreshActiveMessages();
+      _refreshActiveMessages();
     }
     if (type == 'unread') {
       refreshSummaries();
@@ -223,7 +431,6 @@ class MultiAgentProvider extends ChangeNotifier {
 
   void _onStatusChange(Map<String, dynamic> event) {
     if (event['employeeId'] == _activeEmployeeId) {
-      _activeAgentStatus = event['status'] as String? ?? 'idle';
       notifyListeners();
     }
   }
@@ -232,8 +439,8 @@ class MultiAgentProvider extends ChangeNotifier {
     _connected = connected;
     _statusMessage = connected ? 'Connected' : 'Disconnected';
     if (!connected) {
-      _agentSummaries = [];
       _onlineDevices = [];
+      _agentSummaries = [];
     }
     notifyListeners();
   }

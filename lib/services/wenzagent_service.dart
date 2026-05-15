@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:wenzagent/wenzagent.dart';
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Configuration for initializing the WenzAgent service.
 class WenzAgentConfig {
@@ -84,7 +88,14 @@ class WenzAgentService {
     if (_initialized) return true;
 
     try {
-      _deviceId = 'ai-vtuber-${DateTime.now().millisecondsSinceEpoch}';
+      // Use persistent device ID (stored in SharedPreferences)
+      // so data survives across app restarts.
+      final prefs = await SharedPreferences.getInstance();
+      _deviceId = prefs.getString('wenzagent_device_id') ?? '';
+      if (_deviceId.isEmpty) {
+        _deviceId = 'ai-vtuber-${DateTime.now().millisecondsSinceEpoch}';
+        await prefs.setString('wenzagent_device_id', _deviceId);
+      }
 
       _client = DeviceClient.getInstance(_deviceId);
 
@@ -268,6 +279,97 @@ class WenzAgentService {
     try {
       _client?.markAllMessagesAsRead(employeeId: employeeId);
     } catch (_) {}
+  }
+
+  // ─── Employee CRUD ────────────────────────────────────────
+
+  /// Create a new AI employee on this device.
+  Future<AiEmployeeEntity?> createEmployee({
+    required String name,
+    String description = '',
+    String? deviceId,
+    String provider = 'openai',
+    String model = 'gpt-4o',
+  }) async {
+    if (_client == null) return null;
+    try {
+      // Use a UUID-like ID for the employee
+      final uuid = 'emp-${DateTime.now().millisecondsSinceEpoch}';
+      final entity = AiEmployeeEntity(
+        uuid: uuid,
+        name: name,
+        role: 'agent',
+        status: 'offline',
+        description: description.isNotEmpty ? description : null,
+        provider: provider,
+        model: model,
+        currentDeviceId: deviceId ?? _deviceId,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        sortOrder: 0,
+        enableTools: 1,
+        enableMcp: 0,
+        autoApprove: 0,
+        isPinned: 0,
+        deleted: 0,
+      );
+      await _client!.employeeManager.createEmployee(entity);
+      return entity;
+    } catch (e) {
+      print('[WenzAgentService] createEmployee failed: $e');
+      return null;
+    }
+  }
+
+  /// Get all employees across devices.
+  Future<List<AiEmployeeEntity>> getAllEmployees() async {
+    if (_client == null) return [];
+    try {
+      return await _client!.employeeManager.getEmployees(allDevices: true);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Update an employee's provider/model/apiKey/baseUrl.
+  /// Must be called BEFORE creating the agent proxy — the local agent
+  /// reads these fields from the Employee entity during initialization.
+  Future<void> updateEmployeeProvider({
+    required String employeeId,
+    required String provider,
+    required String model,
+    String? apiKey,
+    String? baseUrl,
+  }) async {
+    if (_client == null) return;
+    try {
+      final emp = await _client!.employeeManager.getEmployee(employeeId);
+      if (emp != null) {
+        emp.provider = provider;
+        emp.model = model;
+        emp.apiKey = apiKey;
+        emp.apiBaseUrl = baseUrl;
+        emp.updateTime = DateTime.now();
+        await _client!.employeeManager.updateEmployee(emp);
+      }
+    } catch (e) {
+      print('[WenzAgentService] updateEmployeeProvider failed: $e');
+    }
+  }
+
+  /// Delete an employee.
+  Future<void> deleteEmployee(String uuid) async {
+    if (_client == null) return;
+    try {
+      await _client!.deleteEmployee(uuid);
+    } catch (_) {}
+  }
+
+  // ─── Agent Summaries (for AgentManager) ───────────────────
+
+  /// Get agent summaries as AgentModel-compatible list.
+  List<MultiAgentInfo> getAgentSummaries() {
+    return getSessionSummaries();
   }
 
   // ─── Internal ─────────────────────────────────────────────
