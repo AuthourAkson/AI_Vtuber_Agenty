@@ -392,12 +392,12 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                       Text(emp.description!, maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11, color: ShadColors.mutedForeground)),
                     const SizedBox(height: 2),
-                    Row(
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
                       children: [
                         _chip(emp.provider ?? 'unknown'),
-                        const SizedBox(width: 4),
                         _chip(emp.model ?? 'default'),
-                        const SizedBox(width: 4),
                         _chip(emp.deviceId != null ? 'bound' : 'unbound'),
                       ],
                     ),
