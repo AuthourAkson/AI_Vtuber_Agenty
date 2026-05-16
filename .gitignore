@@ -21,3 +21,7 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Project docs (local only, managed by Agent)
+project.md
+bug.md
