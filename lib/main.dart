@@ -8,6 +8,7 @@ import 'app.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/multi_agent_provider.dart';
+import 'providers/appearance_provider.dart';
 import 'services/live2d_server.dart';
 import 'services/live2d_overlay_ffi.dart';
 
@@ -44,6 +45,7 @@ void main(List<String> args) async {
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => AgentManager()),
+        ChangeNotifierProvider(create: (_) => AppearanceProvider()..load()),
       ],
       child: const MyApp(),
     ),

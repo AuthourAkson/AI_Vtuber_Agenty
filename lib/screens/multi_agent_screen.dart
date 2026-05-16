@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
 import '../providers/multi_agent_provider.dart';
+import '../providers/appearance_provider.dart';
 import '../services/wenzagent_service.dart';
+import 'multi_agent_appearance.dart';
 
 /// Multi-agent network page — matches prompt.md spec:
 /// Secondary sidebar (Chat/Contacts), device list, agent chat, employee creation.
@@ -152,7 +154,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(Icons.settings, size: 18,
-                  color: _showSettings ? ShadColors.sidebarPrimary : ShadColors.mutedForeground),
+                  color: _showSettings ? Theme.of(context).colorScheme.primary : ShadColors.mutedForeground),
             ),
           ),
           const SizedBox(width: 4),
@@ -177,7 +179,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(icon, size: 18,
-              color: active ? ShadColors.sidebarPrimary : ShadColors.mutedForeground),
+              color: active ? Theme.of(context).colorScheme.primary : ShadColors.mutedForeground),
         ),
       ),
     );
@@ -276,7 +278,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
           decoration: BoxDecoration(
             color: isActive ? ShadColors.sidebarAccent : ShadColors.secondary,
             borderRadius: BorderRadius.circular(6),
-            border: isActive ? Border.all(color: ShadColors.sidebarPrimary.withAlpha(80)) : null,
+            border: isActive ? Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(80)) : null,
           ),
           child: Row(
             children: [
@@ -376,10 +378,10 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
               Container(
                 width: 32, height: 32,
                 decoration: BoxDecoration(
-                  color: ShadColors.sidebarPrimary.withAlpha(40),
+                  color: Theme.of(context).colorScheme.primary.withAlpha(40),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.person, size: 18, color: ShadColors.sidebarPrimary),
+                child: Icon(Icons.person, size: 18, color: Theme.of(context).colorScheme.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -465,8 +467,8 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Create Employee'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: ShadColors.sidebarPrimary,
-            side: const BorderSide(color: ShadColors.sidebarPrimary),
+            foregroundColor: Theme.of(context).colorScheme.primary,
+            side: BorderSide(color: Theme.of(context).colorScheme.primary),
             padding: const EdgeInsets.symmetric(vertical: 10),
           ),
         ),
@@ -547,7 +549,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                     description: descCtrl.text.trim(),
                   );
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: ShadColors.sidebarPrimary),
+                style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
                 child: const Text('Create', style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -653,10 +655,10 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: active ? ShadColors.sidebarPrimary : ShadColors.mutedForeground),
+            Icon(icon, size: 16, color: active ? Theme.of(context).colorScheme.primary : ShadColors.mutedForeground),
             const SizedBox(width: 8),
             Text(title, style: TextStyle(fontSize: 13,
-                color: active ? ShadColors.sidebarPrimary : ShadColors.foreground)),
+                color: active ? Theme.of(context).colorScheme.primary : ShadColors.foreground)),
           ],
         ),
       ),
@@ -665,6 +667,8 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
 
   Widget _buildSettingsContent(AgentManager mgr) {
     switch (_activeSettingSection) {
+      case 'pref_appearance':
+        return const MultiAgentAppearancePage();
       case 'ai_config':
         return _buildAiConfigPanel(mgr);
       case 'ai_mcp':
@@ -721,8 +725,8 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add Profile'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: ShadColors.sidebarPrimary,
-                side: const BorderSide(color: ShadColors.sidebarPrimary),
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                side: BorderSide(color: Theme.of(context).colorScheme.primary),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
@@ -746,7 +750,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.api, size: 18, color: ShadColors.sidebarPrimary),
+              Icon(Icons.api, size: 18, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(profile.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadColors.foreground)),
@@ -836,7 +840,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
               }
               Navigator.pop(ctx);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: ShadColors.sidebarPrimary),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
             child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -937,7 +941,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                 icon: const Icon(Icons.wifi, size: 16),
                 label: const Text('Join Network'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: ShadColors.sidebarPrimary,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -992,7 +996,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: active ? ShadColors.sidebarPrimary : ShadColors.secondary,
+          color: active ? Theme.of(context).colorScheme.primary : ShadColors.secondary,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
@@ -1004,7 +1008,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
   Widget _cardHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: ShadColors.sidebarPrimary),
+        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 8),
         Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadColors.foreground)),
       ],
@@ -1139,17 +1143,17 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: ShadColors.sidebarPrimary.withAlpha(20),
+                    color: Theme.of(context).colorScheme.primary.withAlpha(20),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: ShadColors.sidebarPrimary.withAlpha(50)),
+                    border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(50)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.api, size: 13, color: ShadColors.sidebarPrimary),
+                      Icon(Icons.api, size: 13, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 5),
                       Text(mgr.activeProfile!.name,
-                          style: const TextStyle(fontSize: 11, color: ShadColors.sidebarPrimary)),
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary)),
                       const SizedBox(width: 6),
                       const Icon(Icons.swap_horiz, size: 12, color: ShadColors.mutedForeground),
                       const SizedBox(width: 4),
@@ -1179,7 +1183,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: const BoxConstraints(maxWidth: 520),
         decoration: BoxDecoration(
-          color: isUser ? ShadColors.sidebarPrimary.withAlpha(25) : ShadColors.secondary,
+          color: isUser ? Theme.of(context).colorScheme.primary.withAlpha(25) : ShadColors.secondary,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -1242,7 +1246,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
             onTap: () => _send(_msgCtrl.text, mgr),
             child: Container(
               width: 40, height: 40,
-              decoration: const BoxDecoration(color: ShadColors.sidebarPrimary, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
               child: const Icon(Icons.send, size: 18, color: Colors.white),
             ),
           ),
@@ -1301,7 +1305,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
             itemBuilder: (_, i) {
               final p = profiles[i];
               return ListTile(
-                leading: const Icon(Icons.api, color: ShadColors.sidebarPrimary),
+                leading: Icon(Icons.api, color: Theme.of(context).colorScheme.primary),
                 title: Text(p.name, style: const TextStyle(color: ShadColors.foreground, fontSize: 14)),
                 subtitle: Text('${p.model}  •  ${p.baseUrl}',
                     style: const TextStyle(fontSize: 11, color: ShadColors.mutedForeground)),
