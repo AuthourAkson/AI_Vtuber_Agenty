@@ -234,6 +234,17 @@ class ThemePreset {
       lightBorder: 0xFFE0E0E4, lightInput: 0xFFD4D4D8, lightSidebar: 0xFFF0F0F2,
     ),
   ];
+
+  /// Neutral fallback — no accent color, pure grayscale. Used when Theme Color is disabled.
+  static const ThemePreset neutral = ThemePreset(
+    label: 'Neutral', accentColor: 0xFF888888,
+    darkBg: 0xFF1A1A1A, darkFg: 0xFFF5F5F5, darkCard: 0xFF252525,
+    darkSecondary: 0xFF2E2E2E, darkMutedFg: 0xFF9E9E9E,
+    darkBorder: 0x1AFFFFFF, darkInput: 0x26FFFFFF, darkSidebar: 0xFF1C1C1C,
+    lightBg: 0xFFF8F8F8, lightFg: 0xFF1A1A1A, lightCard: 0xFFFFFFFF,
+    lightSecondary: 0xFFF0F0F0, lightMutedFg: 0xFF6B6B6B,
+    lightBorder: 0xFFE0E0E0, lightInput: 0xFFD8D8D8, lightSidebar: 0xFFF0F0F0,
+  );
 }
 
 // ════════════════════════════════════════════════════════════
@@ -251,9 +262,8 @@ class ShadTheme {
   AppearanceProvider get _ap => _ctx.read<AppearanceProvider>();
   bool get _isDark => _ap.isDark;
   ThemePreset get _preset {
-    final i = _ap.themeColorEnabled
-        ? _ap.themeColorIndex
-        : 0; // default Blue
+    if (!_ap.themeColorEnabled) return ThemePreset.neutral;
+    final i = _ap.themeColorIndex;
     final idx = (i >= 0 && i < ThemePreset.presets.length) ? i : 0;
     return ThemePreset.presets[idx];
   }
@@ -315,7 +325,7 @@ class MyApp extends StatelessWidget {
       builder: (context, ap, _) {
         final preset = ap.themeColorEnabled
             ? ThemePreset.presets[ap.themeColorIndex]
-            : ThemePreset.presets[0];
+            : ThemePreset.neutral;
         final accent = Color(preset.accentColor);
         final isDark = ap.isDark;
         final fontSize = ap.fontSize;

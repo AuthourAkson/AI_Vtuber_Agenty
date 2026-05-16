@@ -23,8 +23,9 @@ class AppearanceProvider extends ChangeNotifier {
   bool get startupAnimEnabled => _prefs.startupAnimEnabled;
   bool get themeColorEnabled => _prefs.themeColorEnabled;
 
-  /// The currently selected theme accent color.
-  int get accentColorValue => _prefs.selectedThemeColor;
+  /// The currently selected theme accent color. Returns gray when disabled.
+  int get accentColorValue =>
+      _prefs.themeColorEnabled ? _prefs.selectedThemeColor : 0xFF888888;
 
   // ─── Init ─────────────────────────────────────────────
 
