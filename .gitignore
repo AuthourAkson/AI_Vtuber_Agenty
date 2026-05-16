@@ -25,3 +25,5 @@ Thumbs.db
 # Project docs (local only, managed by Agent)
 project.md
 bug.md
+prompt.md
+changes.md
