@@ -26,6 +26,9 @@ class AppearancePrefs {
   /// Whether the startup transition animation is enabled (default: false)
   bool startupAnimEnabled;
 
+  /// Whether theme color overrides are active. When false, uses default Blue. (default: true)
+  bool themeColorEnabled;
+
   // ─── Constructor ───────────────────────────────────────
 
   AppearancePrefs({
@@ -35,6 +38,7 @@ class AppearancePrefs {
     this.bgPatternIndex = 0,
     this.bgImagePath,
     this.startupAnimEnabled = false,
+    this.themeColorEnabled = true,
   });
 
   // ─── 16-color theme palette ────────────────────────────
@@ -94,6 +98,7 @@ class AppearancePrefs {
     'bgPatternIndex': bgPatternIndex,
     'bgImagePath': bgImagePath,
     'startupAnimEnabled': startupAnimEnabled,
+    'themeColorEnabled': themeColorEnabled,
   };
 
   factory AppearancePrefs.fromJson(Map<String, dynamic> json) {
@@ -104,6 +109,7 @@ class AppearancePrefs {
       bgPatternIndex: json['bgPatternIndex'] as int? ?? 0,
       bgImagePath: json['bgImagePath'] as String?,
       startupAnimEnabled: json['startupAnimEnabled'] as bool? ?? false,
+      themeColorEnabled: json['themeColorEnabled'] as bool? ?? true,
     );
   }
 
@@ -139,6 +145,7 @@ class AppearancePrefs {
     String? bgImagePath,
     bool? startupAnimEnabled,
     bool clearBgImage = false,
+    bool? themeColorEnabled,
   }) {
     return AppearancePrefs(
       darkMode: darkMode ?? this.darkMode,
@@ -147,6 +154,7 @@ class AppearancePrefs {
       bgPatternIndex: bgPatternIndex ?? this.bgPatternIndex,
       bgImagePath: clearBgImage ? null : (bgImagePath ?? this.bgImagePath),
       startupAnimEnabled: startupAnimEnabled ?? this.startupAnimEnabled,
+      themeColorEnabled: themeColorEnabled ?? this.themeColorEnabled,
     );
   }
 }

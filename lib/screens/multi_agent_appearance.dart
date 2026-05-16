@@ -203,52 +203,68 @@ Row(
 children: [
 Icon(Icons.color_lens, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
-Expanded(
-child: _sectionLabel(context, 'Theme Color', 'Choose your accent color'),
+    Expanded(
+      child: _sectionLabel(context, 'Theme Color', 'Choose a complete UI theme preset'),
+    ),
+    Switch(
+      value: ap.themeColorEnabled,
+      onChanged: (v) => ap.update(ap.prefs.copyWith(themeColorEnabled: v)),
+      activeColor: accent,
+    ),
+  ],
 ),
-Container(
-width: 28, height: 28,
-decoration: BoxDecoration(
-color: accent,
-borderRadius: BorderRadius.circular(8),
-boxShadow: [BoxShadow(color: accent.withAlpha(80), blurRadius: 8)],
-),
-),
+// Preview dot + color swatch grid (only when enabled)
+if (ap.themeColorEnabled) ...[
+  SizedBox(height: 12),
+  Container(
+    width: 28, height: 28,
+    decoration: BoxDecoration(
+      color: accent,
+      borderRadius: BorderRadius.circular(8),
+      boxShadow: [BoxShadow(color: accent.withAlpha(80), blurRadius: 8)],
+    ),
+  ),
+  SizedBox(height: 16),
+  Wrap(
+    spacing: 10,
+    runSpacing: 10,
+    children: List.generate(colors.length, (i) {
+      final c = colors[i];
+      final selected = ap.themeColorIndex == i;
+      return GestureDetector(
+        onTap: () => ap.update(ap.prefs.copyWith(themeColorIndex: i)),
+        child: Tooltip(
+          message: c.label,
+          child: AnimatedContainer(
+            duration: Duration(milliseconds: 200),
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: Color(c.color),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? ShadTheme.of(context).foreground : Colors.transparent,
+                width: selected ? 2.5 : 0,
+              ),
+              boxShadow: selected
+                  ? [BoxShadow(color: Color(c.color).withAlpha(100), blurRadius: 8, spreadRadius: 1)]
+                  : [],
+            ),
+            child: selected
+                ? Icon(Icons.check, size: 18, color: Colors.white)
+                : null,
+          ),
+        ),
+      );
+    }),
+  ),
 ],
-),
-SizedBox(height: 16),
-Wrap(
-spacing: 10,
-runSpacing: 10,
-children: List.generate(colors.length, (i) {
-final c = colors[i];
-final selected = ap.themeColorIndex == i;
-return GestureDetector(
-onTap: () => ap.update(ap.prefs.copyWith(themeColorIndex: i)),
-child: Tooltip(
-message: c.label,
-child: AnimatedContainer(
-duration: Duration(milliseconds: 200),
-width: 40, height: 40,
-decoration: BoxDecoration(
-color: Color(c.color),
-borderRadius: BorderRadius.circular(10),
-border: Border.all(
-color: selected ? ShadTheme.of(context).foreground : Colors.transparent,
-width: selected ? 2.5 : 0,
-),
-boxShadow: selected
-? [BoxShadow(color: Color(c.color).withAlpha(100), blurRadius: 8, spreadRadius: 1)]
-: [],
-),
-child: selected
-? Icon(Icons.check, size: 18, color: Colors.white)
-: null,
-),
-),
-);
-}),
-),
+// Disabled hint
+if (!ap.themeColorEnabled)
+  Padding(
+    padding: EdgeInsets.only(top: 12),
+    child: Text('Theme color disabled — using default Blue',
+        style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+  ),
 ],
 ),
 );

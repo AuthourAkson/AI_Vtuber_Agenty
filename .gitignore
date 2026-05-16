@@ -7,7 +7,7 @@ build/
 .vscode/
 *.lock
 pubspec.lock
-
+prompt.md
 # Windows
 windows/flutter/ephemeral/
 windows/flutter/CMakeFiles/

@@ -21,6 +21,7 @@ class AppearanceProvider extends ChangeNotifier {
   int get bgPatternIndex => _prefs.bgPatternIndex;
   String? get bgImagePath => _prefs.bgImagePath;
   bool get startupAnimEnabled => _prefs.startupAnimEnabled;
+  bool get themeColorEnabled => _prefs.themeColorEnabled;
 
   /// The currently selected theme accent color.
   int get accentColorValue => _prefs.selectedThemeColor;

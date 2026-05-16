@@ -136,7 +136,7 @@ color: ShadTheme.of(context).sidebarAccent,
 child: Icon(
 _expanded ? Icons.chevron_left : Icons.chevron_right,
 size: 14,
-color: ShadTheme.of(context).mutedForeground,
+color: ShadTheme.of(context).sidebarAccentForeground,
 ),
 ),
 ),
@@ -166,7 +166,7 @@ Icon(
 icon,
 size: 18,
 color: isActive
-? ShadTheme.of(context).foreground
+                ? ShadTheme.of(context).sidebarAccentForeground
 : ShadTheme.of(context).mutedForeground,
 ),
 SizedBox(width: 10),
@@ -179,7 +179,7 @@ fontSize: 13,
 fontWeight:
 isActive ? FontWeight.w600 : FontWeight.w400,
 color: isActive
-? ShadTheme.of(context).foreground
+                ? ShadTheme.of(context).sidebarAccentForeground
 : ShadTheme.of(context).mutedForeground,
 ),
 ),
@@ -191,7 +191,7 @@ child: Icon(
 icon,
 size: 18,
 color: isActive
-? ShadTheme.of(context).foreground
+                ? ShadTheme.of(context).sidebarAccentForeground
 : ShadTheme.of(context).mutedForeground,
 ),
 ),
