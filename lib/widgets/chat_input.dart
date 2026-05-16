@@ -7,7 +7,7 @@ class ChatInput extends StatefulWidget {
 final Function(String) onSend;
 final bool isStreaming;
 
-const ChatInput({
+ChatInput({
 super.key,
 required this.onSend,
 required this.isStreaming,
@@ -39,12 +39,12 @@ super.dispose();
 @override
 Widget build(BuildContext context) {
 return Container(
-padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
-decoration: const BoxDecoration(
+padding: EdgeInsets.symmetric(horizontal: 48, vertical: 12),
+decoration: BoxDecoration(
 border: Border(top: BorderSide(color: ShadTheme.of(context).border)),
 ),
 child: Container(
-padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(8), // rounded-lg
@@ -58,11 +58,11 @@ focusNode: _focusNode,
 maxLines: 4,
 minLines: 1,
 enabled: !widget.isStreaming,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 14,
 color: ShadTheme.of(context).foreground,
 ),
-decoration: const InputDecoration(
+decoration: InputDecoration(
 hintText: 'Type your message here.',
 hintStyle: TextStyle(color: ShadTheme.of(context).mutedForeground),
 border: InputBorder.none,
@@ -72,7 +72,7 @@ contentPadding: EdgeInsets.zero,
 onSubmitted: (_) => widget.isStreaming ? null : _send(),
 ),
 ),
-const SizedBox(width: 10),
+SizedBox(width: 10),
 // Send / Stop button
 GestureDetector(
 onTap: widget.isStreaming ? null : _send,

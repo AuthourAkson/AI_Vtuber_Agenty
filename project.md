@@ -50,7 +50,7 @@
 **技术栈：**
 - **Frontend:** Flutter Desktop (Windows .exe) + Provider state management
 - **Window:** bitsdojo_window (frameless native buttons) + flutter_acrylic (Mica 毛玻璃)
-- **UI:** fluent_ui (Microsoft Fluent Design System — NavigationView 侧边栏)
+- **UI:** ShadTheme (shadcn/ui 风格主题系统，Material3 基座，支持 dark/light 模式、16 色主题色、13 种背景图案)
 - **Backend:** 自包含 Dart 服务层（BackendService），无外部 Python 依赖
 - **LLM:** 直接调用 OpenAI 兼容 API（SiliconFlow, OpenRouter, Anthropic, Google, Ollama）
 - **TTS:** edge-tts CLI（子进程） + 本地音频缓存
@@ -845,5 +845,78 @@ Flutter App 启动
 | #37 | flutter_markdown _inlines 断言崩溃 | 移除自定义 CodeBlockBuilder |
 | #38 | LaTeX 正则错误 (\$) | 修正为 `\$` |
 | #39 | Session 面板启动无数据 | initFromSavedState 加 loadSessions() |
+
+---
+
+## 变更汇总 (2026-05-17 — ShadTheme 动态主题迁移)
+
+### 背景
+将全项目硬编码的 `ShadColors.xxx`（如 `ShadColors.sidebar`, `ShadColors.foreground`）迁移到
+动态主题系统 `ShadTheme.of(context).xxx`，使所有颜色跟随用户的 dark/light 模式和主题色设置。
+
+### 范围
+涉及 11 个文件（所有 UI 文件），共约 200+ 处硬编码颜色引用。
+
+### 技术难点
+
+**难点 1: `const` 关键字失效**
+`ShadTheme.of(context)` 是运行时表达式，不能出现在 `const` 构造器中。所有使用该模式
+的 `const BoxDecoration`、`const Text`、`const TextStyle` 等必须去掉 `const`。
+修复方法：对 11 个文件执行 `sed -i 's/\bconst //g'` 全面移除。
+
+**难点 2: `StatelessWidget` 辅助方法失去 `context`**
+`State<Widget>` 有隐式 `context` getter，但 `StatelessWidget` 没有。原本在 `build()` 中
+直接调用 `ShadColors.xxx`（不需要 context），迁移后辅助方法（`_label`、`_sectionHeader`、
+`_md` 等）访问 `ShadTheme.of(context)` 需要 `BuildContext`。
+修复方法：给所有 `StatelessWidget` 辅助方法添加 `BuildContext context` 参数。
+
+**难点 3: 链式反应**
+去掉 `const` 后引发连锁错误：
+- `static const` 变量变为无效的 `static` → 改为 `static final`
+- 调用方 `const ChatScreen()` 在不支持 const 的构造器上报错 → 去掉调用方 `const`
+- 辅助方法签名变更后调用处参数数量不匹配 → 补齐所有调用点
+
+### 受影响的类与方法
+
+| 类 | 类型 | 修复 |
+|----|------|------|
+| `_AppSidebarState` | State | de-const；`static const` → `static final` |
+| `_ChatScreenState` | State | de-const |
+| `_SettingsPanel` | StatelessWidget | de-const；`_label/_field/_switchRow` +context |
+| `_TTSScreenState` | State | de-const |
+| `_MemoryScreenState` | State | de-const |
+| `_SettingsScreenState` | State | de-const |
+| `PipelineMonitorScreen` | StatefulWidget | de-const |
+| `_MultiAgentScreenState` | State | de-const；行 701 read_file→write_file 破坏修复 |
+| `ChatInput` | StatefulWidget | de-const |
+| `LLMMonitor` | StatelessWidget | de-const；`_readOnlyTextArea/_toggleButton/_sectionLabel` +context |
+| `MultiAgentAppearancePage` | StatelessWidget | de-const；10+ 辅助方法 +context |
+| `RichContentBubble` | StatelessWidget | de-const；`_md` +context；`List<dynamic>` → `.cast<Widget>()` |
+| `HomeScreen` | StatefulWidget | 去掉 `const ChatScreen()` 等构造器调用 |
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/widgets/app_sidebar.dart` | de-const；static const→static final |
+| `lib/screens/chat_screen.dart` | de-const；_label/_field/_switchRow +context；_SettingsPanel 调用点 |
+| `lib/screens/tts_screen.dart` | de-const |
+| `lib/screens/memory_screen.dart` | de-const |
+| `lib/screens/settings_screen.dart` | de-const |
+| `lib/screens/pipeline_monitor_screen.dart` | de-const |
+| `lib/screens/multi_agent_screen.dart` | de-const；行 701 破坏修复 |
+| `lib/widgets/chat_input.dart` | de-const |
+| `lib/widgets/llm_monitor.dart` | de-const；3 辅助方法 +context |
+| `lib/screens/multi_agent_appearance.dart` | de-const；11 辅助方法 +context |
+| `lib/widgets/rich_content_bubble.dart` | de-const；_md +context；.cast<Widget>() |
+| `lib/screens/home_screen.dart` | 去掉 const 构造器调用 |
+| `bug.md` | 记录 2 轮编译错误及修复过程 |
+| `project.md` | 更新 UI 栈描述 + 本文档 |
+
+### 设计原则
+
+- **State<Widget> 辅助方法不需要 context 参数** — 有隐式 `this.context`
+- **StatelessWidget 辅助方法需要 context 参数** — 没有隐式 context
+- **de-const 是安全操作** — 仅失去编译期常量优化，不影响运行行为
 
 

@@ -7,7 +7,7 @@ import '../providers/chat_provider.dart';
 /// Memory page — matches LocalAIVtuber2's SessionList / MemoryPage.
 class MemoryScreen extends StatefulWidget {
 final VoidCallback? onNavigateHome;
-const MemoryScreen({super.key, this.onNavigateHome});
+MemoryScreen({super.key, this.onNavigateHome});
 
 @override
 State<MemoryScreen> createState() => _MemoryScreenState();
@@ -49,14 +49,14 @@ return title.toLowerCase().contains(_searchTerm.toLowerCase());
 }).toList();
 
 return SingleChildScrollView(
-padding: const EdgeInsets.only(top: 40, left: 48, right: 48, bottom: 40),
+padding: EdgeInsets.only(top: 40, left: 48, right: 48, bottom: 40),
 child: ConstrainedBox(
-constraints: const BoxConstraints(maxWidth: 960),
+constraints: BoxConstraints(maxWidth: 960),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 // Page header — matches LAV2 style
-const Text(
+Text(
 'Chat Sessions',
 style: TextStyle(
 fontSize: 28,
@@ -64,24 +64,24 @@ fontWeight: FontWeight.bold,
 color: ShadTheme.of(context).foreground,
 ),
 ),
-const SizedBox(height: 4),
-const Text(
+SizedBox(height: 4),
+Text(
 'Manage and review your conversation sessions',
 style: TextStyle(
 fontSize: 14,
 color: ShadTheme.of(context).mutedForeground,
 ),
 ),
-const SizedBox(height: 24),
+SizedBox(height: 24),
 
 // Search & filter bar
 Container(
-padding: const EdgeInsets.all(16),
+padding: EdgeInsets.all(16),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).card,
 borderRadius: BorderRadius.circular(8),
 border: Border.all(color: ShadTheme.of(context).border),
-boxShadow: const [
+boxShadow: [
 BoxShadow(
 color: Color(0x08000000),
 blurRadius: 2,
@@ -97,24 +97,24 @@ child: SizedBox(
 height: 36,
 child: TextField(
 controller: _searchCtrl,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 13,
 color: ShadTheme.of(context).foreground,
 ),
 decoration: InputDecoration(
 hintText: 'Search sessions...',
-hintStyle: const TextStyle(
+hintStyle: TextStyle(
 color: ShadTheme.of(context).mutedForeground,
 fontSize: 13,
 ),
-prefixIcon: const Icon(
+prefixIcon: Icon(
 Icons.search,
 size: 16,
 color: ShadTheme.of(context).mutedForeground,
 ),
 filled: true,
 fillColor: ShadTheme.of(context).secondary,
-contentPadding: const EdgeInsets.symmetric(
+contentPadding: EdgeInsets.symmetric(
 horizontal: 12,
 vertical: 8,
 ),
@@ -131,7 +131,7 @@ onChanged: (v) => setState(() => _searchTerm = v),
 ),
 ),
 ),
-const SizedBox(width: 8),
+SizedBox(width: 8),
 // Refresh button
 GestureDetector(
 onTap: _loading
@@ -149,7 +149,7 @@ borderRadius: BorderRadius.circular(6),
 border: Border.all(color: ShadTheme.of(context).input),
 ),
 child: _loading
-? const Center(
+? Center(
 child: SizedBox(
 width: 14,
 height: 14,
@@ -159,7 +159,7 @@ color: ShadTheme.of(context).mutedForeground,
 ),
 ),
 )
-: const Icon(
+: Icon(
 Icons.refresh,
 size: 16,
 color: ShadTheme.of(context).mutedForeground,
@@ -169,22 +169,22 @@ color: ShadTheme.of(context).mutedForeground,
 ],
 ),
 ),
-const SizedBox(height: 20),
+SizedBox(height: 20),
 
 // Session cards
 if (filtered.isEmpty)
 Center(
 child: Padding(
-padding: const EdgeInsets.symmetric(vertical: 48),
+padding: EdgeInsets.symmetric(vertical: 48),
 child: Column(
 children: [
-const Icon(
+Icon(
 Icons.storage_rounded,
 size: 48,
 color: ShadTheme.of(context).mutedForeground,
 ),
-const SizedBox(height: 12),
-const Text(
+SizedBox(height: 12),
+Text(
 'No sessions found',
 style: TextStyle(
 fontSize: 16,
@@ -192,8 +192,8 @@ fontWeight: FontWeight.w500,
 color: ShadTheme.of(context).foreground,
 ),
 ),
-const SizedBox(height: 4),
-const Text(
+SizedBox(height: 4),
+Text(
 'Try adjusting your search criteria',
 style: TextStyle(
 fontSize: 13,
@@ -232,13 +232,13 @@ required String createdAt,
 required ChatProvider chat,
 }) {
 return Container(
-margin: const EdgeInsets.only(bottom: 12),
-padding: const EdgeInsets.all(16),
+margin: EdgeInsets.only(bottom: 12),
+padding: EdgeInsets.all(16),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).card,
 borderRadius: BorderRadius.circular(8),
 border: Border.all(color: ShadTheme.of(context).border),
-boxShadow: const [
+boxShadow: [
 BoxShadow(
 color: Color(0x08000000),
 blurRadius: 2,
@@ -255,17 +255,17 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Text(
 title,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 16,
 fontWeight: FontWeight.w600,
 color: ShadTheme.of(context).foreground,
 ),
 ),
 if (createdAt.isNotEmpty) ...[
-const SizedBox(height: 4),
+SizedBox(height: 4),
 Text(
 'Created: $createdAt',
-style: const TextStyle(
+style: TextStyle(
 fontSize: 12,
 color: ShadTheme.of(context).mutedForeground,
 ),
@@ -285,7 +285,7 @@ await chat.loadSession(id);
 widget.onNavigateHome?.call();
 },
 child: Container(
-padding: const EdgeInsets.symmetric(
+padding: EdgeInsets.symmetric(
 horizontal: 10,
 vertical: 4,
 ),
@@ -293,7 +293,7 @@ decoration: BoxDecoration(
 borderRadius: BorderRadius.circular(4),
 border: Border.all(color: ShadTheme.of(context).input),
 ),
-child: const Text(
+child: Text(
 'Load',
 style: TextStyle(
 fontSize: 12,
@@ -302,14 +302,14 @@ color: ShadTheme.of(context).foreground,
 ),
 ),
 ),
-const SizedBox(width: 6),
+SizedBox(width: 6),
 // Delete button
 GestureDetector(
 onTap: () async {
 await chat.sessionManager.deleteSession(id);
 setState(() {});
 },
-child: const Icon(
+child: Icon(
 Icons.close,
 size: 16,
 color: ShadTheme.of(context).mutedForeground,

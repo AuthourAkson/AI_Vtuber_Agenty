@@ -12,7 +12,7 @@ class RichContentBubble extends StatelessWidget {
 final String content;
 final bool isUser;
 
-const RichContentBubble({
+RichContentBubble({
 super.key,
 required this.content,
 required this.isUser,
@@ -26,7 +26,7 @@ Widget build(BuildContext context) {
 final segments = _splitLatex(content);
 
 if (segments.length == 1 && segments.first is! _MathSeg) {
-return _md(content);
+return _md(context, content);
 }
 
 return Column(
@@ -48,12 +48,12 @@ mathStyle: seg.display ? MathStyle.display : MathStyle.text,
 ),
 );
 }
-return _md((seg as _TextSeg).text);
-}).toList(),
-);
+return _md(context, (seg as _TextSeg).text);
+}).toList().cast<Widget>(),
+  );
 }
 
-Widget _md(String text) {
+Widget _md(BuildContext context, String text) {
 final textColor = isUser
 ? ShadTheme.of(context).secondaryForeground.withAlpha(204)
 : ShadTheme.of(context).secondaryForeground;
@@ -63,21 +63,21 @@ data: text,
 shrinkWrap: true,
 styleSheet: MarkdownStyleSheet(
 p: TextStyle(fontSize: 13, color: textColor, height: 1.5, fontWeight: FontWeight.w500),
-code: const TextStyle(
+code: TextStyle(
 fontSize: 12, fontFamily: 'monospace', color: Color(0xFFE6DB74),
 ),
 codeblockDecoration: BoxDecoration(
-color: const Color(0xFF111111),
+color: Color(0xFF111111),
 borderRadius: BorderRadius.circular(6),
 border: Border.all(color: ShadTheme.of(context).border),
 ),
-codeblockPadding: const EdgeInsets.all(12),
+codeblockPadding: EdgeInsets.all(12),
 h1: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: ShadTheme.of(context).foreground),
 h2: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: ShadTheme.of(context).foreground),
-blockquoteDecoration: const BoxDecoration(
+blockquoteDecoration: BoxDecoration(
 border: Border(left: BorderSide(color: ShadTheme.of(context).ring, width: 2)),
 ),
-blockquotePadding: const EdgeInsets.only(left: 10),
+blockquotePadding: EdgeInsets.only(left: 10),
 listBullet: TextStyle(color: ShadTheme.of(context).mutedForeground),
 ),
 );

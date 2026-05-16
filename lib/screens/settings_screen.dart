@@ -6,7 +6,7 @@ import '../providers/chat_provider.dart';
 import '../providers/multi_agent_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
-const SettingsScreen({super.key});
+SettingsScreen({super.key});
 
 @override
 State<SettingsScreen> createState() => _SettingsScreenState();
@@ -49,37 +49,37 @@ _serverCtrl.text = sp.settings.backendUrl;
 }
 
 return SingleChildScrollView(
-padding: const EdgeInsets.all(24),
+padding: EdgeInsets.all(24),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-const SizedBox(height: 24),
+Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+SizedBox(height: 24),
 
 // ─── WenzAgent Multi-Agent LAN ──────────────────
 _sectionHeader('WenzAgent Multi-Agent Network'),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 _buildLanConfig(sp, wa),
 
-const SizedBox(height: 24),
+SizedBox(height: 24),
 
 // ─── Server Connection ────────────────────────
 _sectionHeader('Server Connection'),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 TextField(
 controller: _serverCtrl,
-decoration: const InputDecoration(
+decoration: InputDecoration(
 labelText: 'Backend URL',
 hintText: 'D:\\AiVtuber_Agent_profile',
 border: OutlineInputBorder(),
 filled: true,
 fillColor: ShadTheme.of(context).secondary,
 ),
-style: const TextStyle(fontSize: 13),
+style: TextStyle(fontSize: 13),
 onChanged: (v) => sp.updateBackendUrl(v),
 ),
-const SizedBox(height: 12),
-const Row(
+SizedBox(height: 12),
+Row(
 children: [
 Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
 SizedBox(width: 6),
@@ -87,19 +87,19 @@ Text('Self-contained — no external backend needed',
 style: TextStyle(color: Color(0xFF4CAF50), fontSize: 13)),
 ],
 ),
-const SizedBox(height: 24),
+SizedBox(height: 24),
 
 // ─── About ────────────────────────────────────
 _sectionHeader('About'),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 Container(
-padding: const EdgeInsets.all(16),
+padding: EdgeInsets.all(16),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).card,
 borderRadius: BorderRadius.circular(10),
 border: Border.all(color: ShadTheme.of(context).border),
 ),
-child: const Column(
+child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Text('AI VTuber Agent', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
@@ -126,13 +126,13 @@ style: TextStyle(color: Color(0xFF666666), fontSize: 12)),
 ),
 ),
 
-const SizedBox(height: 24),
+SizedBox(height: 24),
 _sectionHeader('Data & Storage'),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 OutlinedButton.icon(
 onPressed: () {},
-icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFCF6679)),
-label: const Text('Clear Local Cache', style: TextStyle(color: Color(0xFFCF6679))),
+icon: Icon(Icons.delete_outline, size: 18, color: Color(0xFFCF6679)),
+label: Text('Clear Local Cache', style: TextStyle(color: Color(0xFFCF6679))),
 ),
 ],
 ),
@@ -142,7 +142,7 @@ label: const Text('Clear Local Cache', style: TextStyle(color: Color(0xFFCF6679)
 }
 
 Widget _sectionHeader(String title) {
-return Text(title, style: const TextStyle(
+return Text(title, style: TextStyle(
 fontSize: 14,
 fontWeight: FontWeight.w600,
 color: Color(0xFF4CAF50),
@@ -153,7 +153,7 @@ Widget _miniButton(String label, VoidCallback onTap) {
 return GestureDetector(
 onTap: onTap,
 child: Container(
-padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(4),
@@ -168,7 +168,7 @@ child: Text(label, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).f
 
 Widget _buildLanConfig(SettingsProvider sp, AgentManager wa) {
 return Container(
-padding: const EdgeInsets.all(16),
+padding: EdgeInsets.all(16),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).card,
 borderRadius: BorderRadius.circular(10),
@@ -180,8 +180,8 @@ children: [
 // Enable toggle
 SwitchListTile(
 contentPadding: EdgeInsets.zero,
-title: const Text('Enable multi-agent LAN', style: TextStyle(fontSize: 14)),
-subtitle: const Text(
+title: Text('Enable multi-agent LAN', style: TextStyle(fontSize: 14)),
+subtitle: Text(
 'Connect to a WenzAgent LAN server for multi-device AI collaboration',
 style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground),
 ),
@@ -193,37 +193,37 @@ setState(() {});
 },
 ),
 if (sp.settings.wenzagentEnabled) ...[
-const SizedBox(height: 12),
+SizedBox(height: 12),
 // Join / Create tabs
 Row(
 children: [
 _lanTabButton('Join LAN', 0),
-const SizedBox(width: 8),
+SizedBox(width: 8),
 _lanTabButton('Create LAN', 1),
 ],
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 // Host IP
 TextField(
 controller: _waHostCtrl,
 decoration: InputDecoration(
 labelText: _lanTab == 0 ? 'Server IP Address' : 'Bind Address',
 hintText: _lanTab == 0 ? '192.168.1.100' : '0.0.0.0',
-border: const OutlineInputBorder(),
+border: OutlineInputBorder(),
 filled: true,
 fillColor: ShadTheme.of(context).secondary,
 ),
-style: const TextStyle(fontSize: 13),
+style: TextStyle(fontSize: 13),
 onChanged: (v) {
 sp.settings.wenzagentHost = v;
 sp.saveSettings(sp.settings);
 },
 ),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 // Port
 TextField(
 controller: TextEditingController(text: '${sp.settings.wenzagentPort}'),
-decoration: const InputDecoration(
+decoration: InputDecoration(
 labelText: 'Port',
 hintText: '9090',
 border: OutlineInputBorder(),
@@ -232,56 +232,56 @@ fillColor: ShadTheme.of(context).secondary,
 contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
 ),
 keyboardType: TextInputType.number,
-style: const TextStyle(fontSize: 13),
+style: TextStyle(fontSize: 13),
 onChanged: (v) {
 sp.settings.wenzagentPort = int.tryParse(v) ?? 9090;
 sp.saveSettings(sp.settings);
 },
 ),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 // Device Name
 TextField(
 controller: _waDeviceNameCtrl,
-decoration: const InputDecoration(
+decoration: InputDecoration(
 labelText: 'Device Name',
 hintText: 'AI VTuber',
 border: OutlineInputBorder(),
 filled: true,
 fillColor: ShadTheme.of(context).secondary,
 ),
-style: const TextStyle(fontSize: 13),
+style: TextStyle(fontSize: 13),
 onChanged: (v) {
 sp.settings.wenzagentDeviceName = v;
 sp.saveSettings(sp.settings);
 },
 ),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 // Topic
 TextField(
 controller: _waTopicCtrl,
-decoration: const InputDecoration(
+decoration: InputDecoration(
 labelText: 'Topic (optional)',
 hintText: 'Group identifier',
 border: OutlineInputBorder(),
 filled: true,
 fillColor: ShadTheme.of(context).secondary,
 ),
-style: const TextStyle(fontSize: 13),
+style: TextStyle(fontSize: 13),
 onChanged: (v) {
 sp.settings.wenzagentTopic = v;
 sp.saveSettings(sp.settings);
 },
 ),
-const SizedBox(height: 14),
+SizedBox(height: 14),
 // Connection status + button
 Row(
 children: [
 Icon(
 wa.connected ? Icons.check_circle : Icons.cancel,
 size: 16,
-color: wa.connected ? const Color(0xFF4CAF50) : const Color(0xFFCF6679),
+color: wa.connected ? Color(0xFF4CAF50) : Color(0xFFCF6679),
 ),
-const SizedBox(width: 6),
+SizedBox(width: 6),
 Expanded(
 child: Text(
 wa.connected ? 'Connected to LAN' : wa.statusMessage,
@@ -314,7 +314,7 @@ final active = _lanTab == index;
 return GestureDetector(
 onTap: () => setState(() => _lanTab = index),
 child: Container(
-padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
 decoration: BoxDecoration(
 color: active ? ShadTheme.of(context).sidebarPrimary : ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(6),

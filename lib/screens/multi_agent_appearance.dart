@@ -19,7 +19,7 @@ import '../providers/appearance_provider.dart';
 ///   6. Startup Animation
 ///   7. Reset to Default
 class MultiAgentAppearancePage extends StatelessWidget {
-const MultiAgentAppearancePage({super.key});
+MultiAgentAppearancePage({super.key});
 
 @override
 Widget build(BuildContext context) {
@@ -27,40 +27,40 @@ final ap = context.watch<AppearanceProvider>();
 final accent = Color(ap.accentColorValue);
 
 return SingleChildScrollView(
-padding: const EdgeInsets.all(24),
+padding: EdgeInsets.all(24),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-_sectionHeader('Appearance', Icons.palette_outlined, accent),
-const SizedBox(height: 24),
+_sectionHeader(context, 'Appearance', Icons.palette_outlined, accent),
+SizedBox(height: 24),
 
 // 1. Dark Mode
-_buildDarkMode(ap, accent),
-const SizedBox(height: 24),
+_buildDarkMode(context, ap, accent),
+SizedBox(height: 24),
 
 // 2. Font Size
-_buildFontSize(ap, accent),
-const SizedBox(height: 24),
+_buildFontSize(context, ap, accent),
+SizedBox(height: 24),
 
 // 3. Theme Color
-_buildThemeColor(ap, accent),
-const SizedBox(height: 24),
+_buildThemeColor(context, ap, accent),
+SizedBox(height: 24),
 
 // 4. Background Pattern
-_buildBgPattern(ap, accent),
-const SizedBox(height: 24),
+_buildBgPattern(context, ap, accent),
+SizedBox(height: 24),
 
 // 5. Background Image
 _buildBgImage(ap, accent, context),
-const SizedBox(height: 24),
+SizedBox(height: 24),
 
 // 6. Startup Animation
-_buildStartupAnim(ap, accent),
-const SizedBox(height: 24),
+_buildStartupAnim(context, ap, accent),
+SizedBox(height: 24),
 
 // 7. Reset to Default
-_buildResetSection(ap, accent, context),
-const SizedBox(height: 32),
+_buildResetSection(context, ap, accent),
+SizedBox(height: 32),
 ],
 ),
 );
@@ -70,26 +70,26 @@ const SizedBox(height: 32),
 // Helpers
 // ═══════════════════════════════════════════════════════
 
-Widget _sectionHeader(String title, IconData icon, Color accent) {
+Widget _sectionHeader(BuildContext context, String title, IconData icon, Color accent) {
 return Row(
 children: [
 Icon(icon, size: 20, color: accent),
-const SizedBox(width: 8),
+SizedBox(width: 8),
 Text(title,
 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 ],
 );
 }
 
-Widget _sectionLabel(String title, String? subtitle) {
+Widget _sectionLabel(BuildContext context, String title, String? subtitle) {
 return Padding(
-padding: const EdgeInsets.only(bottom: 12),
+padding: EdgeInsets.only(bottom: 12),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 if (subtitle != null) ...[
-const SizedBox(height: 2),
+SizedBox(height: 2),
 Text(subtitle, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 ],
 ],
@@ -97,9 +97,9 @@ Text(subtitle, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).muted
 );
 }
 
-Widget _settingCard({required Widget child}) {
+Widget _settingCard(BuildContext context, {required Widget child}) {
 return Container(
-padding: const EdgeInsets.all(16),
+padding: EdgeInsets.all(16),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).card,
 borderRadius: BorderRadius.circular(10),
@@ -113,14 +113,14 @@ child: child,
 // 1. Dark Mode
 // ═══════════════════════════════════════════════════════
 
-Widget _buildDarkMode(AppearanceProvider ap, Color accent) {
-return _settingCard(
+Widget _buildDarkMode(BuildContext context, AppearanceProvider ap, Color accent) {
+return _settingCard(context,
 child: Row(
 children: [
 Icon(Icons.dark_mode, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Dark Mode', 'Switch between dark and light theme'),
+child: _sectionLabel(context, 'Dark Mode', 'Switch between dark and light theme'),
 ),
 Switch(
 value: ap.isDark,
@@ -136,20 +136,20 @@ activeColor: accent,
 // 2. Font Size
 // ═══════════════════════════════════════════════════════
 
-Widget _buildFontSize(AppearanceProvider ap, Color accent) {
-return _settingCard(
+Widget _buildFontSize(BuildContext context, AppearanceProvider ap, Color accent) {
+return _settingCard(context,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Row(
 children: [
 Icon(Icons.format_size, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Font Size', 'Adjust text size across the app'),
+child: _sectionLabel(context, 'Font Size', 'Adjust text size across the app'),
 ),
 Container(
-padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
 decoration: BoxDecoration(
 color: accent.withAlpha(25),
 borderRadius: BorderRadius.circular(6),
@@ -159,7 +159,7 @@ style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: accent)),
 ),
 ],
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 SliderTheme(
 data: SliderThemeData(
 activeTrackColor: accent,
@@ -177,7 +177,7 @@ onChanged: (v) => ap.update(ap.prefs.copyWith(fontSize: v)),
 ),
 Center(
 child: Padding(
-padding: const EdgeInsets.only(top: 8),
+padding: EdgeInsets.only(top: 8),
 child: Text(
 'The quick brown fox jumps over the lazy dog.',
 style: TextStyle(fontSize: ap.fontSize, color: ShadTheme.of(context).foreground),
@@ -193,18 +193,18 @@ style: TextStyle(fontSize: ap.fontSize, color: ShadTheme.of(context).foreground)
 // 3. Theme Color (16 presets)
 // ═══════════════════════════════════════════════════════
 
-Widget _buildThemeColor(AppearanceProvider ap, Color accent) {
+Widget _buildThemeColor(BuildContext context, AppearanceProvider ap, Color accent) {
 final colors = AppearancePrefs.themeColors;
-return _settingCard(
+return _settingCard(context,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Row(
 children: [
 Icon(Icons.color_lens, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Theme Color', 'Choose your accent color'),
+child: _sectionLabel(context, 'Theme Color', 'Choose your accent color'),
 ),
 Container(
 width: 28, height: 28,
@@ -216,7 +216,7 @@ boxShadow: [BoxShadow(color: accent.withAlpha(80), blurRadius: 8)],
 ),
 ],
 ),
-const SizedBox(height: 16),
+SizedBox(height: 16),
 Wrap(
 spacing: 10,
 runSpacing: 10,
@@ -228,7 +228,7 @@ onTap: () => ap.update(ap.prefs.copyWith(themeColorIndex: i)),
 child: Tooltip(
 message: c.label,
 child: AnimatedContainer(
-duration: const Duration(milliseconds: 200),
+duration: Duration(milliseconds: 200),
 width: 40, height: 40,
 decoration: BoxDecoration(
 color: Color(c.color),
@@ -242,7 +242,7 @@ boxShadow: selected
 : [],
 ),
 child: selected
-? const Icon(Icons.check, size: 18, color: Colors.white)
+? Icon(Icons.check, size: 18, color: Colors.white)
 : null,
 ),
 ),
@@ -258,23 +258,23 @@ child: selected
 // 4. Background Pattern
 // ═══════════════════════════════════════════════════════
 
-Widget _buildBgPattern(AppearanceProvider ap, Color accent) {
+Widget _buildBgPattern(BuildContext context, AppearanceProvider ap, Color accent) {
 final patterns = AppearancePrefs.bgPatterns;
-return _settingCard(
+return _settingCard(context,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Row(
 children: [
 Icon(Icons.texture, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Background Pattern',
+child: _sectionLabel(context, 'Background Pattern',
 ap.bgPatternIndex == 0 ? 'No pattern' : patterns[ap.bgPatternIndex].label),
 ),
 ],
 ),
-const SizedBox(height: 16),
+SizedBox(height: 16),
 Wrap(
 spacing: 8,
 runSpacing: 8,
@@ -285,7 +285,7 @@ onTap: () => ap.update(ap.prefs.copyWith(bgPatternIndex: i)),
 child: Tooltip(
 message: patterns[i].label,
 child: AnimatedContainer(
-duration: const Duration(milliseconds: 200),
+duration: Duration(milliseconds: 200),
 width: 64, height: 56,
 decoration: BoxDecoration(
 color: ShadTheme.of(context).secondary,
@@ -315,20 +315,20 @@ color: selected ? accent : ShadTheme.of(context).mutedForeground,
 
 Widget _buildBgImage(AppearanceProvider ap, Color accent, BuildContext context) {
 final hasImage = ap.bgImagePath != null;
-return _settingCard(
+return _settingCard(context,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Row(
 children: [
 Icon(Icons.image, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Background Image', 'Set a custom background image'),
+child: _sectionLabel(context, 'Background Image', 'Set a custom background image'),
 ),
 ],
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 if (hasImage) ...[
 ClipRRect(
 borderRadius: BorderRadius.circular(8),
@@ -342,7 +342,7 @@ fit: BoxFit.cover,
 errorBuilder: (_, __, ___) => Container(
 height: 140,
 color: ShadTheme.of(context).secondary,
-child: const Center(
+child: Center(
 child: Icon(Icons.broken_image, size: 32, color: ShadTheme.of(context).mutedForeground),
 ),
 ),
@@ -352,30 +352,30 @@ right: 4, top: 4,
 child: GestureDetector(
 onTap: () => ap.update(ap.prefs.copyWith(clearBgImage: true)),
 child: Container(
-padding: const EdgeInsets.all(4),
-decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-child: const Icon(Icons.close, size: 16, color: Colors.white),
+padding: EdgeInsets.all(4),
+decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+child: Icon(Icons.close, size: 16, color: Colors.white),
 ),
 ),
 ),
 ],
 ),
 ),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 Text(ap.bgImagePath!, maxLines: 1, overflow: TextOverflow.ellipsis,
 style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 ],
 SizedBox(
 width: double.infinity,
 child: OutlinedButton.icon(
 onPressed: () => _pickBgImage(ap),
-icon: const Icon(Icons.folder_open, size: 18),
+icon: Icon(Icons.folder_open, size: 18),
 label: Text(hasImage ? 'Change Image' : 'Choose Image'),
 style: OutlinedButton.styleFrom(
 foregroundColor: ShadTheme.of(context).foreground,
 side: BorderSide(color: ShadTheme.of(context).border),
-padding: const EdgeInsets.symmetric(vertical: 12),
+padding: EdgeInsets.symmetric(vertical: 12),
 ),
 ),
 ),
@@ -400,17 +400,17 @@ ap.update(ap.prefs.copyWith(bgImagePath: result.files.single.path));
 // 6. Startup Animation
 // ═══════════════════════════════════════════════════════
 
-Widget _buildStartupAnim(AppearanceProvider ap, Color accent) {
-return _settingCard(
+Widget _buildStartupAnim(BuildContext context, AppearanceProvider ap, Color accent) {
+return _settingCard(context,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Row(
 children: [
 Icon(Icons.animation, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Startup Animation',
+child: _sectionLabel(context, 'Startup Animation',
 'Smooth transition when launching the app'),
 ),
 Switch(
@@ -420,9 +420,9 @@ activeColor: accent,
 ),
 ],
 ),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 Container(
-padding: const EdgeInsets.all(12),
+padding: EdgeInsets.all(12),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).background,
 borderRadius: BorderRadius.circular(8),
@@ -432,7 +432,7 @@ child: Row(
 children: [
 Icon(Icons.info_outline, size: 14,
 color: ap.startupAnimEnabled ? ShadTheme.of(context).mutedForeground : Color(0xFFF59E0B)),
-const SizedBox(width: 8),
+SizedBox(width: 8),
 Expanded(
 child: Text(
 ap.startupAnimEnabled
@@ -454,23 +454,23 @@ color: ap.startupAnimEnabled ? ShadTheme.of(context).mutedForeground : Color(0xF
 // 7. Reset to Default
 // ═══════════════════════════════════════════════════════
 
-Widget _buildResetSection(AppearanceProvider ap, Color accent, BuildContext ctx) {
-return _settingCard(
+Widget _buildResetSection(BuildContext context, AppearanceProvider ap, Color accent) {
+return _settingCard(context,
 child: Row(
 children: [
 Icon(Icons.restore, size: 22, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 12),
+SizedBox(width: 12),
 Expanded(
-child: _sectionLabel('Default', 'Restore all appearance settings to factory defaults'),
+child: _sectionLabel(context, 'Default', 'Restore all appearance settings to factory defaults'),
 ),
 OutlinedButton.icon(
-onPressed: () => _confirmReset(ap, ctx),
-icon: const Icon(Icons.refresh, size: 16),
-label: const Text('Reset'),
+onPressed: () => _confirmReset(ap, context),
+icon: Icon(Icons.refresh, size: 16),
+label: Text('Reset'),
 style: OutlinedButton.styleFrom(
 foregroundColor: ShadTheme.of(context).destructive,
 side: BorderSide(color: ShadTheme.of(context).destructive),
-padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
 ),
 ),
 ],
@@ -478,13 +478,13 @@ padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
 );
 }
 
-void _confirmReset(AppearanceProvider ap, BuildContext ctx) {
+void _confirmReset(AppearanceProvider ap, BuildContext context) {
 showDialog(
-context: ctx,
+context: context,
 builder: (dCtx) => AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
 title: Text('Reset to Default', style: TextStyle(color: ShadTheme.of(context).foreground)),
-content: const Text(
+content: Text(
 'This will restore all appearance settings to their factory defaults.',
 style: TextStyle(color: ShadTheme.of(context).mutedForeground),
 ),
@@ -514,16 +514,16 @@ class _PatternPreview extends StatelessWidget {
 final int pattern;
 final Color color;
 
-const _PatternPreview({required this.pattern, required this.color});
+_PatternPreview({required this.pattern, required this.color});
 
 @override
 Widget build(BuildContext context) {
-if (pattern == 0) return const SizedBox.shrink();
+if (pattern == 0) return SizedBox.shrink();
 return ClipRRect(
 borderRadius: BorderRadius.circular(6),
 child: CustomPaint(
 painter: _PreviewPainter(pattern: pattern, color: color),
-size: const Size(64, 56),
+size: Size(64, 56),
 ),
 );
 }

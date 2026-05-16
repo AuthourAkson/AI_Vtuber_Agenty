@@ -9,7 +9,7 @@ class AppSidebar extends StatefulWidget {
 final String activePage;
 final Function(String) onPageSelected;
 
-const AppSidebar({
+AppSidebar({
 super.key,
 required this.activePage,
 required this.onPageSelected,
@@ -23,8 +23,8 @@ class _AppSidebarState extends State<AppSidebar> {
 bool _expanded = true;
 
 // Match LAV2 page-mapping sections exactly
-static const _testPipeline = ['home', 'character', 'memory', 'agents'];
-static const _footer = [
+static final _testPipeline = ['home', 'character', 'memory', 'agents'];
+static final _footer = [
 'input',
 'vision',
 'tts',
@@ -33,7 +33,7 @@ static const _footer = [
 'settings',
 ];
 
-static const _icons = {
+static final _icons = {
 'home': Icons.home,
 'character': Icons.person,
 'memory': Icons.storage_rounded,
@@ -46,7 +46,7 @@ static const _icons = {
 'settings': Icons.settings,
 };
 
-static const _titles = {
+static final _titles = {
 'home': 'Home',
 'character': 'Character',
 'memory': 'Memory',
@@ -64,10 +64,10 @@ void _toggle() => setState(() => _expanded = !_expanded);
 @override
 Widget build(BuildContext context) {
 return AnimatedContainer(
-duration: const Duration(milliseconds: 200),
+duration: Duration(milliseconds: 200),
 curve: Curves.easeInOut,
 width: _expanded ? 200.0 : 48.0,
-decoration: const BoxDecoration(
+decoration: BoxDecoration(
 color: ShadTheme.of(context).sidebar,
 border: Border(
 right: BorderSide(color: ShadTheme.of(context).sidebarBorder),
@@ -77,10 +77,10 @@ child: Column(
 children: [
 // Toggle button
 _buildToggle(),
-const SizedBox(height: 8),
+SizedBox(height: 8),
 // Test Pipeline section label
 if (_expanded)
-const Padding(
+Padding(
 padding: EdgeInsets.only(left: 12, bottom: 4),
 child: Align(
 alignment: Alignment.centerLeft,
@@ -95,19 +95,19 @@ fontWeight: FontWeight.w600,
 ),
 ),
 ..._testPipeline.map((key) => _navItem(key)),
-const Spacer(),
+Spacer(),
 // Footer separator
 Container(
 height: 1,
 color: ShadTheme.of(context).sidebarBorder,
-margin: const EdgeInsets.symmetric(horizontal: 8),
+margin: EdgeInsets.symmetric(horizontal: 8),
 ),
-const SizedBox(height: 4),
+SizedBox(height: 4),
 ..._footer.map((key) => _navItem(key)),
-const SizedBox(height: 4),
+SizedBox(height: 4),
 // Dark mode indicator
 Padding(
-padding: const EdgeInsets.only(bottom: 12),
+padding: EdgeInsets.only(bottom: 12),
 child: Icon(
 Icons.dark_mode,
 size: 16,
@@ -121,7 +121,7 @@ color: ShadTheme.of(context).mutedForeground.withAlpha(140),
 
 Widget _buildToggle() {
 return Padding(
-padding: const EdgeInsets.only(top: 8, right: 8),
+padding: EdgeInsets.only(top: 8, right: 8),
 child: Align(
 alignment: Alignment.centerRight,
 child: GestureDetector(
@@ -153,7 +153,7 @@ Widget item = GestureDetector(
 onTap: () => widget.onPageSelected(key),
 child: Container(
 height: 36,
-margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+margin: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
 padding: EdgeInsets.only(left: _expanded ? 10 : 0),
 decoration: BoxDecoration(
 color: isActive ? ShadTheme.of(context).sidebarAccent : null,
@@ -169,7 +169,7 @@ color: isActive
 ? ShadTheme.of(context).foreground
 : ShadTheme.of(context).mutedForeground,
 ),
-const SizedBox(width: 10),
+SizedBox(width: 10),
 Flexible(
 child: Text(
 title,

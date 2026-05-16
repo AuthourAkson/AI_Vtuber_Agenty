@@ -6,28 +6,28 @@ import '../providers/chat_provider.dart';
 /// LLM Monitor panel — matches LocalAIVtuber2's llm-monitor.tsx.
 /// Shows system prompt, vision context, OCR, memory, and full assembled prompt.
 class LLMMonitor extends StatelessWidget {
-const LLMMonitor({super.key});
+LLMMonitor({super.key});
 
 @override
 Widget build(BuildContext context) {
 return Consumer<ChatProvider>(
 builder: (context, chat, _) {
 return SingleChildScrollView(
-padding: const EdgeInsets.all(16),
+padding: EdgeInsets.all(16),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 // Mic / Vision toggle buttons (stubs — LAV2 uses GlobalStateManager)
 Row(
 children: [
-_toggleButton(
+_toggleButton(context, 
 icon: Icons.mic,
 label: 'Start Mic',
 active: false,
 onTap: () {},
 ),
-const SizedBox(width: 8),
-_toggleButton(
+SizedBox(width: 8),
+_toggleButton(context, 
 icon: Icons.camera_alt,
 label: 'Start Vision',
 active: false,
@@ -35,58 +35,58 @@ onTap: () {},
 ),
 ],
 ),
-const SizedBox(height: 16),
+SizedBox(height: 16),
 
 // System context
-_sectionLabel('System Context'),
-const SizedBox(height: 4),
-_readOnlyTextArea(
+_sectionLabel(context, 'System Context'),
+SizedBox(height: 4),
+_readOnlyTextArea(context, 
 chat.systemPrompt.isNotEmpty
 ? chat.systemPrompt
 : 'No system prompt set',
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 
 // Vision context
-_sectionLabel('Vision Context'),
-const SizedBox(height: 4),
-_readOnlyTextArea(
+_sectionLabel(context, 'Vision Context'),
+SizedBox(height: 4),
+_readOnlyTextArea(context, 
 chat.currentCaption.isNotEmpty
 ? chat.currentCaption
 : 'No vision context',
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 
 // OCR context
-_sectionLabel('OCR Context'),
-const SizedBox(height: 4),
-_readOnlyTextArea(
+_sectionLabel(context, 'OCR Context'),
+SizedBox(height: 4),
+_readOnlyTextArea(context, 
 chat.currentOcrText.isNotEmpty
 ? chat.currentOcrText
 : 'No OCR context',
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 
 // Divider
 Container(height: 1, color: ShadTheme.of(context).border),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 
 // Retrieved memory context
-_sectionLabel('Retrieved Memory Context'),
-const SizedBox(height: 4),
-_readOnlyTextArea(
+_sectionLabel(context, 'Retrieved Memory Context'),
+SizedBox(height: 4),
+_readOnlyTextArea(context, 
 chat.currentMemoryContext.isNotEmpty
 ? chat.currentMemoryContext
 : 'No context retrieved from memory',
 ),
-const SizedBox(height: 12),
+SizedBox(height: 12),
 
 // Full system prompt
-_sectionLabel('Full System Prompt'),
-const SizedBox(height: 4),
+_sectionLabel(context, 'Full System Prompt'),
+SizedBox(height: 4),
 Container(
 width: double.infinity,
-padding: const EdgeInsets.all(10),
+padding: EdgeInsets.all(10),
 decoration: BoxDecoration(
 color: ShadTheme.of(context).muted,
 borderRadius: BorderRadius.circular(6),
@@ -96,7 +96,7 @@ child: Text(
 chat.fullSystemPrompt.isNotEmpty
 ? chat.fullSystemPrompt
 : 'No system prompt composed yet',
-style: const TextStyle(
+style: TextStyle(
 fontSize: 12,
 color: ShadTheme.of(context).foreground,
 height: 1.4,
@@ -110,12 +110,12 @@ height: 1.4,
 );
 }
 
-Widget _sectionLabel(String text) {
+Widget _sectionLabel(BuildContext context, String text) {
 return Padding(
-padding: const EdgeInsets.only(bottom: 4),
+padding: EdgeInsets.only(bottom: 4),
 child: Text(
 text,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 13,
 fontWeight: FontWeight.w600,
 color: ShadTheme.of(context).foreground,
@@ -124,17 +124,17 @@ color: ShadTheme.of(context).foreground,
 );
 }
 
-Widget _readOnlyTextArea(String text) {
+Widget _readOnlyTextArea(BuildContext context, String text) {
 return Container(
 width: double.infinity,
-padding: const EdgeInsets.all(10),
+padding: EdgeInsets.all(10),
 decoration: BoxDecoration(
 borderRadius: BorderRadius.circular(6),
 border: Border.all(color: ShadTheme.of(context).input),
 ),
 child: Text(
 text,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 12,
 color: ShadTheme.of(context).mutedForeground,
 height: 1.4,
@@ -143,7 +143,7 @@ height: 1.4,
 );
 }
 
-Widget _toggleButton({
+Widget _toggleButton(BuildContext context, {
 required IconData icon,
 required String label,
 required bool active,
@@ -153,7 +153,7 @@ return GestureDetector(
 onTap: onTap,
 child: Container(
 width: 140,
-padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+padding: EdgeInsets.symmetric(vertical: 6, horizontal: 10),
 decoration: BoxDecoration(
 color: active ? ShadTheme.of(context).primary : ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(6),
@@ -163,10 +163,10 @@ child: Row(
 mainAxisSize: MainAxisSize.min,
 children: [
 Icon(icon, size: 14, color: ShadTheme.of(context).foreground),
-const SizedBox(width: 6),
+SizedBox(width: 6),
 Text(
 label,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 12,
 color: ShadTheme.of(context).foreground,
 ),

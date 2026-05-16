@@ -31,27 +31,27 @@ String _activePage = 'home';
 Widget _buildPage(String page) {
 switch (page) {
 case 'home':
-return const ChatScreen();
+return ChatScreen();
 case 'input':
-return const ChatScreen();
+return ChatScreen();
 case 'character':
-return const CharacterScreen();
+return CharacterScreen();
 case 'memory':
 return MemoryScreen(onNavigateHome: () => setState(() => _activePage = 'home'));
 case 'vision':
-return const VisionScreen();
+return VisionScreen();
 case 'tts':
-return const TTSScreen();
+return TTSScreen();
 case 'pipeline':
-return const PipelineMonitorScreen();
+return PipelineMonitorScreen();
 case 'stream':
-return const StreamScreen();
+return StreamScreen();
 case 'settings':
-return const SettingsScreen();
+return SettingsScreen();
 case 'agents':
-return const MultiAgentScreen();
+return MultiAgentScreen();
 default:
-return const ChatScreen();
+return ChatScreen();
 }
 }
 
