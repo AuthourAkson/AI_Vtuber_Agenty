@@ -1,0 +1,988 @@
+# AI VTuber Agent (Agent × AI VTuber)
+
+## Agent 快速导航
+
+如果你是 AI Agent 接手这个项目，请按顺序阅读：
+1. 项目架构 → 了解技术栈和目录结构
+2. 环境与启动 → 如何跑起来
+3. 数据流 → 前后端如何通信
+4. 关键文件索引 → 每个文件做什么
+5. 扩展指南 → 常见修改怎么做
+6. 开发路线图 → 当前进度和未来目标
+
+---
+
+## 项目架构
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    AI VTuber Agent (Flutter Desktop)              │
+│                                                                   │
+│  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌──────────────────┐   │
+│  │  Chat   │  │Character │  │  TTS    │  │  Vision/Memory   │   │
+│  │ Screen  │  │ Screen   │  │ Screen  │  │  Screens         │   │
+│  └────┬────┘  └────┬─────┘  └────┬────┘  └────────┬─────────┘   │
+│       │            │             │                  │             │
+│  ┌────┴────────────┴─────────────┴──────────────────┴──────┐     │
+│  │              Provider Layer (ChangeNotifier)             │     │
+│  │   ChatProvider  │  SettingsProvider                     │     │
+│  └──────────────────────┬──────────────────────────────────┘     │
+│                         │                                        │
+│  ┌──────────────────────┴──────────────────────────────────┐     │
+│  │              BackendService (Dart — 进程内)              │     │
+│  │  LLMService  │  TTSService  │  MemoryService            │     │
+│  │  StorageService  │  VisionService                       │     │
+│  └──────────────────────┬──────────────────────────────────┘     │
+│                         │ 本地文件 I/O                           │
+└─────────────────────────┼───────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              D:\AiVtuber_Agent_profile\ (本地存储)                │
+│                                                                  │
+│  settings.json  ← LLM 配置、TTS 语音、角色设置                    │
+│  sessions\      ← 聊天会话 JSON 文件 ({uuid}.json)                │
+│  tts_cache\     ← TTS 音频缓存                                   │
+│  screenshots\   ← 截图缓存                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**技术栈：**
+- **Frontend:** Flutter Desktop (Windows .exe) + Provider state management
+- **Window:** bitsdojo_window (frameless native buttons) + flutter_acrylic (Mica 毛玻璃)
+- **UI:** ShadTheme (shadcn/ui 风格主题系统，Material3 基座) + 16 种完整 ThemePreset（dark/light 各一套全色板，支持一键切换）
+- **Backend:** 自包含 Dart 服务层（BackendService），无外部 Python 依赖
+- **LLM:** 直接调用 OpenAI 兼容 API（SiliconFlow, OpenRouter, Anthropic, Google, Ollama）
+- **TTS:** edge-tts CLI（子进程） + 本地音频缓存
+- **Storage:** `D:\\AiVtuber_Agent_profile\\`（Steam 风格本地存档，可备份到云端）
+
+**重要：本项目完全独立，不修改或依赖 D:\\LocalAIVtuber2**
+
+---
+
+## 目录结构
+
+```
+AiVtuber_Agent/
+├── project.md                          ★ 项目架构文档（本文件）
+├── pubspec.yaml                        ★ Flutter 依赖配置
+├── analysis_options.yaml                Lint 规则
+├── .gitignore                          Git 忽略规则
+├── README.md                           项目说明
+│
+├── assets/                             静态资源（Live2D 模型、音频等）
+│   ├── .gitkeep
+│   └── live2d/                         ★ Live2D Cubism SDK + 渲染页面
+│       ├── pixi.min.js                 PixiJS v6.5.10 (WebGL 渲染)
+│       ├── live2d.min.js               Cubism 2.1 Framework
+│       ├── live2dcubismcore.min.js     Cubism Core
+│       ├── cubism4.min.js              pixi-live2d-display (Cubism 4 封装)
+│       └── renderer.html               ★ PixiJS WebGL 渲染页面 + 眼球追踪 + 对话框
+│
+├── lib/                                Flutter 应用源代码
+│   ├── main.dart                       ★ 入口：初始化 Provider + 分支主窗/悬浮窗
+│   ├── overlay_main.dart               ★ 悬浮窗独立入口（desktop pet 子窗口）
+│   ├── app.dart                        ★ MaterialApp：暗色主题配置
+│   │
+│   ├── models/                         数据模型
+│   │   ├── message.dart                HistoryItem（聊天记录）, Session（会话）
+│   │   ├── task.dart                   Task, TaskStatus, TaskResponse（流水线任务）
+│   │   └── settings.dart               AppSettings（全部设置项，含 JSON 序列化）
+│   │
+│   ├── providers/                      状态管理（ChangeNotifier）
+│   │   ├── chat_provider.dart          ★ ChatProvider：聊天消息、LLM 流式、会话、Pipeline 集成
+│   │   └── settings_provider.dart      SettingsProvider：本地加载/保存设置
+│   │
+│   ├── services/                       业务逻辑层（BackendService + 子服务）
+│   │   ├── backend_service.dart        ★ BackendService：总入口，替换原 ApiClient
+│   │   ├── storage_service.dart        ★ StorageService：D:\\AiVtuber_Agent_profile\\ JSON 读写
+│   │   ├── llm_service.dart            ★ LLMService：直接调用 OpenAI 兼容 API（SSE 流式）
+│   │   ├── tts_service.dart            ★ TTSService：edge-tts 子进程合成 + 缓存
+│   │   ├── memory_service.dart         ★ MemoryService：本地关键词匹配记忆检索
+│   │   ├── vision_service.dart         ★ VisionService：mss 截图 + easyocr OCR
+│   │   ├── live2d_model_service.dart   ★ Live2DModelService：模型文件管理
+│   │   ├── live2d_server.dart          ★ Live2DServer：全局 HTTP 文件服务
+│   │   ├── pipeline_manager.dart       PipelineManager：Task 流水线（LLM→TTS→Audio）
+│   │   └── session_manager.dart        SessionManager：会话 CRUD 操作
+│   │
+│   ├── screens/                        页面（侧边栏导航）
+│   │   ├── home_screen.dart            ★ 主框架：侧边栏 + 页面路由
+│   │   ├── chat_screen.dart            ★ 聊天页面：消息列表 + 输入框
+│   │   ├── llm_screen.dart             LLM 设置：System Prompt、API Relay 配置
+│   │   ├── character_screen.dart       角色设置：Live2D/VRM 切换、位置调整
+│   │   ├── tts_screen.dart             TTS 设置：引擎选择、RVC 参数
+│   │   ├── vision_screen.dart          视觉：截图 + OCR + Caption
+│   │   ├── memory_screen.dart          记忆：会话列表、记忆检索开关
+│   │   ├── stream_screen.dart          直播：YouTube 聊天、Setlist
+│   │   ├── settings_screen.dart        通用设置：关于、数据路径
+│   │   └── pipeline_monitor_screen.dart Pipeline 实时监控
+│   │
+│   └── widgets/                        可复用组件
+│       ├── app_sidebar.dart            侧边栏导航（图标 + Tooltip）
+│       ├── api_sidebar.dart            ★ API 设置右侧栏（Base URL / API Key / Model）
+│       ├── chat_bubble.dart            聊天气泡（用户/AI 双色）
+│       ├── chat_input.dart             聊天输入框（含发送按钮）
+│       └── live2d_view.dart            ★ Live2D WebView 渲染组件（Dart↔JS 桥）
+│
+└── windows/                            Windows 平台原生配置
+    ├── CMakeLists.txt                  CMake 构建配置
+    └── runner/
+        ├── main.cpp                    ★ WinMain 入口
+        ├── flutter_window.h/cpp        Flutter 窗口管理
+        ├── win32_window.h/cpp          Win32 基础窗口
+        ├── utils.h/cpp                 UTF-16 转换工具
+        └── resource.h                  Icon 资源 ID
+```
+
+---
+
+## 环境与启动
+
+### 前置条件
+- Windows 10/11
+- Flutter SDK 3.x（`/mnt/d/flutter/bin/flutter`）
+- edge-tts（可选，用于 TTS）: `pip install edge-tts`
+- Python + easyocr + mss（可选，用于截图 OCR）
+
+### 编译 & 运行
+
+```bash
+# 在 Windows 终端（非 WSL）：
+cd D:\AiVtuber_Agent
+
+# 安装依赖
+flutter pub get
+
+# 运行（Debug 模式）
+flutter run -d windows
+
+# 构建 Release (.exe)
+flutter build windows
+# 输出: build\windows\x64\runner\Release\ai_vtuber_agent.exe
+```
+
+### 配置
+
+首次启动后，在 **LLM Settings** 页面配置 API Relay：
+- Base URL: `https://api.siliconflow.cn/v1`（或其他 OpenAI 兼容 API）
+- API Key: 你的 API 密钥
+- Model: `deepseek-ai/DeepSeek-V3.2` 或其他模型
+
+设置自动保存到 `D:\AiVtuber_Agent_profile\settings.json`
+
+### 无后端依赖
+
+本项目 **不需要** 启动任何外部服务器。所有功能运行在进程内：
+- LLM 对话 → 直接 HTTP 调用云端 API
+- TTS 合成 → edge-tts 子进程
+- 数据存储 → `D:\AiVtuber_Agent_profile\` 本地 JSON 文件
+- 记忆检索 → 关键字匹配会话文件
+
+---
+
+## 数据流
+
+### 消息发送流程（进程内直接调用）
+
+```
+用户在 ChatInput 输入 → 点击发送
+  │
+  ▼
+ChatProvider.sendMessage()
+  ├─ 查询 Memory: backend.queryMemory(text) → MemoryService 关键字匹配
+  ├─ 组装 SystemPrompt: Vision + OCR + Memory + Instructions
+  ├─ 创建会话（若需要）: sessionManager.createNewSession() → StorageService
+  ├─ 流式 LLM: backend.completionStream() → LLMService SSE 直连 API
+  │   └─ 逐 chunk 更新 UI → _messages.add(assistant msg)
+  ├─ 句子分块 → PipelineManager.addLLMResponse() → TTS pipeline
+  └─ 保存会话: sessionManager.updateSessionContent() → StorageService
+```
+
+### Pipeline 流水线（LLM → TTS → Audio）
+
+```
+Task: created
+  │
+  ▼ LLM streaming
+Task: llm_started → llm_finished
+  │ 每句完成后 → PipelineManager.addTTSAudio()
+  ▼
+Task: tts_finished (all audio generated)
+  │
+  ▼ Audio playback
+Task: task_finished (all playback done)
+```
+
+### 后端服务调用链（无 HTTP 开销）
+
+| 操作 | 调用链 |
+|------|--------|
+| 获取设置 | BackendService.getSettings() → StorageService.loadSettings() |
+| 保存设置 | BackendService.updateSettings() → StorageService.saveSettings() |
+| 流式 LLM | BackendService.completionStream() → LLMService (HTTP SSE) |
+| TTS 合成 | BackendService.ttsSynthesize() → TTSService (edge-tts 子进程) |
+| 记忆检索 | BackendService.queryMemory() → MemoryService (关键字匹配) |
+| 截图 OCR | BackendService.captureScreenshot() → VisionService (mss + easyocr) |
+| 会话 CRUD | BackendService.createSession/updateSession/... → StorageService |
+
+---
+
+## 关键文件索引
+
+| 需要修改... | 去这里 |
+|-------------|--------|
+| 聊天消息逻辑 | lib/providers/chat_provider.dart |
+| LLM API 调用 | lib/services/llm_service.dart |
+| 设置加载/保存 | lib/services/storage_service.dart |
+| TTS 合成 | lib/services/tts_service.dart |
+| 记忆检索 | lib/services/memory_service.dart |
+| 截图 OCR | lib/services/vision_service.dart |
+| Live2D 模型管理 | lib/services/live2d_model_service.dart |
+| Live2D 渲染 | lib/widgets/live2d_view.dart → assets/live2d/renderer.html |
+| Pipeline 任务状态 | lib/services/pipeline_manager.dart |
+| 会话存储 | lib/services/session_manager.dart → storage_service.dart |
+| 数据模型（Message） | lib/models/message.dart |
+| 数据模型（Task） | lib/models/task.dart |
+| 设置项 | lib/models/settings.dart |
+| 聊天 UI | lib/screens/chat_screen.dart |
+| 聊天气泡 | lib/widgets/chat_bubble.dart |
+| 侧边栏导航 | lib/widgets/app_sidebar.dart |
+| LLM 设置页 | lib/screens/llm_screen.dart |
+| 角色设置页 | lib/screens/character_screen.dart |
+| TTS 设置页 | lib/screens/tts_screen.dart |
+| 视觉设置页 | lib/screens/vision_screen.dart |
+| 记忆页面 | lib/screens/memory_screen.dart |
+| 直播页面 | lib/screens/stream_screen.dart |
+| 通用设置页 | lib/screens/settings_screen.dart |
+| Windows 原生配置 | windows/runner/* |
+| 暗色主题 | lib/app.dart |
+
+---
+
+## 扩展指南
+
+### 添加 Live2D 渲染
+1. 使用 Flutter WebView 嵌入 PixiJS + Live2D Cubism SDK
+2. 模型文件存储在 `D:\AiVtuber_Agent_profile\models\live2d\`
+3. 渲染页面: `assets/live2d/renderer.html`
+4. Dart↔JS 通信: JavaScript Handler 双向桥
+
+### 添加新的 LLM Provider
+1. `lib/services/llm_service.dart` — 添加新的 API 格式适配
+2. `lib/screens/llm_screen.dart` — 添加 provider 选择 UI
+
+### 添加新的 TTS 引擎
+1. `lib/services/tts_service.dart` — 添加新引擎的合成方法
+2. `lib/screens/tts_screen.dart` — 添加引擎选择 UI
+
+### 添加新的设置页
+1. `lib/screens/` 下新建 `xxx_screen.dart`
+2. `lib/screens/home_screen.dart` 的 `_pages` map 中添加路由
+3. `lib/widgets/app_sidebar.dart` 添加新 key
+
+### 添加 Live2D 渲染
+1. 研究 `pixi-live2d-display` 的 Flutter 替代方案
+2. 使用 Flutter WebView 嵌入 Live2D SDK 或直接使用 Cubism Native SDK
+3. 在 `lib/screens/character_screen.dart` 替换占位容器
+
+### 添加 WebSocket 实时通信（未来）
+1. `pubspec.yaml` 已包含 `web_socket_channel`
+2. 在 `lib/services/` 新建 `ws_service.dart`
+3. `lib/providers/chat_provider.dart` 可替换 HTTP 流为 WS 事件流
+
+### 数据备份
+- 所有数据在 `D:\AiVtuber_Agent_profile\`
+- 可手动复制到云盘 / Git / 备份工具
+- 未来可添加自动云端同步
+
+---
+
+## 开发路线图
+
+### Phase 1: 复现 LocalAIVtuber2 核心功能（当前阶段）
+- [x] ✅ 项目结构搭建（Flutter Desktop）
+- [x] ✅ 数据模型（Message, Task, Settings）
+- [x] ✅ Provider 状态管理（ChatProvider, SettingsProvider）
+- [x] ✅ BackendService 自包含 Dart 后端（替代 ApiClient HTTP 依赖）
+- [x] ✅ LLMService 直连 OpenAI 兼容 API（SSE 流式）
+- [x] ✅ TTSService edge-tts 子进程合成
+- [x] ✅ MemoryService 本地关键字匹配
+- [x] ✅ StorageService D:\AiVtuber_Agent_profile\ JSON 存储
+- [x] ✅ VisionService 截图 + OCR
+- [x] ✅ PipelineManager 流水线逻辑
+- [x] ✅ SessionManager 会话管理
+- [x] ✅ 侧边栏导航（10 页面）
+- [x] ✅ 聊天界面（流式 LLM 响应）
+- [x] ✅ LLM 设置页（System Prompt, API Relay）
+- [x] ✅ 角色设置页（Live2D/VRM 切换）
+- [x] ✅ TTS 设置页（GPT-SoVITS, RVC）
+- [x] ✅ 视觉设置页（截图 OCR）
+- [x] ✅ 记忆页面（会话管理）
+- [x] ✅ 直播设置页（YouTube 聊天）
+- [x] ✅ Pipeline Monitor（实时流水线任务状态）
+- [x] ✅ 通用设置页
+- [x] ✅ Windows 原生配置（CMake, runner）
+- [x] ✅ Git 仓库初始化 + GitHub 推送
+- [x] ✅ Bug 修复（memory regex / profileDir 私有访问 / updateBackendUrl / 窗口圆角）
+- [x] ✅ Windows 11 原生圆角（DWMWA_WINDOW_CORNER_PREFERENCE）
+- [x] ✅ 自定义标题栏（window_manager TitleBarStyle.hidden + Flutter 拖拽栏）
+- [x] ✅ 窗口圆角 overlay 修复（WS_THICKFRAME 保留 + DwmExtendFrameIntoClientArea）
+- [x] ✅ 标题栏文字下划线修复
+- [x] ✅ 聊天页面 API 设置侧边栏（Base URL + API Key + Model + Test Connection）
+- [x] ✅ 编译验证 & 运行成功（Windows 11）
+- [x] ✅ SystemPrompt 同步到对话（ChatProvider 每次发消息前加载 settings）
+- [x] ✅ 启动自动恢复上次会话（SharedPreferences 记录 last_session_id）
+- [x] ✅ UI 现代化改造：bitsdojo_window + flutter_acrylic（Mica 毛玻璃）
+- [x] ✅ 退回 Material3（移除 fluent_ui 依赖 — API 不稳定）
+- [x] ✅ 真正四角圆端：BDW_CUSTOM_FRAME frameless → DWM 自动圆角 + ClipRRect 内容圆角
+- [x] ✅ Flutter pub get + 编译验证（需 Windows 终端，WSL 环境受限）
+- [x] ✅ Live2D 角色渲染集成（WebView + PixiJS + Cubism SDK）
+- [x] ✅ Live2D 桌宠悬浮窗（桌面透明窗口 + 眼球追踪 + 右键对话）
+- [ ] ⬜ TTS 音频播放集成
+- [ ] ⬜ 端到端测试（聊天 + 记忆 + 截图）
+
+### Phase 2: Agent × AI VTuber（subagent 多 Agent 协作）
+- [ ] ⬜ WebSocket 实时双向通信
+- [ ] ⬜ SubAgent 编排系统（multi-agent collaboration）
+- [ ] ⬜ 上下文压缩（context compression）
+- [ ] ⬜ 多 AI Provider（OpenAI, Anthropic, Google, Ollama）
+- [ ] ⬜ Agent 任务委派（delegate_task）
+- [ ] ⬜ 文件传输（带 SHA256 校验）
+- [ ] ⬜ CronJob 定时任务调度
+
+### Phase 3: 增强功能
+- [ ] ⬜ 语音输入（VAD + whisper STT）
+- [ ] ⬜ 实时 Live2D 嘴型同步
+- [ ] ⬜ Android/iOS 平台适配
+- [ ] ⬜ Web 端支持
+
+---
+
+## Git 仓库
+
+- **Remote:** `https://github.com/AuthourAkson/AI_Vtuber_Agenty.git`
+- **Branch:** `main`
+- **推送时机:** 每次完成阶段性功能后更新 project.md 并推送
+
+---
+
+*此文档由 Hermes Agent 维护。*
+*项目完全自包含，不依赖 LocalAIVtuber2 后端。*
+*数据存储路径：D:\AiVtuber_Agent_profile\（Steam 风格本地存档）*
+
+---
+
+## 最终变更汇总 (2026-05-11)
+
+### Bug 修复
+| # | 问题 | 文件 |
+|---|------|------|
+| B6 | window_manager API 变更 maximizeOrRestore | lib/app.dart |
+| B7 | DWM 类型转换 static_cast | windows/runner/flutter_window.cpp |
+| B8 | InkWell 缺少 Material 祖先 | lib/app.dart |
+| B9 | RenderFlex 溢出（级联） | 自动修复 |
+| B10 | DWM 圆角未生效（初始修复） | flutter_window.cpp |
+| B11 | overlay + 四角矩形（不完整修复） | flutter_window.cpp |
+| B12 | 标题栏下划线 | lib/app.dart |
+| B13 | ChatProvider LLMService 未同步 API 设置 | lib/providers/chat_provider.dart |
+| B14 | SystemPrompt 未同步到对话 | lib/providers/chat_provider.dart |
+| B15 | 启动未自动恢复上次会话 | chat_provider.dart + home_screen.dart |
+| B16 | C4819 MSVC 编码警告 | CMakeLists.txt + 源文件 |
+
+### 功能新增
+| 功能 | 文件 |
+|------|------|
+| 聊天页 API 侧边栏（Base URL/Key/Model + Test + Presets） | lib/widgets/api_sidebar.dart（新） |
+| 启动自动加载上次对话历史 | lib/providers/chat_provider.dart |
+| LLM 侧边栏入口 | lib/widgets/app_sidebar.dart |
+
+### UI 现代化
+| 改动 | 说明 |
+|------|------|
+| window_manager → bitsdojo_window | 原生窗口按钮 + frameless |
+| + flutter_acrylic | Windows 11 Mica 毛玻璃效果 |
+| + bitsdojo_window_configure(BDW_CUSTOM_FRAME) | main.cpp — 触发 DWM 自动圆角 |
+| + ClipRRect(r=12) | app.dart — 内容区圆角 |
+| fluent_ui → Material3 | 回退（fluent_ui API 不稳定） |
+
+### 技术栈（最终）
+```
+Material3 + bitsdojo_window + flutter_acrylic
+  ↓
+Frameless Window → DWM 自动圆角 + Mica 毛玻璃 + 原生窗口按钮
+```
+
+### Live2D 渲染栈 (2026-05-11)
+```
+Flutter InAppWebView (Edge WebView2)
+  ↓
+PixiJS v6.5.10 (WebGL)
+  ├── pixi-live2d-display v0.4.0 (Cubism 4)
+  ├── live2dcubismcore.min.js (Cubism Core)
+  └── live2d.min.js (Cubism 2.1 compat)
+  ↓
+模型文件: D:\AiVtuber_Agent_profile\models\live2d\
+```
+
+### 新增文件 (Live2D 集成)
+| 文件 | 说明 |
+|------|------|
+| `assets/live2d/renderer.html` | PixiJS WebGL 渲染页面，含右鍵對話框 UI |
+| `assets/live2d/live2dcubismcore.min.js` | Live2D Cubism Core (從 LocalAIVtuber2 複製) |
+| `assets/live2d/live2d.min.js` | Live2D Cubism 2.1 Framework |
+| `lib/services/live2d_model_service.dart` | 模型匯入/列表/刪除 |
+| `lib/widgets/live2d_view.dart` | InAppWebView 封裝 + JavaScript Handler 雙向橋 |
+
+### 修改文件 (Live2D 集成)
+| 文件 | 變更 |
+|------|------|
+| `pubspec.yaml` | + flutter_inappwebview, + desktop_multi_window, + assets/live2d/ |
+| `lib/screens/character_screen.dart` | 完整重寫：Live2D 預覽 + 模型選擇 + 文件上傳 |
+| `lib/services/backend_service.dart` | + Live2DModelService, 替換 stub 為真實實現 |
+
+### 编译 & 运行
+```bash
+cd D:\AiVtuber_Agent
+flutter clean
+flutter pub get
+flutter run -d windows
+```
+
+---
+
+## 变更汇总 (2026-05-12)
+
+### 桌宠悬浮窗 + 眼球追踪
+| 文件 | 说明 |
+|------|------|
+| `lib/services/live2d_server.dart` | **新增** 全局 HTTP 服务器（localhost:48888），服务 assets + 模型文件 |
+| `lib/overlay_main.dart` | **新增** 悬浮窗独立入口，WebView 渲染 Live2D 桌宠 |
+| `lib/main.dart` | 分支主窗口/悬浮窗 + 启动 Live2DServer |
+| `assets/live2d/renderer.html` | **重写** 加入眼球追踪(ParamEyeBallX/Y)、嘴型同步(ParamMouthOpenY)、右键对话 |
+| `assets/live2d/pixi.min.js` | **新增** PixiJS v6.5.10 本地化 |
+| `assets/live2d/cubism4.min.js` | **新增** pixi-live2d-display 本地化 |
+| `lib/screens/character_screen.dart` | +Launch Desktop Pet 按钮 + 表情/嘴型测试控件 |
+| `lib/widgets/live2d_view.dart` | 重构使用共享 Live2DServer |
+| `pubspec.yaml` | + window_manager, + desktop_multi_window |
+
+### 架构
+```
+主窗口 (AI VTuber Agent)              悬浮窗 (Live2D Desktop Pet)
+┌──────────────────────┐              ┌─────────────────────┐
+│ Character Settings   │   Window     │ 透明 + always-on-top │
+│  预览 / 上传 / 控制  │◄─Channel──►│ WebView              │
+│  Launch Desktop Pet  │              │  👀 眼球追踪鼠标     │
+│  Smile / Star Eyes   │              │  🗣 嘴型同步 (TTS)   │
+│  Test Mouth Open     │              │  💬 右键→透明对话框  │
+└──────────────────────┘              └─────────────────────┘
+              │                                  │
+              └──── Live2DServer :48888 ─────────┘
+                     (HTTP 文件服务)
+```
+
+### Bug 修复 (第三批次)
+| # | 问题 | 文件 |
+|---|------|------|
+| B17 | file_picker v11 API 变更 | character_screen.dart |
+| B18 | WebView file:// CORS 模型加载失败 | live2d_view.dart → Live2DServer |
+| B19 | 中文路径 URL 编码 → 404 | live2d_server.dart (Uri.decodeComponent) |
+| B20 | desktop_multi_window API (WindowController) | character_screen.dart, overlay_main.dart |
+| B21 | cubism4.min.js 加载顺序 → PIXI.live2d undefined | renderer.html |
+| B22 | window_manager 在子窗口不可用 | overlay_main.dart |
+
+---
+---
+## 变更汇总 (2026-05-12 晚 — VTube Studio 风格透明浮窗)
+
+### 架构重构：从全屏覆盖到独立透明窗口
+
+**旧方案 (PetModeOverlay)**：全屏透明 Flutter 路由覆盖在主窗口上，阻断 UI 交互和窗口拖拽。
+
+**新方案 (Native WebView2 Overlay)**：C++ 原生 Win32 窗口，独立于 Flutter 主窗口，VTube Studio 风格：
+
+```
+主窗口 (AI VTuber Agent)              独立透明浮窗 (Live2D Overlay)
+┌──────────────────────────┐         ┌─────────────────────┐
+│  正常 UI                 │         │ WS_EX_LAYERED       │
+│  (Chat/Settings/...)     │  FFI    │ WS_EX_TOPMOST       │
+│                          │◄───────►│ WS_EX_TOOLWINDOW    │
+│  Character Settings:     │         │                     │
+│    [Open Overlay]        │         │  WebView2 (透明BG)  │
+│    [Close] [Toggle Top]  │         │  PixiJS + Live2D    │
+│                          │         │  👀 眼球追踪鼠标     │
+└──── Live2DServer :48888 ─┴─────────┤  ✋ 拖拽移动窗口     │
+                                     │  ↕↔ 边缘调整大小    │
+                                     └─────────────────────┘
+                                              ↕ OBS 捕获
+```
+
+### 新增/修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `windows/runner/live2d_overlay_window.h` | **新增** C++ 透明窗口类：Win32 + WebView2 + DWM 合成 |
+| `windows/runner/live2d_overlay_window.cpp` | **新增** 实现：窗口创建、WebView2 初始化、拖拽/缩放、透明背景 |
+| `windows/runner/live2d_overlay_bridge.cpp` | **新增** C API 桥接（Dart FFI 调用入口） |
+| `windows/runner/CMakeLists.txt` | **修改** + overlay 源文件 + WebView2 SDK 链接 |
+| `lib/services/live2d_overlay_ffi.dart` | **新增** Dart FFI 绑定：create/destroy/move/resize/navigate/setTopMost |
+| `lib/main.dart` | **修改** + Live2DOverlayFfi 初始化 |
+| `lib/screens/character_screen.dart` | **重写** PetModeOverlay → Native Overlay：Open/Close/Toggle Topmost 按钮 |
+| `assets/live2d/renderer.html` | **修改** + 查询参数解析 (?model=&x=&y=&scale=), + 透明背景 !important |
+| `lib/widgets/pet_mode_overlay.dart` | **删除**（已废弃） |
+
+### 技术细节
+
+**透明窗口实现：**
+- `WS_EX_LAYERED` | `WS_EX_TOPMOST` | `WS_EX_TOOLWINDOW` — 分层 + 置顶 + 无任务栏图标
+- `DwmExtendFrameIntoClientArea` (margins=-1) — DWM 全窗口玻璃效果
+- `DwmEnableBlurBehindWindow` — 启用模糊透明
+- `ICoreWebView2Controller2::put_DefaultBackgroundColor({0,0,0,0})` — WebView 透明
+
+**窗口交互：**
+- `WM_NCHITTEST` 返回 `HTCAPTION` — 点击模型本体拖拽整个窗口
+- 边缘 8px 检测 — 四边 + 四角调整窗口大小
+- `ESC` 键关闭窗口
+
+**WebView2 编译：**
+- 复用 flutter_inappwebview 的 WebView2 SDK (build/windows/x64/packages/)
+- 链接 WebView2LoaderStatic.lib (静态库，无需额外 DLL)
+- 覆盖 `_HAS_EXCEPTIONS` 宏（WebView2 COM 回调需要）
+
+### 移除的旧方案
+
+| 旧文件 | 状态 |
+|--------|------|
+| `lib/widgets/pet_mode_overlay.dart` | **删除** — 全屏覆盖阻断主窗口 |
+| `lib/overlay_main.dart` | 保留但不再使用（desktop_multi_window 方案） |
+
+### 后续优化
+
+- [ ] 从 Dart 调用 JS 控制模型（通过 WebView2 WebMessage API）
+- [ ] 鼠标点击穿透模式（OBS 捕获时不阻挡操作）
+- [ ] 窗口位置/大小持久化
+- [ ] 多显示器支持
+
+### Bug 修复 (第五批次)
+
+| # | 问题 | 修复 |
+|---|------|------|
+| B26 | PetModeOverlay 覆盖全屏阻断主窗口 UI | → Native WebView2 overlay 窗口 |
+| B27 | PetModeOverlay 导致主窗口无法拖拽 | → 独立 Win32 窗口 (WS_EX_TOOLWINDOW) |
+| B28 | desktop_multi_window 子窗口 flutter_inappwebview 插件未注册 | → 绕过 Flutter 插件，直接用 C++ WebView2 |
+| B29 | CMake WebView2 SDK 路径错误 `CMAKE_SOURCE_DIR/build` → `../build` | CMakeLists.txt 路径修复 + fallback |
+
+---
+
+## 变更汇总 (2026-05-13 — PyQt6 桌宠模式：对标 AUAK)
+
+### 决策：放弃 C++ Native WebView2 Overlay，改用 PyQt6 子进程
+
+**原因：** 用户已有成熟 PyQt6 实现（D:\\AUAK_Live2D_Desktop_AI），该方案已完美实现透明背景、
+拖拽、眼球追踪。C++ 方案编译复杂、WebView2 SDK 路径问题多、调试困难。PyQt6 方案在同一技术栈
+下更易维护。
+
+### 桌宠架构 (PyQt6)
+
+```
+主窗口 (AI VTuber Agent)                桌宠 (PyQt6 独立子进程)
+┌──────────────────────────┐         ┌─────────────────────────┐
+│  正常 UI                 │         │ Frameless + AlwaysOnTop │
+│  (Chat/Settings/...)     │  HTTP   │ Tool Window (无任务栏)   │
+│                          │◄───────►│ WA_TranslucentBackground│
+│  Character Settings:     │ control │                         │
+│    [Launch Desktop Pet]  │         │  QWebEngineView (透明)  │
+│    [Close] [ClickThru]   │         │  pet.html               │
+│    [Reload Model]        │ :48889  │  ├── PixiJS + Live2D    │
+└──── Live2DServer :48888 ─┴─────────┤  ├── 眼球追踪 (60fps)   │
+           (HTTP 文件服务)            │  ├── 拖拽控制器          │
+                                      │  └── 聊天气泡            │
+                                      └─────────────────────────┘
+                                               ↕ OBS 捕获
+```
+
+### 技术栈对比
+
+| 特性 | C++ WebView2 Overlay (已废弃) | PyQt6 子进程 (当前) |
+|------|------------------------------|---------------------|
+| 语言 | C++ + Dart FFI | Python (同 AUAK) |
+| 浏览器引擎 | WebView2 (需 SDK) | QWebEngineView (Qt 内置) |
+| 透明背景 | DWM API + COM | WA_TranslucentBackground |
+| 拖拽 | WM_NCHITTEST | QWebChannel → WindowController |
+| 眼球追踪 | JS mousemove 事件 | QWebChannel → MouseTracker (60fps) |
+| 编译 | CMake + WebView2 SDK 链接 | 无需编译 (Python 脚本) |
+| Flutter 交互 | Dart FFI (函数调用) | HTTP REST (loose coupling) |
+| 复杂度 | 高 (500+ 行 C++ + FFI) | 低 (300 行 Python + HTML) |
+
+### 核心文件
+
+| 文件 | 说明 |
+|------|------|
+| `lib/services/live2d_pet.py` | **PyQt6 桌宠窗口**：透明窗口、WebView、拖拽、眼球追踪、HTTP 控制服务 |
+| `assets/live2d/pet.html` | **PixiJS 渲染页面**：Live2D 模型加载、眼球追踪 (ParamEyeBallX/Y)、自动缩放、拖拽手柄、聊天气泡 |
+| `lib/screens/character_screen.dart` | Flutter 侧控制：`_openPet` 启动 Python 子进程、`_closePet`、`_togglePetClickThrough`、`_reloadPetModel` |
+| `lib/services/live2d_server.dart` | HTTP 文件服务 (port 48888)：serves pet.html + JS 库 + Live2D 模型文件 |
+| `lib/services/live2d_overlay_ffi.dart` | ⚠️ **已废弃**（C++ FFI 绑定，保留代码但不再使用） |
+
+### 依赖 (Python 侧，与 AUAK 相同)
+
+```bash
+pip install PyQt6 PyQt6-WebEngine
+# Qt6 WebEngine 自带 Chromium 内核，无需额外安装浏览器
+```
+
+### Flutter 启动桌宠流程
+
+```
+1. 用户在 Character Screen 点击 [Launch Desktop Pet]
+2. Flutter: Live2DServer.toModelUrl(path) → HTTP URL
+3. Flutter: Process.start('python', ['lib/services/live2d_pet.py', '--model-url', url, ...])
+4. Python: 启动 PyQt6 透明窗口 → 加载 pet.html → QWebChannel 绑定
+5. Python: 启动 HTTP 控制服务 (127.0.0.1:48889)
+6. Flutter: GET /health → 确认启动成功 → 显示 SnackBar
+7. 用户拖拽绿色手柄移动桌宠，眼球跟随鼠标
+```
+
+### HTTP 控制 API (port 48889)
+
+| Method | Path | Body | 说明 |
+|--------|------|------|------|
+| GET | `/health` | — | 健康检查 → `{"status":"ok"}` |
+| GET | `/status` | — | 窗口状态查询 |
+| POST | `/close` | — | 优雅关闭 |
+| POST | `/click_through` | `{"enable": bool}` | 鼠标穿透开关 |
+| POST | `/reload_model` | `{"model_url":"...","scale":...,"x":...,"y":...}` | 切换模型 |
+| POST | `/show_message` | `{"text":"...","duration_ms":3000}` | 显示聊天气泡 |
+
+### 眼球追踪实现
+
+```
+Python MouseTracker (60fps QTimer)
+  → 计算 cursor_pos - window_topLeft
+  → QWebChannel emit mouseMoved(relX, relY)
+  → JS: offsetX = (x - w/2) / (w/2), offsetY = -(y - h/2) / (h/2)
+  → live2d coreModel.setParameterValueById("ParamEyeBallX", offsetX)
+  → live2d coreModel.setParameterValueById("ParamEyeBallY", offsetY)
+  → live2d coreModel.setParameterValueById("ParamAngleX", offsetX * 30)
+  → live2d coreModel.setParameterValueById("ParamAngleY", offsetY * 30)
+```
+
+### 自动缩放
+
+pet.html 在模型加载后自动计算缩放比例：
+```js
+var targetHeight = window.innerHeight * 0.80;
+modelScale = targetHeight / model.height;
+```
+用户可通过 query param `?scale=X` 手动覆盖。
+
+### 与 C++ Overlay 的共存
+
+C++ overlay 文件保留在仓库中但**不再活跃使用**：
+- `lib/services/live2d_overlay_ffi.dart` — Dart FFI 绑定 (保留)
+- `windows/runner/live2d_overlay_window.h/cpp` — C++ 实现 (保留)
+- `windows/runner/live2d_overlay_bridge.cpp` — C API 桥接 (保留)
+- `windows/runner/CMakeLists.txt` — overlay 源文件链接可注释掉以减少编译时间
+
+### 移除的旧方案
+
+| 旧文件 | 状态 |
+|--------|------|
+| `lib/widgets/pet_mode_overlay.dart` | 之前已删除 |
+| `lib/overlay_main.dart` | 保留但不再使用 (desktop_multi_window 方案) |
+| C++ overlay 全套 | ⚠️ 保留代码，不参与编译 |
+
+---
+
+## 变更汇总 (2026-05-13 下午 — 桌宠 Bug 修复)
+
+### Bug B30: 模型位置偏下 + 窗口过大 + 关闭后进程残留
+
+**问题分析：**
+
+1. **模型位置偏下** — Live2D chibi 模型的视觉中心通常高于几何中心（头顶有留白）。默认 Y=50%
+   导致人物下半身被裁切。对比 AUAK 的 `index.html`：它使用硬编码居中 `model.y = innerHeight/2`，
+   但我们的 `pet.html` 的 Y 参数通过 query param 传递（来自 Settings），且默认值偏高。
+
+2. **窗口过大** — 400×600 对桌宠来说浪费空间。AUAK 同样使用此尺寸，但用户需要刚好容纳
+   模型+拖拽按钮的紧凑窗口。
+
+3. **关闭后进程残留** — `_petProcess` 是 `CharacterScreen` 的私有字段。当 Flutter 主窗口
+   关闭时，`dispose()` 未必执行，导致 Python 子进程成为孤儿。且原 `_closePet()` 有逻辑缺陷：
+   `setState(() => _petProcess = null)` 在 `Future.delayed` 前同步执行，导致延迟 kill 永远不触发。
+
+**修复：**
+
+| # | 问题 | 文件 | 变更 |
+|---|------|------|------|
+| B30a | 模型偏下 | `assets/live2d/pet.html` | `updateModelTransform()` 改用硬编码居中 `model.x = innerWidth/2; model.y = innerHeight/2`（匹配 AUAK） |
+| | | `assets/live2d/pet.html` | 自动缩放 80%（匹配 AUAK） |
+| B30b | 窗口过大 | `lib/services/live2d_pet.py` | `DEFAULT_W` 400→320, `DEFAULT_H` 600→480 |
+| B30c | 进程残留 | `lib/services/live2d_pet.py` | 新增 `ParentAliveChecker`：QTimer 每 3s poll Flutter :48888，1 次失败即自动退出 |
+| | | `lib/services/live2d_server.dart` | 新增 `/` 和 `/health` 路由返回 200（供 checker poll） |
+| | | `assets/live2d/pet.html` | 新增红色 X 关闭按钮（直接 POST /close） |
+| | | `lib/screens/character_screen.dart` | `_petProcess` 字段移除，全部改用 `Live2DServer.setPetProcess()` / `petRunning` |
+| | | `lib/main.dart` | `ProcessSignal.sigterm.watch()` 兜底 kill pet |
+| | | `lib/screens/character_screen.dart` | `_closePet()` 修复：不再提前 null 阻碍 delayed kill |
+
+### 生命周期流程（修复后）
+
+```
+Flutter App 启动
+  └─ Live2DServer.start()                    → HTTP :48888
+  └─ ProcessSignal.sigterm.watch()           → killPet() on exit
+
+用户点击 [Open Pet]
+  └─ Process.start('python', ['live2d_pet.py', ...])
+  └─ Live2DServer.setPetProcess(process)     → 全局引用
+
+用户点击 [Close] 或关闭主窗口
+  └─ CharacterScreen._closePet()
+  │    └─ HTTP POST /close                   → Python: QApplication.quit()
+  │    └─ Future.delayed(500ms): killPet()   → sigterm 兜底
+  └─ 或 ParentAliveChecker 连续 3 次 poll 失败      → Python 自动 shutdown
+  └─ 或 ProcessSignal.sigterm 收到 (macOS/Linux)    → killPet()
+```
+
+### 参数对照
+
+| 参数 | 旧值 | 新值 | 说明 |
+|------|------|------|------|
+| 窗口尺寸 | 400×600 | 320×480 | 更紧凑，适合桌宠 |
+| 模型定位 | 百分比 Y=42% | 硬编码居中（同 AUAK） | `model.y = innerHeight / 2` |
+| 自动缩放 | 90% | 80% | 匹配 AUAK，模型完整显示 |
+| 进程清理 | sigterm watch | ParentAliveChecker + sigterm | 双重兜底：Python 自主检测 + 信号 |
+
+---
+
+## 变更汇总 (2026-05-14 — Frontend 视觉重构：1:1 复刻 LocalAIVtuber2)
+
+### 目标
+将 AiVtuber_Agent 的 Flutter 前端视觉设计 1:1 复刻 LocalAIVtuber2 的 React + shadcn/ui 前端。
+
+### 视觉设计系统 (shadcn Dark Theme)
+- **背景**: `#1A1A1A` (oklch 0.145)
+- **卡片**: `#252525` (oklch 0.205)
+- **次要色**: `#2E2E2E` (oklch 0.269)
+- **边框**: `rgba(255,255,255,0.1)`
+- **圆角**: 6px (shadcn rounded-md), 8px (rounded-lg), 10px (input border-radius)
+- **字体色**: `#F5F5F5` (foreground), `#9E9E9E` (muted)
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/app.dart` | **重写** 新增 `ShadColors` 颜色常量类，主题完全匹配 shadcn dark palette |
+| `lib/widgets/app_sidebar.dart` | **重写** 可折叠 sidebar (200px/48px)，双段布局 (Test pipeline + footer)，匹配 shadcn Sidebar |
+| `lib/widgets/side_panel.dart` | **新增** 滑动侧面板组件，匹配 LAV2 SidePanel（左右滑入/滑出 + 边缘切换按钮） |
+| `lib/widgets/chat_bubble.dart` | **重写** 匹配 LAV2 chatbox 样式（bg-secondary, rounded-md, 小字浅色） |
+| `lib/widgets/chat_input.dart` | **重写** 匹配 LAV2 输入区（bg-secondary, rounded-lg, Input+Send button） |
+| `lib/widgets/llm_monitor.dart` | **新增** LLM 监控面板，显示 System/Vision/OCR/Memory 上下文 |
+| `lib/screens/home_screen.dart` | **重写** 简化为 sidebar + IndexedStack 内容区布局 |
+| `lib/screens/chat_screen.dart` | **重写** 三区布局 (session sidebar | chat | LLM monitor) + 设置侧面板 |
+| `lib/screens/memory_screen.dart` | **重写** 匹配 SessionList 卡片式布局 + 搜索过滤 |
+| `lib/screens/tts_screen.dart` | **重写** ShadColors 主题 + 卡片式布局 |
+| `lib/screens/vision_screen.dart` | 添加 ShadColors import |
+| `lib/screens/settings_screen.dart` | 添加 ShadColors import |
+| `lib/screens/stream_screen.dart` | 添加 ShadColors import |
+| `lib/screens/pipeline_monitor_screen.dart` | 更新卡片/边框色为 ShadColors |
+| `lib/screens/llm_screen.dart` | ~~移除引用~~ (LLM 设置已整合进 ChatScreen 侧面板) |
+| `lib/models/settings.dart` | + `copyWith()` 方法 |
+| `lib/providers/chat_provider.dart` | + 新增 getters: `activeSessionTitle`, `sessions`, `fullSystemPrompt`, `currentCaption`, `currentOcrText`, `currentMemoryContext`, `createNewSession()`, `loadSession()` |
+| `lib/services/session_manager.dart` | + `getSessionsCache()` 同步缓存 + `_refreshCache()` |
+
+### 布局对照表
+
+| LAV2 (React) | AiVtuber_Agent (Flutter) |
+|---|---|
+| `AppSidebar` + `SidebarProvider` | `AppSidebar` (可折叠，AnimatedBuilder) |
+| `llmPage.tsx` (Home) | `ChatScreen` (chat + LLM monitor + 侧面板) |
+| `SidePanel` (left, sessions) | `SidePanel(side=Side.left)` |
+| `SidePanel` (right, settings) | `SidePanel(side=Side.right, openLabel/closeLabel='Settings')` |
+| `chatbox.tsx` Input + Send | `ChatInput` (bg-secondary + TextField + IconButton) |
+| `editable-chat-history.tsx` | `ChatBubble` (bg-secondary, rounded-md, 13px) |
+| `llm-monitor.tsx` | `LLMMonitor` (只读 TextArea) |
+| `session-list.tsx` | `MemoryScreen` (搜索 + 卡片列表) |
+| `ttsPage.tsx` + Card | `TTSScreen` (shadCard 卡片式) |
+| `page-mapping.ts` 10 页面路由 | `HomeScreen._buildPage` (条件 switch，仅构建活跃页) |
+
+### 窗口框架
+保持不变：`bitsdojo_window` (BDW_CUSTOM_FRAME) + `flutter_acrylic` (Mica 毛玻璃) + Windows 11 原生圆角。
+
+---
+
+## 变更汇总 (2026-05-14 #2 — Markdown/LaTeX 渲染 + SelectionArea)
+
+### 新增功能
+- **Markdown 渲染**: 粗体、斜体、列表、引用块、链接（flutter_markdown + MarkdownBody）
+- **代码块**: 深色背景 + 等宽字体 + 原生选区复制（SelectionArea）
+- **LaTeX 公式**: `$...$` 行内 / `$$...$$` 块级（flutter_math_fork + Math.tex）
+- **化学式**: `\ce{H2O}` → `H_{2}O` 自动转换（flutter_math_fork 不含 mhchem）
+- **选区高亮**: 绿色半透明底色 + 光标（textSelectionTheme）
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/widgets/rich_content_bubble.dart` | **新增** 统一渲染组件：LaTeX 正则分割 + MarkdownBody + \ce 预处理 |
+| `lib/widgets/chat_bubble.dart` | 改用 RichContentBubble + SelectionArea 包裹 |
+| `lib/app.dart` | + textSelectionTheme（选区高亮色） |
+| `pubspec.yaml` | + flutter_math_fork（LaTeX 渲染） |
+
+### Session 面板修复
+| 文件 | 变更 |
+|------|------|
+| `lib/providers/chat_provider.dart` | `initFromSavedState()` 启动时加载 session list + notifyListeners() |
+| `lib/services/session_manager.dart` | `listSessions()` 同步缓存; `deleteSession()` 自动刷新; + `loadSessions()` |
+| `lib/screens/memory_screen.dart` | + initState 预加载; Load 按钮跳转 Home; Delete 异步处理 |
+| `lib/screens/home_screen.dart` | MemoryScreen 接收 `onNavigateHome` 回调 |
+
+### Bug 修复
+| Bug | 现象 | 修复 |
+|-----|------|------|
+| #34 | debugFrameWasSentToEngine 无限循环 | IndexedStack→switch; AnimationController→隐式动画 |
+| #35 | SidePanel Stack 无界约束崩溃 | SizedBox(width:) 包裹 |
+| #36 | Session 面板重叠 AppSidebar + 按钮无响应 | ClipRect + 条件渲染 + 状态外露 |
+| #37 | flutter_markdown _inlines 断言崩溃 | 移除自定义 CodeBlockBuilder |
+| #38 | LaTeX 正则错误 (\$) | 修正为 `\$` |
+| #39 | Session 面板启动无数据 | initFromSavedState 加 loadSessions() |
+
+---
+
+## 变更汇总 (2026-05-17 — ShadTheme 动态主题迁移)
+
+### 背景
+将全项目硬编码的 `ShadColors.xxx`（如 `ShadColors.sidebar`, `ShadColors.foreground`）迁移到
+动态主题系统 `ShadTheme.of(context).xxx`，使所有颜色跟随用户的 dark/light 模式和主题色设置。
+
+### 范围
+涉及 11 个文件（所有 UI 文件），共约 200+ 处硬编码颜色引用。
+
+### 技术难点
+
+**难点 1: `const` 关键字失效**
+`ShadTheme.of(context)` 是运行时表达式，不能出现在 `const` 构造器中。所有使用该模式
+的 `const BoxDecoration`、`const Text`、`const TextStyle` 等必须去掉 `const`。
+修复方法：对 11 个文件执行 `sed -i 's/\bconst //g'` 全面移除。
+
+**难点 2: `StatelessWidget` 辅助方法失去 `context`**
+`State<Widget>` 有隐式 `context` getter，但 `StatelessWidget` 没有。原本在 `build()` 中
+直接调用 `ShadColors.xxx`（不需要 context），迁移后辅助方法（`_label`、`_sectionHeader`、
+`_md` 等）访问 `ShadTheme.of(context)` 需要 `BuildContext`。
+修复方法：给所有 `StatelessWidget` 辅助方法添加 `BuildContext context` 参数。
+
+**难点 3: 链式反应**
+去掉 `const` 后引发连锁错误：
+- `static const` 变量变为无效的 `static` → 改为 `static final`
+- 调用方 `const ChatScreen()` 在不支持 const 的构造器上报错 → 去掉调用方 `const`
+- 辅助方法签名变更后调用处参数数量不匹配 → 补齐所有调用点
+
+### 受影响的类与方法
+
+| 类 | 类型 | 修复 |
+|----|------|------|
+| `_AppSidebarState` | State | de-const；`static const` → `static final` |
+| `_ChatScreenState` | State | de-const |
+| `_SettingsPanel` | StatelessWidget | de-const；`_label/_field/_switchRow` +context |
+| `_TTSScreenState` | State | de-const |
+| `_MemoryScreenState` | State | de-const |
+| `_SettingsScreenState` | State | de-const |
+| `PipelineMonitorScreen` | StatefulWidget | de-const |
+| `_MultiAgentScreenState` | State | de-const；行 701 read_file→write_file 破坏修复 |
+| `ChatInput` | StatefulWidget | de-const |
+| `LLMMonitor` | StatelessWidget | de-const；`_readOnlyTextArea/_toggleButton/_sectionLabel` +context |
+| `MultiAgentAppearancePage` | StatelessWidget | de-const；10+ 辅助方法 +context |
+| `RichContentBubble` | StatelessWidget | de-const；`_md` +context；`List<dynamic>` → `.cast<Widget>()` |
+| `HomeScreen` | StatefulWidget | 去掉 `const ChatScreen()` 等构造器调用 |
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/widgets/app_sidebar.dart` | de-const；static const→static final |
+| `lib/screens/chat_screen.dart` | de-const；_label/_field/_switchRow +context；_SettingsPanel 调用点 |
+| `lib/screens/tts_screen.dart` | de-const |
+| `lib/screens/memory_screen.dart` | de-const |
+| `lib/screens/settings_screen.dart` | de-const |
+| `lib/screens/pipeline_monitor_screen.dart` | de-const |
+| `lib/screens/multi_agent_screen.dart` | de-const；行 701 破坏修复 |
+| `lib/widgets/chat_input.dart` | de-const |
+| `lib/widgets/llm_monitor.dart` | de-const；3 辅助方法 +context |
+| `lib/screens/multi_agent_appearance.dart` | de-const；11 辅助方法 +context |
+| `lib/widgets/rich_content_bubble.dart` | de-const；_md +context；.cast<Widget>() |
+| `lib/screens/home_screen.dart` | 去掉 const 构造器调用 |
+| `bug.md` | 记录 2 轮编译错误及修复过程 |
+| `project.md` | 更新 UI 栈描述 + 本文档 |
+
+### 设计原则
+
+- **State<Widget> 辅助方法不需要 context 参数** — 有隐式 `this.context`
+- **StatelessWidget 辅助方法需要 context 参数** — 没有隐式 context
+- **de-const 是安全操作** — 仅失去编译期常量优化，不影响运行行为
+
+---
+
+## 变更汇总 (2026-05-17 #2 — 16 种完整 ThemePreset 主题系统)
+
+### 背景
+将原本仅修改单一 accent 色的 Theme Color 功能升级为 **16 种完整 UI 主题预设**。
+每种预设定义 dark + light 两套全色板（背景、前景、卡片、侧边栏、边框、输入框、
+弱文字等），切换预设时整个应用立马换肤，效果等同于 Dark Mode 切换。
+
+### ThemePreset 架构
+
+```
+lib/app.dart ── ThemePreset 类 (16 presets) ── ShadTheme ── 全局 Widget
+                    │
+                    ├── Blue (默认, 原 ShadColors)
+                    ├── Purple / Pink / Red / Orange
+                    ├── Amber / Yellow / Lime / Green
+                    ├── Emerald / Teal / Cyan / Sky
+                    ├── Indigo / Rose / Slate
+                    │
+                    └── 每 preset: darkBg/Fg/Card/Secondary/Sidebar/Border/Input/MutedFg
+                                  lightBg/Fg/Card/Secondary/Sidebar/Border/Input/MutedFg
+                                  accentColor + onAccent (自动黑/白对比)
+```
+
+### 开关功能
+- Theme Color 行右侧 Switch 开关
+- 关闭 → 强制使用 Blue 预设，色块网格隐藏
+- 状态持久化到 `appearance_prefs.json`
+
+### 对比色自适配
+`ShadTheme.primaryForeground` / `sidebarAccentForeground` / `ColorScheme.onPrimary`
+全部改用 `onAccent` 逻辑：暗 accent → 白字，亮 accent → 深灰字。
+解决了 Yellow/Lime/Cyan 等亮色主题上白字不可见的问题。
+
+### 受影响的 Widget
+修复了选中态按钮图标/文字被 accent 背景「吞没」的问题：
+- `app_sidebar.dart` — 侧边栏导航选中项 icon/text + 折叠按钮
+- `multi_agent_screen.dart` — Chat/Contacts/Settings 按钮、
+  设置页侧边栏选中项、Create/Save/Join/Send 按钮
+
+### 文件变更
+
+| 文件 | 变更 |
+|------|------|
+| `lib/app.dart` | 新增 ThemePreset（16 presets 完整色板）；重写 ShadTheme 从 preset 读取；移除 ShadColors；AppShell 接收 preset 参数；_buildTheme 使用预设色板 |
+| `lib/models/appearance_prefs.dart` | + themeColorEnabled 字段；主题色列表对齐 16 presets |
+| `lib/providers/appearance_provider.dart` | + themeColorEnabled getter |
+| `lib/screens/multi_agent_appearance.dart` | + Theme Color Switch 开关；色块仅在启用时显示 |
+| `lib/screens/multi_agent_screen.dart` | 5 处按钮/图标 colorScheme.primary/Colors.white → onPrimary |
+| `lib/widgets/app_sidebar.dart` | 3 处选中态 foreground → sidebarAccentForeground |
+| `bug.md` | 记录编译错误及修复 |
+| `project.md` | 更新 UI 描述 + 本文档 |
+
+### Bug 修复历程
+
+| 轮次 | 错误 | 修复 |
+|------|------|------|
+| #1 | `const` + `ShadTheme.of(context)` 冲突 (11 文件, 200+ 处) | blanket de-const |
+| #2 | `StatelessWidget` 辅助方法 context 未定义 | +BuildContext 参数 |
+| #3 | `static const` → `static` 无效；`const ChatScreen()` 调用失败 | static final；去调用方 const |
+| #4 | `_label/_field/_switchRow` 缺 context；`ctx` 残留；`List<dynamic>` 类型 | 补齐参数；清理 ctx；.cast<Widget>() |
+| #5 | bitsdojo 按钮 `const` 无效；`_drawTriangles` 缺参数 | 去 const；补 paint |
+| #6 | 选中态按钮/accent 背景吞没图标文字 | primary → onPrimary |
+| #7 | ThemeColor 关闭后仍有 Blue 残留 | +neutral 灰阶预设 (accent=0xFF888888) |
+
+
