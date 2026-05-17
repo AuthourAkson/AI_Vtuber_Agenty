@@ -977,8 +977,8 @@ onPressed: () => mgr.createLAN(host: '127.0.0.1', port: int.tryParse(_waPortCtrl
 icon: Icon(Icons.play_arrow, size: 16),
 label: Text('Start & Connect'),
 style: ElevatedButton.styleFrom(
-backgroundColor: Color(0xFF4CAF50),
-foregroundColor: Colors.white,
+backgroundColor: Theme.of(context).colorScheme.primary,
+foregroundColor: Theme.of(context).colorScheme.onPrimary,
 padding: EdgeInsets.symmetric(vertical: 12),
 ),
 ),

@@ -78,8 +78,8 @@ class _VisionScreenState extends State<VisionScreen> {
                   icon: Icon(_capturing ? Icons.hourglass_top : Icons.screenshot_monitor, size: 18),
                   label: Text(_capturing ? 'Capturing...' : 'Capture Screenshot'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF50),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     padding: const EdgeInsets.all(16),
                   ),
                 ),

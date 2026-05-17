@@ -9,6 +9,7 @@ import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
 import '../services/live2d_server.dart';
 import '../widgets/live2d_view.dart';
+import '../app.dart';
 
 class CharacterScreen extends StatefulWidget {
   const CharacterScreen({super.key});
@@ -191,7 +192,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 subtitle: const Text('Display Live2D/VRM character on screen'),
                 value: s.renderModel,
                 onChanged: (v) => _update(sp, s, renderModel: v),
-                activeColor: const Color(0xFF4CAF50),
               ),
               const SizedBox(height: 16),
 
@@ -333,39 +333,41 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   ),
                 )
               else
-                ...(_models.map((m) => Container(
+                ...(_models.map((m) {
+                  final isSelected = modelJsonPath != null &&
+                                     modelJsonPath.contains(m['name']!);
+                  final shad = ShadTheme.of(context);
+                  return Container(
                   margin: const EdgeInsets.only(bottom: 6),
                   decoration: BoxDecoration(
-                    color: modelJsonPath != null &&
-                           modelJsonPath.contains(m['name']!)
-                        ? const Color(0xFF1E3A1E)
-                        : const Color(0xFF1E1E1E),
+                    color: isSelected
+                        ? shad.muted
+                        : shad.card,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: modelJsonPath != null &&
-                             modelJsonPath.contains(m['name']!)
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFF2C2C2C),
+                      color: isSelected
+                          ? shad.primary
+                          : shad.border,
                     ),
                   ),
                   child: ListTile(
                     dense: true,
-                    leading: const Icon(Icons.person,
-                      color: Color(0xFF4CAF50), size: 20),
+                    leading: Icon(Icons.person,
+                      color: shad.primary, size: 20),
                     title: Text(m['name']!,
                       style: const TextStyle(fontSize: 13)),
-                    selected: modelJsonPath != null &&
-                              modelJsonPath.contains(m['name']!),
+                    selected: isSelected,
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                        color: Color(0xFF888888), size: 18),
+                      icon: Icon(Icons.delete_outline,
+                        color: shad.mutedForeground, size: 18),
                       onPressed: () => _deleteModel(m['name']!),
                     ),
                     onTap: () {
                       _update(sp, s, selectedLive2DModel: m['path']);
                     },
                   ),
-                ))),
+                );
+                })),
               const SizedBox(height: 20),
 
               // ─── Upload buttons ───
@@ -377,10 +379,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   OutlinedButton.icon(
                     onPressed: _importingModel != null ? null : _uploadLive2DModel,
                     icon: _importingModel != null
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 14, height: 14,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF4CAF50)))
+                              strokeWidth: 2, color: Theme.of(context).colorScheme.primary))
                         : const Icon(Icons.upload_file, size: 18),
                     label: Text(_importingModel != null
                         ? 'Importing...' : 'Upload Live2D'),
@@ -433,11 +435,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
                     icon: const Icon(Icons.open_in_new, size: 18),
                     label: Text(Live2DServer.petRunning ? 'Pet Active' : 'Open Pet'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Theme.of(context).colorScheme.primary,
                       side: BorderSide(
-                        color: Live2DServer.petRunning
-                            ? const Color(0xFF4CAF50)
-                            : const Color(0xFF4CAF50),
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                   ),
@@ -456,8 +456,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
                       icon: Icon(_clickThrough ? Icons.touch_app : Icons.touch_app_outlined, size: 18),
                       label: Text(_clickThrough ? 'Click-through ON' : 'Interactive'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _clickThrough ? const Color(0xFF4CAF50) : const Color(0xFF888888),
-                        side: BorderSide(color: _clickThrough ? const Color(0xFF4CAF50) : const Color(0xFF444444)),
+                        foregroundColor: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).mutedForeground,
+                        side: BorderSide(color: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).border),
                       ),
                     ),
                     OutlinedButton.icon(
@@ -642,24 +642,25 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   Widget _modeCard(String title, IconData icon, bool selected, VoidCallback onTap) {
+    final shad = ShadTheme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1E3A1E) : const Color(0xFF1E1E1E),
+          color: selected ? shad.muted : shad.card,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? const Color(0xFF4CAF50) : const Color(0xFF2C2C2C),
+            color: selected ? shad.primary : shad.border,
           ),
         ),
         child: Column(
           children: [
             Icon(icon, color: selected
-                ? const Color(0xFF4CAF50) : const Color(0xFF888888)),
+                ? shad.primary : shad.mutedForeground),
             const SizedBox(height: 8),
             Text(title, style: TextStyle(color: selected
-                ? const Color(0xFF4CAF50) : const Color(0xFF888888))),
+                ? shad.primary : shad.mutedForeground)),
           ],
         ),
       ),
@@ -676,7 +677,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
           value: value,
           min: min,
           max: max,
-          activeColor: const Color(0xFF4CAF50),
           onChanged: onChanged,
         ),
       ],
