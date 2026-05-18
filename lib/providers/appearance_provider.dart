@@ -20,6 +20,7 @@ class AppearanceProvider extends ChangeNotifier {
   int get themeColorIndex => _prefs.themeColorIndex;
   int get bgPatternIndex => _prefs.bgPatternIndex;
   String? get bgImagePath => _prefs.bgImagePath;
+  bool get bgImageEnabled => _prefs.bgImageEnabled;
   bool get startupAnimEnabled => _prefs.startupAnimEnabled;
   bool get themeColorEnabled => _prefs.themeColorEnabled;
 

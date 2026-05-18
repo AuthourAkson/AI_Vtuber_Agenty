@@ -331,6 +331,7 @@ color: selected ? accent : ShadTheme.of(context).mutedForeground,
 
 Widget _buildBgImage(AppearanceProvider ap, Color accent, BuildContext context) {
 final hasImage = ap.bgImagePath != null;
+final enabled = ap.bgImageEnabled;
 return _settingCard(context,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,12 +341,18 @@ children: [
 Icon(Icons.image, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Background Image', 'Set a custom background image'),
+child: _sectionLabel(context, 'Background Image',
+    enabled && hasImage ? ap.bgImagePath!.split(Platform.pathSeparator).last : 'Set a custom background image'),
+),
+Switch(
+value: enabled,
+onChanged: hasImage ? (v) => ap.update(ap.prefs.copyWith(bgImageEnabled: v)) : null,
+activeColor: accent,
 ),
 ],
 ),
 SizedBox(height: 12),
-if (hasImage) ...[
+if (hasImage && enabled) ...[
 ClipRRect(
 borderRadius: BorderRadius.circular(8),
 child: Stack(

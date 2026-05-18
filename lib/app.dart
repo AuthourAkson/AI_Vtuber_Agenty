@@ -331,6 +331,7 @@ class MyApp extends StatelessWidget {
         final fontSize = ap.fontSize;
         final patternIndex = ap.bgPatternIndex;
         final bgImagePath = ap.bgImagePath;
+        final bgImageEnabled = ap.bgImageEnabled;
 
         return MaterialApp(
           title: 'AI VTuber Agent',
@@ -341,6 +342,7 @@ class MyApp extends StatelessWidget {
             isDark: isDark,
             bgPatternIndex: patternIndex,
             bgImagePath: bgImagePath,
+            bgImageEnabled: bgImageEnabled,
             preset: preset,
           ),
         );
@@ -489,6 +491,7 @@ class AppShell extends StatelessWidget {
   final bool isDark;
   final int bgPatternIndex;
   final String? bgImagePath;
+  final bool bgImageEnabled;
   final ThemePreset preset;
 
   const AppShell({
@@ -497,6 +500,7 @@ class AppShell extends StatelessWidget {
     required this.isDark,
     required this.bgPatternIndex,
     this.bgImagePath,
+    required this.bgImageEnabled,
     required this.preset,
   });
 
@@ -526,7 +530,7 @@ class AppShell extends StatelessWidget {
   }
 
   Widget _buildBackground(Color fallback) {
-    if (bgImagePath != null) {
+    if (bgImageEnabled && bgImagePath != null) {
       final file = File(bgImagePath!);
       if (file.existsSync()) {
         return Image.file(
@@ -544,10 +548,10 @@ class AppShell extends StatelessWidget {
       return Container(color: fallback);
     }
     final ptnColor = isDark
-        ? Color(preset.darkMutedFg).withAlpha(18)
-        : Color(preset.lightMutedFg).withAlpha(25);
+        ? accent.withAlpha(28)
+        : accent.withAlpha(40);
     return CustomPaint(
-      painter: _BgPatternPainter(
+      foregroundPainter: _BgPatternPainter(
         pattern: bgPatternIndex,
         color: ptnColor,
       ),

@@ -73,13 +73,10 @@ AppSidebar(
 activePage: _activePage,
 onPageSelected: (page) => setState(() => _activePage = page),
 ),
-// Main content — only build the active page
-Expanded(
-child: Container(
-color: ShadTheme.of(context).background,
-child: _buildPage(_activePage),
-),
-),
+        // Main content — only build the active page
+        Expanded(
+          child: _buildPage(_activePage),
+        ),
 ],
 );
 }

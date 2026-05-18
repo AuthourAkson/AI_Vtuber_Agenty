@@ -23,6 +23,10 @@ class AppearancePrefs {
   /// Path to a custom background image file, or null for none
   String? bgImagePath;
 
+  /// Whether the background image is active. When false, falls back to pattern/solid.
+  /// (default: true — image shows immediately when set)
+  bool bgImageEnabled;
+
   /// Whether the startup transition animation is enabled (default: false)
   bool startupAnimEnabled;
 
@@ -37,6 +41,7 @@ class AppearancePrefs {
     this.themeColorIndex = 0,
     this.bgPatternIndex = 0,
     this.bgImagePath,
+    this.bgImageEnabled = true,
     this.startupAnimEnabled = false,
     this.themeColorEnabled = true,
   });
@@ -97,6 +102,7 @@ class AppearancePrefs {
     'themeColorIndex': themeColorIndex,
     'bgPatternIndex': bgPatternIndex,
     'bgImagePath': bgImagePath,
+    'bgImageEnabled': bgImageEnabled,
     'startupAnimEnabled': startupAnimEnabled,
     'themeColorEnabled': themeColorEnabled,
   };
@@ -108,6 +114,7 @@ class AppearancePrefs {
       themeColorIndex: json['themeColorIndex'] as int? ?? 0,
       bgPatternIndex: json['bgPatternIndex'] as int? ?? 0,
       bgImagePath: json['bgImagePath'] as String?,
+      bgImageEnabled: json['bgImageEnabled'] as bool? ?? true,
       startupAnimEnabled: json['startupAnimEnabled'] as bool? ?? false,
       themeColorEnabled: json['themeColorEnabled'] as bool? ?? true,
     );
@@ -146,6 +153,7 @@ class AppearancePrefs {
     bool? startupAnimEnabled,
     bool clearBgImage = false,
     bool? themeColorEnabled,
+    bool? bgImageEnabled,
   }) {
     return AppearancePrefs(
       darkMode: darkMode ?? this.darkMode,
@@ -155,6 +163,7 @@ class AppearancePrefs {
       bgImagePath: clearBgImage ? null : (bgImagePath ?? this.bgImagePath),
       startupAnimEnabled: startupAnimEnabled ?? this.startupAnimEnabled,
       themeColorEnabled: themeColorEnabled ?? this.themeColorEnabled,
+      bgImageEnabled: bgImageEnabled ?? this.bgImageEnabled,
     );
   }
 }
