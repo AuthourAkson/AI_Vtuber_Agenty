@@ -352,7 +352,7 @@ activeColor: accent,
 ],
 ),
 SizedBox(height: 12),
-if (hasImage && enabled) ...[
+if (hasImage) ...[
 ClipRRect(
 borderRadius: BorderRadius.circular(8),
 child: Stack(
