@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/settings.dart';
@@ -21,9 +22,9 @@ class CharacterScreen extends StatefulWidget {
 class _CharacterScreenState extends State<CharacterScreen> {
   final Live2DModelService _modelService = Live2DModelService();
   List<Map<String, String>> _models = [];
-  String? _importingModel; // model being imported
-  int _petPort = 48889; // HTTP port for pet control
-  bool _clickThrough = true; // Default: click-through for streaming
+  String? _importingModel;
+  int _petPort = 48889;
+  bool _clickThrough = true;
   final HttpClient _httpClient = HttpClient();
 
   @override
@@ -34,7 +35,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   @override
   void dispose() {
-    _closePet(); // Clean up Python pet process if running
+    _closePet();
     _httpClient.close();
     super.dispose();
   }
@@ -79,8 +80,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   Future<void> _uploadLive2DModel() async {
-    // Pick a Live2D model folder
-    // User selects the .model3.json file — we import the parent folder
     final result = await FilePicker.pickFiles(
       dialogTitle: 'Select Live2D model file (.model3.json or .model.json)',
       allowMultiple: false,
@@ -93,7 +92,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
     final filePath = result.files.single.path;
     if (filePath == null) return;
 
-    // The parent directory is the model folder
     final dir = Directory(filePath).parent;
 
     setState(() => _importingModel = dir.path);
@@ -104,7 +102,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
       if (destPath != null && mounted) {
         _refreshModels();
-        // Auto-select the newly imported model
         final sp = context.read<SettingsProvider>();
         final modelJson = _modelService.getModelJsonPath(modelName);
         _update(sp, sp.settings, selectedLive2DModel: modelJson);
@@ -160,7 +157,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
     if (confirm == true) {
       _modelService.deleteModel(modelName);
       _refreshModels();
-      // If the deleted model was selected, clear selection
       final sp = context.read<SettingsProvider>();
       final currentPath = sp.settings.selectedLive2DModel;
       if (currentPath != null && currentPath.contains(modelName)) {
@@ -174,7 +170,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
     return Consumer<SettingsProvider>(
       builder: (context, sp, _) {
         final s = sp.settings;
-        // Resolve model JSON path from the stored model path
         final modelJsonPath = s.selectedLive2DModel;
 
         return SingleChildScrollView(
@@ -186,7 +181,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
               const SizedBox(height: 24),
 
-              // ─── Render toggle ───
               SwitchListTile(
                 title: const Text('Show Character'),
                 subtitle: const Text('Display Live2D/VRM character on screen'),
@@ -195,7 +189,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ─── 2D/3D switch ───
               Row(
                 children: [
                   Expanded(
@@ -219,7 +212,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
               ),
               const SizedBox(height: 24),
 
-              // ─── Live2D Character Preview ───
               if (!s.use3D) ...[
                 const Text('Live2D Preview',
                   style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
@@ -264,7 +256,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Position sliders
                 const Text('Live2D Position',
                   style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
                 const SizedBox(height: 8),
@@ -281,7 +272,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 const SizedBox(height: 24),
               ],
 
-              // ─── VRM preview placeholder ───
               if (s.use3D) ...[
                 Container(
                   height: 300,
@@ -309,7 +299,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 const SizedBox(height: 24),
               ],
 
-              // ─── Model Selection ───
               const Text('Installed Models',
                 style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
               const SizedBox(height: 8),
@@ -370,7 +359,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 })),
               const SizedBox(height: 20),
 
-              // ─── Upload buttons ───
               const Text('Upload Model',
                 style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
               const SizedBox(height: 8),
@@ -412,7 +400,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
               const Divider(color: Color(0xFF2C2C2C)),
               const SizedBox(height: 16),
 
-              // ─── Transparent Overlay (VTube Studio Style) ───
+              // ─── Transparent Overlay ───
               const Text('Transparent Overlay',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
@@ -481,7 +469,28 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   // ─── Python Pet Subprocess Management ───
 
-  /// Send an HTTP request to the Python pet control server.
+  /// Extract bundled Python scripts to the profile directory so they work
+  /// from any location (flutter run, built exe, zipped distribution).
+  static const _scriptDir = r'D:\AiVtuber_Agent_profile\python_scripts';
+  static const _assetPath = 'assets/python/live2d_pet.py';
+
+  static Future<String?> _ensureScript() async {
+    final dir = Directory(_scriptDir);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+
+    final destFile = File('$_scriptDir\\live2d_pet.py');
+
+    // Write fresh from asset bundle every time (ensures updates apply)
+    try {
+      final data = await rootBundle.load(_assetPath);
+      await destFile.writeAsBytes(data.buffer.asUint8List());
+      return destFile.path;
+    } catch (e) {
+      debugPrint('Failed to extract pet script: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> _petRequest(String path, {Map<String, dynamic>? body}) async {
     if (!Live2DServer.petRunning) return null;
     try {
@@ -505,10 +514,22 @@ class _CharacterScreenState extends State<CharacterScreen> {
   Future<void> _openPet(String modelPath, AppSettings s) async {
     if (Live2DServer.petRunning) return;
 
-    // Build model URL
+    // Extract bundled Python script to profile directory
+    final scriptPath = await _ensureScript();
+    if (scriptPath == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to extract pet script. Check installation.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     final modelUrl = Live2DServer.toModelUrl(modelPath);
 
-    // Resolve python executable — try python3 first, then python
     String pythonExe = 'python3';
     try {
       final result = await Process.run(pythonExe, ['--version']);
@@ -516,9 +537,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
     } catch (_) {
       pythonExe = 'python';
     }
-
-    // Find the pet script path relative to the project
-    final scriptPath = 'lib/services/live2d_pet.py';
 
     try {
       final process = await Process.start(pythonExe, [
@@ -532,7 +550,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
       Live2DServer.setPetProcess(process);
 
-      // Listen to stdout/stderr
       process.stdout.transform(utf8.decoder).listen((data) {
         debugPrint('[Pet stdout] $data');
       });
@@ -540,14 +557,12 @@ class _CharacterScreenState extends State<CharacterScreen> {
         debugPrint('[Pet stderr] $data');
       });
 
-      // Handle process exit
       process.exitCode.then((code) {
         debugPrint('[Pet] Process exited with code $code');
         Live2DServer.setPetProcess(null);
         if (mounted) setState(() {});
       });
 
-      // Wait a moment for the server to start, then confirm health
       await Future.delayed(const Duration(seconds: 2));
       final healthOk = await _checkPetHealth();
       if (healthOk && mounted) {
@@ -556,6 +571,15 @@ class _CharacterScreenState extends State<CharacterScreen> {
             content: Text('Desktop pet opened. Hover top-left corner to drag.'),
             backgroundColor: Color(0xFF4CAF50),
             duration: Duration(seconds: 3),
+          ),
+        );
+      } else if (!healthOk && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Pet process started but not responding on port $_petPort. '
+                'Check that PyQt6 + PyQt6-WebEngine are installed.'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -586,9 +610,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   void _closePet() {
     if (Live2DServer.petRunning) {
-      // Try graceful shutdown via HTTP
       _petRequest('/close');
-      // Force kill after a short delay as safety net
       Future.delayed(const Duration(milliseconds: 500), () {
         Live2DServer.killPet();
       });

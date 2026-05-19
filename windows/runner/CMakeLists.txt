@@ -11,8 +11,6 @@ add_executable(${BINARY_NAME} WIN32
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"
-  # "live2d_overlay_window.cpp"   # DISABLED: PyQt6 pet mode replaces C++ overlay (2026-05-13)
-  # "live2d_overlay_bridge.cpp"   # DISABLED: PyQt6 pet mode replaces C++ overlay (2026-05-13)
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"
   "runner.exe.manifest"
