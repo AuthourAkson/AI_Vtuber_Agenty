@@ -78,13 +78,31 @@ class Live2DOverlayFfi {
     }
 
     try {
-      // DynamicLibrary.process() looks up symbols in the current process
-      // (main exe + all loaded DLLs) — most reliable for in-process FFI
+      // Strategy 1: DynamicLibrary.process() — symbols in current process
       _lib = DynamicLibrary.process();
-      
-      // Verify symbols exist by trying to look up one function
+      // Verify symbols exist
       _lib!.lookup('CreateOverlay');
-      
+    } catch (_) {
+      _lib = null;
+    }
+
+    if (_lib == null) {
+      try {
+        // Strategy 2: DynamicLibrary.open() — explicit EXE path
+        final exePath = Platform.resolvedExecutable;
+        _lib = DynamicLibrary.open(exePath);
+        _lib!.lookup('CreateOverlay');
+      } catch (_) {
+        _lib = null;
+      }
+    }
+
+    if (_lib == null) {
+      print('Live2DOverlayFfi: Could not find Cubism overlay symbols in process or EXE.');
+      return false;
+    }
+
+    try {
       _createOverlay = _lib!
           .lookupFunction<CreateOverlayNative, CreateOverlayDart>('CreateOverlay');
       _destroyOverlay = _lib!
@@ -111,12 +129,15 @@ class Live2DOverlayFfi {
       return true;
     } catch (e) {
       print('Live2DOverlayFfi: Failed to load native functions: $e');
-      _loaded = true;
+      _lib = null;
       return false;
     }
   }
 
-  bool get isAvailable => load();
+  bool get isAvailable {
+    if (!load()) return false;
+    return _createOverlay != null;
+  }
 
   /// Create a Live2D overlay window.
   /// [url] - The HTTP URL to load (e.g., http://localhost:48888/live2d_web/renderer.html)

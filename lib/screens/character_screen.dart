@@ -14,7 +14,6 @@ import '../app.dart';
 
 class CharacterScreen extends StatefulWidget {
   const CharacterScreen({super.key});
-
   @override
   State<CharacterScreen> createState() => _CharacterScreenState();
 }
@@ -41,17 +40,12 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   void _refreshModels() {
-    setState(() {
-      _models = _modelService.listModels();
-    });
+    setState(() => _models = _modelService.listModels());
   }
 
   void _update(SettingsProvider sp, AppSettings s, {
-    bool? renderModel,
-    bool? use3D,
-    double? live2DXPosition,
-    double? live2DYPosition,
-    double? live2DScale,
+    bool? renderModel, bool? use3D,
+    double? live2DXPosition, double? live2DYPosition, double? live2DScale,
     String? selectedLive2DModel,
   }) {
     sp.saveSettings(AppSettings(
@@ -82,84 +76,48 @@ class _CharacterScreenState extends State<CharacterScreen> {
   Future<void> _uploadLive2DModel() async {
     final result = await FilePicker.pickFiles(
       dialogTitle: 'Select Live2D model file (.model3.json or .model.json)',
-      allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: ['json'],
+      allowMultiple: false, type: FileType.custom, allowedExtensions: ['json'],
     );
-
     if (result == null || result.files.isEmpty) return;
-
     final filePath = result.files.single.path;
     if (filePath == null) return;
-
     final dir = Directory(filePath).parent;
-
     setState(() => _importingModel = dir.path);
-
     try {
       final modelName = dir.path.split(Platform.pathSeparator).last;
       final destPath = await _modelService.importModel(dir.path);
-
       if (destPath != null && mounted) {
         _refreshModels();
         final sp = context.read<SettingsProvider>();
         final modelJson = _modelService.getModelJsonPath(modelName);
         _update(sp, sp.settings, selectedLive2DModel: modelJson);
-
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Model "$modelName" imported'),
-            backgroundColor: const Color(0xFF4CAF50),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No valid Live2D model found in selected folder'),
-            backgroundColor: Colors.red,
-          ),
-        );
+          SnackBar(content: Text('Model "$modelName" imported'),
+            backgroundColor: const Color(0xFF4CAF50)));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Import failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _importingModel = null);
     }
   }
 
   Future<void> _deleteModel(String modelName) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) =>
+      AlertDialog(backgroundColor: const Color(0xFF1E1E1E),
         title: const Text('Delete Model?'),
         content: Text('Delete "$modelName"? This cannot be undone.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ]));
     if (confirm == true) {
       _modelService.deleteModel(modelName);
       _refreshModels();
       final sp = context.read<SettingsProvider>();
-      final currentPath = sp.settings.selectedLive2DModel;
-      if (currentPath != null && currentPath.contains(modelName)) {
+      if ((sp.settings.selectedLive2DModel ?? '').contains(modelName)) {
         _update(sp, sp.settings, selectedLive2DModel: null);
       }
     }
@@ -167,541 +125,224 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<SettingsProvider>(
-      builder: (context, sp, _) {
-        final s = sp.settings;
-        final modelJsonPath = s.selectedLive2DModel;
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Character Settings',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 24),
-
-              SwitchListTile(
-                title: const Text('Show Character'),
-                subtitle: const Text('Display Live2D/VRM character on screen'),
-                value: s.renderModel,
-                onChanged: (v) => _update(sp, s, renderModel: v),
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _modeCard(
-                      'Live2D (2D)',
-                      Icons.person_outline,
-                      !s.use3D,
-                      () => _update(sp, s, use3D: false),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _modeCard(
-                      'VRM (3D)',
-                      Icons.view_in_ar,
-                      s.use3D,
-                      () => _update(sp, s, use3D: true),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              if (!s.use3D) ...[
-                const Text('Live2D Preview',
-                  style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-                const SizedBox(height: 8),
-                Container(
-                  height: 350,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2C2C2C)),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: modelJsonPath != null
-                        ? Live2DView(
-                            modelPath: modelJsonPath,
-                            positionX: s.live2DXPosition,
-                            positionY: s.live2DYPosition,
-                            scale: s.live2DScale,
-                            interactive: false,
-                            onEvent: (event) {
-                              if (event.type == 'modelError') {
-                                debugPrint('Live2D error: ${event.data}');
-                              }
-                            },
-                          )
-                        : const Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.person, size: 64,
-                                  color: Color(0xFF666666)),
-                                SizedBox(height: 12),
-                                Text('No model selected',
-                                  style: TextStyle(color: Color(0xFF666666))),
-                                Text('Upload a Live2D model to preview',
-                                  style: TextStyle(color: Color(0xFF555555),
-                                    fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                const Text('Live2D Position',
-                  style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(child: _sliderSetting('X', s.live2DXPosition, 0, 100,
-                      (v) => _update(sp, s, live2DXPosition: v))),
-                    Expanded(child: _sliderSetting('Y', s.live2DYPosition, 0, 100,
-                      (v) => _update(sp, s, live2DYPosition: v))),
-                    Expanded(child: _sliderSetting('Scale', s.live2DScale, 0.05, 0.5,
-                      (v) => _update(sp, s, live2DScale: v))),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              if (s.use3D) ...[
-                Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF2C2C2C)),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.view_in_ar, size: 64,
-                          color: Color(0xFF666666)),
-                        SizedBox(height: 12),
-                        Text('VRM 3D Preview',
-                          style: TextStyle(color: Color(0xFF666666))),
-                        Text('Coming soon — will use Three.js via WebView',
-                          style: TextStyle(color: Color(0xFF555555),
-                            fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              const Text('Installed Models',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-              const SizedBox(height: 8),
-              if (_models.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF2C2C2C)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Color(0xFF888888), size: 18),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text('No models installed. Upload a Live2D model folder.',
-                          style: TextStyle(color: Color(0xFF888888))),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                ...(_models.map((m) {
-                  final isSelected = modelJsonPath != null &&
-                                     modelJsonPath.contains(m['name']!);
-                  final shad = ShadTheme.of(context);
-                  return Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? shad.muted
-                        : shad.card,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isSelected
-                          ? shad.primary
-                          : shad.border,
-                    ),
-                  ),
-                  child: ListTile(
-                    dense: true,
-                    leading: Icon(Icons.person,
-                      color: shad.primary, size: 20),
-                    title: Text(m['name']!,
-                      style: const TextStyle(fontSize: 13)),
-                    selected: isSelected,
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete_outline,
-                        color: shad.mutedForeground, size: 18),
-                      onPressed: () => _deleteModel(m['name']!),
-                    ),
-                    onTap: () {
-                      _update(sp, s, selectedLive2DModel: m['path']);
-                    },
-                  ),
-                );
-                })),
-              const SizedBox(height: 20),
-
-              const Text('Upload Model',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _importingModel != null ? null : _uploadLive2DModel,
-                    icon: _importingModel != null
-                        ? SizedBox(
-                            width: 14, height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Theme.of(context).colorScheme.primary))
-                        : const Icon(Icons.upload_file, size: 18),
-                    label: Text(_importingModel != null
-                        ? 'Importing...' : 'Upload Live2D'),
-                  ),
-                  const SizedBox(width: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('VRM upload coming in next update'),
-                          backgroundColor: Color(0xFF888888),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.upload_file, size: 18),
-                    label: const Text('Upload VRM'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Select the .model3.json or .model.json file inside your Live2D model folder.',
-                style: TextStyle(color: const Color(0xFF555555), fontSize: 11),
-              ),
-
-              const SizedBox(height: 32),
-              const Divider(color: Color(0xFF2C2C2C)),
-              const SizedBox(height: 16),
-
-              // ─── Transparent Overlay ───
-              const Text('Transparent Overlay',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              const Text(
-                'Open a separate transparent, always-on-top window with your Live2D character. '
-                'Default: click-through (mouse passes through). '
-                'F2 or Ctrl+Shift+F2 to toggle Interactive mode for dragging. '
-                'ESC or Ctrl+Shift+Q to close the overlay.',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: modelJsonPath != null && !Live2DServer.petRunning
-                        ? () => _openPet(modelJsonPath!, s)
-                        : null,
-                    icon: const Icon(Icons.open_in_new, size: 18),
-                    label: Text(Live2DServer.petRunning ? 'Pet Active' : 'Open Pet'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                      side: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  if (Live2DServer.petRunning) ...[
-                    OutlinedButton.icon(
-                      onPressed: _closePet,
-                      icon: const Icon(Icons.close, size: 18),
-                      label: const Text('Close'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.redAccent,
-                        side: const BorderSide(color: Colors.redAccent),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _togglePetClickThrough,
-                      icon: Icon(_clickThrough ? Icons.touch_app : Icons.touch_app_outlined, size: 18),
-                      label: Text(_clickThrough ? 'Click-through ON' : 'Interactive'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).mutedForeground,
-                        side: BorderSide(color: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).border),
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _reloadPetModel,
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Reload Model'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF888888),
-                        side: const BorderSide(color: Color(0xFF444444)),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    return Consumer<SettingsProvider>(builder: (context, sp, _) {
+      final s = sp.settings;
+      final modelJsonPath = s.selectedLive2DModel;
+      return SingleChildScrollView(padding: const EdgeInsets.all(24), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Character Settings',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 24),
+        SwitchListTile(title: const Text('Show Character'),
+          subtitle: const Text('Display Live2D/VRM character on screen'),
+          value: s.renderModel, onChanged: (v) => _update(sp, s, renderModel: v)),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: _modeCard('Live2D (2D)', Icons.person_outline,
+            !s.use3D, () => _update(sp, s, use3D: false))),
+          const SizedBox(width: 12),
+          Expanded(child: _modeCard('VRM (3D)', Icons.view_in_ar,
+            s.use3D, () => _update(sp, s, use3D: true))),
+        ]),
+        const SizedBox(height: 24),
+        if (!s.use3D) ...[
+          const Text('Live2D Preview',
+            style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+          const SizedBox(height: 8),
+          Container(height: 350, decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2C))),
+            child: ClipRRect(borderRadius: BorderRadius.circular(12),
+              child: modelJsonPath != null
+                ? Live2DView(modelPath: modelJsonPath,
+                    positionX: s.live2DXPosition, positionY: s.live2DYPosition,
+                    scale: s.live2DScale, interactive: false,
+                    onEvent: (event) { if (event.type == 'modelError') debugPrint('Live2D error: ${event.data}'); })
+                : const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.person, size: 64, color: Color(0xFF666666)),
+                    SizedBox(height: 12), Text('No model selected', style: TextStyle(color: Color(0xFF666666))),
+                    Text('Upload a Live2D model to preview', style: TextStyle(color: Color(0xFF555555), fontSize: 12))])))),
+          const SizedBox(height: 16),
+          const Text('Live2D Position', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _sliderSetting('X', s.live2DXPosition, 0, 100, (v) => _update(sp, s, live2DXPosition: v))),
+            Expanded(child: _sliderSetting('Y', s.live2DYPosition, 0, 100, (v) => _update(sp, s, live2DYPosition: v))),
+            Expanded(child: _sliderSetting('Scale', s.live2DScale, 0.05, 0.5, (v) => _update(sp, s, live2DScale: v))),
+          ]),
+          const SizedBox(height: 24),
+        ],
+        if (s.use3D) ...[
+          Container(height: 300, decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF2C2C2C))),
+            child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.view_in_ar, size: 64, color: Color(0xFF666666)),
+              SizedBox(height: 12), Text('VRM 3D Preview', style: TextStyle(color: Color(0xFF666666))),
+              Text('Coming soon', style: TextStyle(color: Color(0xFF555555), fontSize: 12))]))),
+          const SizedBox(height: 24),
+        ],
+        const Text('Installed Models', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+        const SizedBox(height: 8),
+        if (_models.isEmpty)
+          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF2C2C2C))),
+            child: const Row(children: [
+              Icon(Icons.info_outline, color: Color(0xFF888888), size: 18), SizedBox(width: 8),
+              Expanded(child: Text('No models installed. Upload a Live2D model folder.',
+                style: TextStyle(color: Color(0xFF888888))))]))
+        else ...(_models.map((m) {
+          final isSelected = modelJsonPath != null && modelJsonPath.contains(m['name']!);
+          final shad = ShadTheme.of(context);
+          return Container(margin: const EdgeInsets.only(bottom: 6), decoration: BoxDecoration(
+            color: isSelected ? shad.muted : shad.card, borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: isSelected ? shad.primary : shad.border)),
+            child: ListTile(dense: true,
+              leading: Icon(Icons.person, color: shad.primary, size: 20),
+              title: Text(m['name']!, style: const TextStyle(fontSize: 13)),
+              selected: isSelected,
+              trailing: IconButton(icon: Icon(Icons.delete_outline, color: shad.mutedForeground, size: 18),
+                onPressed: () => _deleteModel(m['name']!)),
+              onTap: () => _update(sp, s, selectedLive2DModel: m['path'])));})),
+        const SizedBox(height: 20),
+        const Text('Upload Model', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+        const SizedBox(height: 8),
+        Row(children: [
+          OutlinedButton.icon(
+            onPressed: _importingModel != null ? null : _uploadLive2DModel,
+            icon: _importingModel != null
+              ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Theme.of(context).colorScheme.primary))
+              : const Icon(Icons.upload_file, size: 18),
+            label: Text(_importingModel != null ? 'Importing...' : 'Upload Live2D')),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('VRM upload coming in next update'), backgroundColor: Color(0xFF888888)));
+          }, icon: const Icon(Icons.upload_file, size: 18), label: const Text('Upload VRM')),
+        ]),
+        const SizedBox(height: 8),
+        const Text('Select the .model3.json or .model.json file inside your Live2D model folder.',
+          style: TextStyle(color: Color(0xFF555555), fontSize: 11)),
+        const SizedBox(height: 32), const Divider(color: Color(0xFF2C2C2C)), const SizedBox(height: 16),
+        const Text('Transparent Overlay', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        const Text('Open a separate transparent, always-on-top window with your Live2D character. '
+          'Default: click-through. F2 to toggle Interactive mode. ESC to close.',
+          style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          OutlinedButton.icon(
+            onPressed: modelJsonPath != null && !Live2DServer.petRunning
+              ? () => _openPet(modelJsonPath!, s) : null,
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: Text(Live2DServer.petRunning ? 'Pet Active' : 'Open Pet'),
+            style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.primary,
+              side: BorderSide(color: Theme.of(context).colorScheme.primary))),
+          if (Live2DServer.petRunning) ...[
+            OutlinedButton.icon(onPressed: _closePet, icon: const Icon(Icons.close, size: 18),
+              label: const Text('Close'), style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent))),
+            OutlinedButton.icon(onPressed: _togglePetClickThrough,
+              icon: Icon(_clickThrough ? Icons.touch_app : Icons.touch_app_outlined, size: 18),
+              label: Text(_clickThrough ? 'Click-through ON' : 'Interactive'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).mutedForeground,
+                side: BorderSide(color: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).border))),
+            OutlinedButton.icon(onPressed: _reloadPetModel, icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Reload Model'), style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF888888), side: const BorderSide(color: Color(0xFF444444)))),
+          ],
+        ]),
+      ]));
+    });
   }
 
-  // ─── Python Pet Subprocess Management ───
+  // ─── Python Pet (asset-bundled) ───
 
-  /// Extract bundled Python scripts to the profile directory so they work
-  /// from any location (flutter run, built exe, zipped distribution).
   static const _scriptDir = r'D:\AiVtuber_Agent_profile\python_scripts';
-  static const _assetPath = 'assets/python/live2d_pet.py';
 
   static Future<String?> _ensureScript() async {
     final dir = Directory(_scriptDir);
     if (!dir.existsSync()) dir.createSync(recursive: true);
-
     final destFile = File('$_scriptDir\\live2d_pet.py');
-
-    // Write fresh from asset bundle every time (ensures updates apply)
     try {
-      final data = await rootBundle.load(_assetPath);
+      final data = await rootBundle.load('assets/python/live2d_pet.py');
       await destFile.writeAsBytes(data.buffer.asUint8List());
       return destFile.path;
-    } catch (e) {
-      debugPrint('Failed to extract pet script: $e');
-      return null;
-    }
-  }
-
-  Future<Map<String, dynamic>?> _petRequest(String path, {Map<String, dynamic>? body}) async {
-    if (!Live2DServer.petRunning) return null;
-    try {
-      final request = await _httpClient.postUrl(
-        Uri.parse('http://127.0.0.1:$_petPort$path'),
-      );
-      if (body != null) {
-        request.write(jsonEncode(body));
-      }
-      final response = await request.close().timeout(const Duration(seconds: 3));
-      if (response.statusCode == 200) {
-        final data = await response.transform(utf8.decoder).join();
-        return jsonDecode(data) as Map<String, dynamic>;
-      }
-    } catch (e) {
-      debugPrint('Pet HTTP error ($path): $e');
-    }
-    return null;
+    } catch (e) { return null; }
   }
 
   Future<void> _openPet(String modelPath, AppSettings s) async {
     if (Live2DServer.petRunning) return;
-
-    // Extract bundled Python script to profile directory
     final scriptPath = await _ensureScript();
     if (scriptPath == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to extract pet script. Check installation.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to extract pet script.'), backgroundColor: Colors.red));
       return;
     }
-
     final modelUrl = Live2DServer.toModelUrl(modelPath);
-
-    String pythonExe = 'python3';
+    String py = 'python3';
+    try { if ((await Process.run(py, ['--version'])).exitCode != 0) py = 'python'; } catch (_) { py = 'python'; }
     try {
-      final result = await Process.run(pythonExe, ['--version']);
-      if (result.exitCode != 0) pythonExe = 'python';
-    } catch (_) {
-      pythonExe = 'python';
-    }
-
-    try {
-      final process = await Process.start(pythonExe, [
-        scriptPath,
-        '--port', _petPort.toString(),
-        '--model-url', modelUrl,
-        '--scale', s.live2DScale.toString(),
-        '--x', s.live2DXPosition.toString(),
-        '--y', s.live2DYPosition.toString(),
-      ]);
-
+      final process = await Process.start(py, [scriptPath, '--port', _petPort.toString(),
+        '--model-url', modelUrl, '--scale', s.live2DScale.toString(),
+        '--x', s.live2DXPosition.toString(), '--y', s.live2DYPosition.toString()]);
       Live2DServer.setPetProcess(process);
-
-      process.stdout.transform(utf8.decoder).listen((data) {
-        debugPrint('[Pet stdout] $data');
-      });
-      process.stderr.transform(utf8.decoder).listen((data) {
-        debugPrint('[Pet stderr] $data');
-      });
-
+      process.stdout.transform(utf8.decoder).listen((d) => debugPrint('[Pet] $d'));
+      process.stderr.transform(utf8.decoder).listen((d) => debugPrint('[Pet ERR] $d'));
       process.exitCode.then((code) {
-        debugPrint('[Pet] Process exited with code $code');
         Live2DServer.setPetProcess(null);
         if (mounted) setState(() {});
       });
-
       await Future.delayed(const Duration(seconds: 2));
-      final healthOk = await _checkPetHealth();
-      if (healthOk && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Desktop pet opened. Hover top-left corner to drag.'),
-            backgroundColor: Color(0xFF4CAF50),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      } else if (!healthOk && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Pet process started but not responding on port $_petPort. '
-                'Check that PyQt6 + PyQt6-WebEngine are installed.'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+      if (Live2DServer.petRunning && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Desktop pet opened.'), backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 2)));
       }
     } catch (e) {
-      if (mounted) {
-        Live2DServer.setPetProcess(null);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to start desktop pet: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<bool> _checkPetHealth() async {
-    try {
-      final request = await _httpClient.getUrl(
-        Uri.parse('http://127.0.0.1:$_petPort/health'),
-      );
-      final response = await request.close().timeout(const Duration(seconds: 3));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+      Live2DServer.setPetProcess(null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed: $e'), backgroundColor: Colors.red));
     }
   }
 
   void _closePet() {
-    if (Live2DServer.petRunning) {
-      _petRequest('/close');
-      Future.delayed(const Duration(milliseconds: 500), () {
-        Live2DServer.killPet();
-      });
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Desktop pet closed.'),
-          backgroundColor: Color(0xFF888888),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    }
+    if (!Live2DServer.petRunning) return;
+    Live2DServer.killPet();
+    setState(() {});
   }
 
   void _togglePetClickThrough() {
     if (!Live2DServer.petRunning) return;
-    final newState = !_clickThrough;
-    _petRequest('/click_through', body: {'enable': newState});
-    setState(() => _clickThrough = newState);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(newState
-            ? 'Click-through ON — mouse passes through'
-            : 'Interactive mode — drag handle visible to move window'),
-        backgroundColor: newState ? const Color(0xFF4CAF50) : const Color(0xFF888888),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    setState(() => _clickThrough = !_clickThrough);
   }
 
   void _reloadPetModel() {
     if (!Live2DServer.petRunning) return;
+    _closePet();
     final sp = context.read<SettingsProvider>();
-    final s = sp.settings;
-    final modelPath = s.selectedLive2DModel;
-    if (modelPath == null) return;
-    final modelUrl = Live2DServer.toModelUrl(modelPath);
-    _petRequest('/reload_model', body: {
-      'model_url': modelUrl,
-      'scale': s.live2DScale,
-      'x': s.live2DXPosition,
-      'y': s.live2DYPosition,
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Reloading pet model...'),
-        backgroundColor: Color(0xFF888888),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    final path = sp.settings.selectedLive2DModel;
+    if (path != null) _openPet(path, sp.settings);
   }
 
   Widget _modeCard(String title, IconData icon, bool selected, VoidCallback onTap) {
     final shad = ShadTheme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: selected ? shad.muted : shad.card,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? shad.primary : shad.border,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: selected
-                ? shad.primary : shad.mutedForeground),
-            const SizedBox(height: 8),
-            Text(title, style: TextStyle(color: selected
-                ? shad.primary : shad.mutedForeground)),
-          ],
-        ),
-      ),
-    );
+    return GestureDetector(onTap: onTap, child: Container(padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: selected ? shad.muted : shad.card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: selected ? shad.primary : shad.border)),
+      child: Column(children: [
+        Icon(icon, color: selected ? shad.primary : shad.mutedForeground),
+        const SizedBox(height: 8),
+        Text(title, style: TextStyle(color: selected ? shad.primary : shad.mutedForeground))])));
   }
 
-  Widget _sliderSetting(String label, double value, double min, double max,
-      Function(double) onChanged) {
-    return Column(
-      children: [
-        Text('$label: ${value.toStringAsFixed(2)}',
-          style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          onChanged: onChanged,
-        ),
-      ],
-    );
+  Widget _sliderSetting(String label, double value, double min, double max, Function(double) onChanged) {
+    return Column(children: [
+      Text('$label: ${value.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+      Slider(value: value, min: min, max: max, onChanged: onChanged)]);
   }
 }
