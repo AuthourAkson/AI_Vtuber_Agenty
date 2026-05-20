@@ -6,6 +6,7 @@ import '../providers/settings_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/llm_monitor.dart';
+import '../l10n/app_localizations.dart';
 
 /// Chat page — matches LocalAIVtuber2's llmPage.tsx + chatbox.tsx layout.
 class ChatScreen extends StatefulWidget {
@@ -175,7 +176,7 @@ child: Icon(Icons.settings, size: 14, color: ShadTheme.of(context).mutedForegrou
 Widget _buildChatMessages(ChatProvider chat) {
 return chat.messages.isEmpty
 ? Center(
-child: Text('Start a conversation',
+child: Text(AppLocalizations.of(context).chatStartConversation,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground.withAlpha(120), fontSize: 14)))
 : ListView.builder(
 controller: _scrollController,
@@ -297,7 +298,7 @@ border: Border(bottom: BorderSide(color: ShadTheme.of(context).border)),
 ),
 child: Row(
 children: [
-Text('Sessions',
+Text(AppLocalizations.of(context).chatSessions,
 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 Spacer(),
 GestureDetector(
@@ -324,7 +325,7 @@ mainAxisAlignment: MainAxisAlignment.center,
 children: [
 Icon(Icons.add, size: 14, color: ShadTheme.of(context).foreground),
 SizedBox(width: 6),
-Text('New Session', style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+Text(AppLocalizations.of(context).chatNewSession, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
 ],
 ),
 ),
@@ -334,7 +335,7 @@ Text('New Session', style: TextStyle(fontSize: 13, color: ShadTheme.of(context).
 Expanded(
 child: chat.sessions.isEmpty
 ? Center(
-child: Text('Memory Empty',
+child: Text(AppLocalizations.of(context).memoryEmpty,
 style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground.withAlpha(120))))
 : ListView.builder(
 padding: EdgeInsets.symmetric(horizontal: 8),
@@ -439,7 +440,7 @@ border: Border(bottom: BorderSide(color: ShadTheme.of(context).border)),
 ),
 child: Row(
 children: [
-Text('Settings',
+Text(AppLocalizations.of(context).chatSettings,
 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 Spacer(),
 GestureDetector(

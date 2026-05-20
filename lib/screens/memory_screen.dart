@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/chat_provider.dart';
 
 /// Memory page — matches LocalAIVtuber2's SessionList / MemoryPage.
@@ -59,6 +60,7 @@ Widget build(BuildContext context) {
 return Consumer<ChatProvider>(
 builder: (context, chat, _) {
 final sessions = chat.sessions;
+final l10n = AppLocalizations.of(context);
 
 // Filter by search term
 final filtered = sessions.where((s) {
@@ -75,7 +77,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 // Page header — matches LAV2 style
 Text(
-'Chat Sessions',
+l10n.memoryTitle,
 style: TextStyle(
 fontSize: 28,
 fontWeight: FontWeight.bold,
@@ -84,7 +86,7 @@ color: ShadTheme.of(context).foreground,
 ),
 SizedBox(height: 4),
 Text(
-'Manage and review your conversation sessions',
+l10n.memorySubtitle,
 style: TextStyle(
 fontSize: 14,
 color: ShadTheme.of(context).mutedForeground,
@@ -120,7 +122,7 @@ fontSize: 13,
 color: ShadTheme.of(context).foreground,
 ),
 decoration: InputDecoration(
-hintText: 'Search sessions...',
+hintText: l10n.memorySearch,
 hintStyle: TextStyle(
 color: ShadTheme.of(context).mutedForeground,
 fontSize: 13,
@@ -203,7 +205,7 @@ color: ShadTheme.of(context).mutedForeground,
 ),
 SizedBox(height: 12),
 Text(
-'No sessions found',
+l10n.memoryNoResults,
 style: TextStyle(
 fontSize: 16,
 fontWeight: FontWeight.w500,

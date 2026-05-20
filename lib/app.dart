@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/appearance_provider.dart';
 import 'models/appearance_prefs.dart';
 
@@ -333,9 +335,25 @@ class MyApp extends StatelessWidget {
         final bgImagePath = ap.bgImagePath;
         final bgImageEnabled = ap.bgImageEnabled;
 
+        // Resolve locale from language preference
+        final lang = ap.language;
+        final locale = lang == 'zh-CN'
+            ? const Locale('zh', 'CN')
+            : lang == 'zh-TW'
+                ? const Locale('zh', 'TW')
+                : const Locale('en');
+
         return MaterialApp(
           title: 'AI VTuber Agent',
           debugShowCheckedModeBanner: false,
+          locale: locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           theme: _buildTheme(isDark, accent, fontSize, preset),
           home: AppShell(
             accent: accent,

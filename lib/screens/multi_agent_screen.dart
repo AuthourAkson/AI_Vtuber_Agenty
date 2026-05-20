@@ -4,6 +4,7 @@ import '../app.dart';
 import '../providers/multi_agent_provider.dart';
 import '../providers/appearance_provider.dart';
 import '../services/wenzagent_service.dart';
+import '../l10n/app_localizations.dart';
 import 'multi_agent_appearance.dart';
 
 /// Multi-agent network page — matches prompt.md spec:
@@ -907,14 +908,15 @@ style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
 Widget _buildGeneralPanel() {
 return Consumer<AppearanceProvider>(
 builder: (context, ap, _) {
+final l10n = AppLocalizations.of(context);
 return SingleChildScrollView(
 padding: EdgeInsets.all(24),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Text('General Preferences', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+Text(l10n.generalTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 SizedBox(height: 4),
-Text('Behaviour and language settings.', style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+Text(l10n.generalSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
 SizedBox(height: 24),
 
 // ── Auto-open last page ──
@@ -927,8 +929,8 @@ border: Border.all(color: ShadTheme.of(context).border),
 ),
 child: SwitchListTile(
 contentPadding: EdgeInsets.zero,
-title: Text('启动时自动打开上次的页面', style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground)),
-subtitle: Text('Auto-open last page on startup', style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+title: Text(l10n.generalAutoOpen, style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground)),
+subtitle: Text(l10n.generalAutoOpenDesc, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 value: ap.autoOpenLastPage,
 onChanged: (v) => ap.update(ap.prefs.copyWith(autoOpenLastPage: v)),
 activeColor: ShadTheme.of(context).primary,
@@ -951,11 +953,11 @@ Row(
 children: [
 Icon(Icons.translate, size: 20, color: ShadTheme.of(context).primary),
 SizedBox(width: 10),
-Text('语言 / Language', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+Text(l10n.generalLanguage, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 ],
 ),
 SizedBox(height: 4),
-Text('Select the UI display language.', style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+Text(l10n.generalLanguageDesc, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 SizedBox(height: 12),
 DropdownButtonFormField<String>(
 value: ap.language,

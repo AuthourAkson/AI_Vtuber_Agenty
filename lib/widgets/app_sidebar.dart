@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 
 /// Collapsible sidebar matching LocalAIVtuber2's shadcn/ui Sidebar.
 /// - Expanded: 200px wide, icon + text
@@ -46,18 +47,22 @@ static final _icons = {
 'settings': Icons.settings,
 };
 
-static final _titles = {
-'home': 'Home',
-'character': 'Character',
-'memory': 'Memory',
-'agents': 'Multi-Agent',
-'input': 'Input',
-'vision': 'Vision',
-'tts': 'TTS',
-'pipeline': 'Pipeline',
-'stream': 'Stream',
-'settings': 'Settings',
-};
+String _localizedTitle(String key) {
+final l10n = AppLocalizations.of(context);
+switch (key) {
+case 'home': return l10n.sidebarHome;
+case 'character': return l10n.sidebarCharacter;
+case 'memory': return l10n.sidebarMemory;
+case 'agents': return l10n.sidebarAgents;
+case 'input': return l10n.sidebarInput;
+case 'vision': return l10n.sidebarVision;
+case 'tts': return l10n.sidebarTTS;
+case 'pipeline': return l10n.sidebarPipeline;
+case 'stream': return l10n.sidebarStream;
+case 'settings': return l10n.sidebarSettings;
+default: return key;
+}
+}
 
 void _toggle() => setState(() => _expanded = !_expanded);
 
@@ -146,7 +151,7 @@ color: ShadTheme.of(context).sidebarAccentForeground,
 
 Widget _navItem(String key) {
 final isActive = widget.activePage == key;
-final title = _titles[key] ?? key;
+final title = _localizedTitle(key);
 final icon = _icons[key] ?? Icons.circle;
 
 Widget item = GestureDetector(
