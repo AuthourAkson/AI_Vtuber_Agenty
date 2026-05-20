@@ -55,6 +55,10 @@ class BackendService {
     return storage.createSession('Chat Session');
   }
 
+  Future<String> createSessionWithTitle(String title) async {
+    return storage.createSession(title);
+  }
+
   Future<void> updateSession(String id, List<HistoryItem> history) async {
     final existing = storage.getSession(id);
     if (existing != null) {
@@ -74,6 +78,10 @@ class BackendService {
 
   Future<void> deleteSession(String id) async {
     storage.deleteSession(id);
+  }
+
+  Future<void> renameSession(String id, String newTitle) async {
+    storage.renameSession(id, newTitle);
   }
 
   // ─── TTS ───

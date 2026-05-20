@@ -206,14 +206,80 @@ ChatBubble(item: item),
 // Session Panel (left)
 // ═══════════════════════════════════════════════════════════════
 
-class _SessionPanel extends StatelessWidget {
+class _SessionPanel extends StatefulWidget {
 final ChatProvider chat;
 final VoidCallback onClose;
 
 _SessionPanel({required this.chat, required this.onClose});
 
 @override
+State<_SessionPanel> createState() => _SessionPanelState();
+}
+
+class _SessionPanelState extends State<_SessionPanel> {
+String? _renamingId;
+final _renameCtrl = TextEditingController();
+
+@override
+void dispose() {
+_renameCtrl.dispose();
+super.dispose();
+}
+
+void _startRename(String id, String currentTitle) {
+setState(() {
+_renamingId = id;
+_renameCtrl.text = currentTitle;
+});
+}
+
+void _commitRename(String id) async {
+final newTitle = _renameCtrl.text.trim();
+setState(() => _renamingId = null);
+if (newTitle.isNotEmpty && newTitle != 'Chat Session') {
+await widget.chat.renameSession(id, newTitle);
+}
+}
+
+void _cancelRename() {
+setState(() => _renamingId = null);
+}
+
+Future<void> _newSessionWithTitle() async {
+final ctrl = TextEditingController(text: '');
+final title = await showDialog<String>(
+context: context,
+builder: (ctx) => AlertDialog(
+title: Text('New Session'),
+content: TextField(
+controller: ctrl,
+autofocus: true,
+decoration: InputDecoration(
+hintText: 'Session name',
+filled: true,
+fillColor: ShadTheme.of(ctx).secondary,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+),
+onSubmitted: (v) => Navigator.pop(ctx, v.trim().isNotEmpty ? v.trim() : 'Chat Session'),
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+TextButton(
+onPressed: () => Navigator.pop(ctx, ctrl.text.trim().isNotEmpty ? ctrl.text.trim() : 'Chat Session'),
+child: Text('Create')),
+],
+),
+);
+ctrl.dispose();
+if (title != null) {
+await widget.chat.createNewSession(title: title);
+}
+}
+
+@override
 Widget build(BuildContext context) {
+final chat = widget.chat;
+
 return AnimatedContainer(
 duration: Duration(milliseconds: 250),
 curve: Curves.easeInOut,
@@ -235,17 +301,17 @@ Text('Sessions',
 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 Spacer(),
 GestureDetector(
-onTap: onClose,
+onTap: widget.onClose,
 child: Icon(Icons.close, size: 16, color: ShadTheme.of(context).mutedForeground),
 ),
 ],
 ),
 ),
-// New Session button
+// New Session button — shows rename dialog
 Padding(
 padding: EdgeInsets.all(12),
 child: GestureDetector(
-onTap: chat.isStreaming ? null : () => chat.createNewSession(),
+onTap: chat.isStreaming ? null : _newSessionWithTitle,
 child: Container(
 width: double.infinity,
 padding: EdgeInsets.symmetric(vertical: 8),
@@ -278,8 +344,32 @@ final s = chat.sessions[i];
 final id = s['id'] as String? ?? '';
 final title = (s['title'] as String?) ?? 'Untitled';
 final active = id == chat.activeSessionId;
+final isRenaming = _renamingId == id;
+
+if (isRenaming) {
+return Container(
+padding: EdgeInsets.symmetric(horizontal: 4),
+margin: EdgeInsets.only(bottom: 2),
+child: TextField(
+controller: _renameCtrl,
+autofocus: true,
+style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+decoration: InputDecoration(
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+isDense: true,
+filled: true,
+fillColor: ShadTheme.of(context).secondary,
+),
+onSubmitted: (_) => _commitRename(id),
+onEditingComplete: () => _commitRename(id),
+),
+);
+}
+
 return GestureDetector(
 onTap: () => chat.loadSession(id),
+onLongPress: () => _startRename(id, title),
 child: Container(
 padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
 margin: EdgeInsets.only(bottom: 2),
@@ -287,11 +377,21 @@ decoration: BoxDecoration(
 color: active ? ShadTheme.of(context).secondary : null,
 borderRadius: BorderRadius.circular(4),
 ),
+child: Row(
+children: [
+Expanded(
 child: Text(title,
 style: TextStyle(
 fontSize: 13,
 color: active ? ShadTheme.of(context).foreground : ShadTheme.of(context).mutedForeground),
 overflow: TextOverflow.ellipsis),
+),
+GestureDetector(
+onTap: () => _startRename(id, title),
+child: Icon(Icons.edit, size: 12, color: ShadTheme.of(context).mutedForeground.withAlpha(120)),
+),
+],
+),
 ),
 );
 },

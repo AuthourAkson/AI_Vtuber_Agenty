@@ -13,9 +13,12 @@ class SessionManager {
   /// Return cached session list (updated after listSessions() calls)
   List<Map<String, dynamic>> getSessionsCache() => _sessionsCache;
 
-  Future<String?> createNewSession() async {
+  Future<String?> createNewSession({String? title}) async {
     try {
-      final id = await _backend.createSession();
+      final t = (title != null && title.trim().isNotEmpty) ? title.trim() : 'Chat Session';
+      final id = t != 'Chat Session'
+          ? await _backend.createSessionWithTitle(t)
+          : await _backend.createSession();
       if (id != null) await _refreshCache();
       return id;
     } catch (e) {
@@ -63,4 +66,9 @@ class SessionManager {
 
   /// Load initial session list into cache (call on screen init)
   Future<void> loadSessions() => _refreshCache();
+
+  Future<void> renameSession(String id, String newTitle) async {
+    await _backend.renameSession(id, newTitle);
+    await _refreshCache();
+  }
 }

@@ -17,6 +17,8 @@ class _MemoryScreenState extends State<MemoryScreen> {
 final _searchCtrl = TextEditingController();
 String _searchTerm = '';
 bool _loading = false;
+String? _renamingId;
+final _renameCtrl = TextEditingController();
 
 @override
 void initState() {
@@ -33,7 +35,23 @@ if (mounted) setState(() {});
 @override
 void dispose() {
 _searchCtrl.dispose();
+_renameCtrl.dispose();
 super.dispose();
+}
+
+void _startRename(String id, String currentTitle) {
+setState(() {
+_renamingId = id;
+_renameCtrl.text = currentTitle;
+});
+}
+
+void _commitRename(ChatProvider chat, String id) async {
+final newTitle = _renameCtrl.text.trim();
+setState(() => _renamingId = null);
+if (newTitle.isNotEmpty) {
+await chat.renameSession(id, newTitle);
+}
 }
 
 @override
@@ -215,6 +233,10 @@ id: id,
 title: title,
 createdAt: createdAt,
 chat: chat,
+isRenaming: _renamingId == id,
+renameCtrl: _renamingId == id ? _renameCtrl : null,
+onStartRename: () => _startRename(id, title),
+onCommitRename: () => _commitRename(chat, id),
 );
 }),
 ],
@@ -230,6 +252,10 @@ required String id,
 required String title,
 required String createdAt,
 required ChatProvider chat,
+required bool isRenaming,
+TextEditingController? renameCtrl,
+required VoidCallback onStartRename,
+required VoidCallback onCommitRename,
 }) {
 return Container(
 margin: EdgeInsets.only(bottom: 12),
@@ -246,14 +272,34 @@ offset: Offset(0, 1),
 ),
 ],
 ),
-child: Row(
-children: [
-// Session info
-Expanded(
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Text(
+if (isRenaming)
+Padding(
+padding: EdgeInsets.only(bottom: 8),
+child: TextField(
+controller: renameCtrl,
+autofocus: true,
+style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground),
+decoration: InputDecoration(
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+isDense: true,
+filled: true,
+fillColor: ShadTheme.of(context).secondary,
+),
+onSubmitted: (_) => onCommitRename(),
+onEditingComplete: () => onCommitRename(),
+),
+)
+else
+Row(
+children: [
+Expanded(
+child: GestureDetector(
+onLongPress: onStartRename,
+child: Text(
 title,
 style: TextStyle(
 fontSize: 16,
@@ -261,7 +307,15 @@ fontWeight: FontWeight.w600,
 color: ShadTheme.of(context).foreground,
 ),
 ),
-if (createdAt.isNotEmpty) ...[
+),
+),
+GestureDetector(
+onTap: onStartRename,
+child: Icon(Icons.edit, size: 14, color: ShadTheme.of(context).mutedForeground.withAlpha(100)),
+),
+],
+),
+if (createdAt.isNotEmpty && !isRenaming) ...[
 SizedBox(height: 4),
 Text(
 'Created: $createdAt',
@@ -271,9 +325,7 @@ color: ShadTheme.of(context).mutedForeground,
 ),
 ),
 ],
-],
-),
-),
+SizedBox(height: isRenaming ? 4 : 8),
 // Actions
 Row(
 mainAxisSize: MainAxisSize.min,

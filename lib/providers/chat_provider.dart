@@ -40,7 +40,16 @@ class ChatProvider extends ChangeNotifier {
   String? get activeSessionId => _sessionId;
   String get activeSessionTitle {
     if (_sessionId == null) return 'New Session';
-    // Use first user message as title, or fallback
+    // Use stored title from session cache
+    final cached = sessionManager.getSessionsCache();
+    for (final s in cached) {
+      if (s['id'] == _sessionId) {
+        final t = s['title'] as String?;
+        if (t != null && t.isNotEmpty && t != 'Chat Session') return t;
+        break;
+      }
+    }
+    // Fallback: first user message, or session ID prefix
     final firstMsg = _messages.isNotEmpty ? _messages.first : null;
     if (firstMsg != null && firstMsg.role == 'user') {
       final truncated = firstMsg.content.length > 30
@@ -73,8 +82,8 @@ class ChatProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get sessions => sessionManager.getSessionsCache();
 
   /// Create a new session and switch to it
-  Future<void> createNewSession() async {
-    final id = await sessionManager.createNewSession();
+  Future<void> createNewSession({String? title}) async {
+    final id = await sessionManager.createNewSession(title: title);
     if (id != null) {
       _sessionId = id;
       _messages.clear();
@@ -83,6 +92,12 @@ class ChatProvider extends ChangeNotifier {
       await prefs.setString('last_session_id', id);
       notifyListeners();
     }
+  }
+
+  /// Rename a session
+  Future<void> renameSession(String id, String newTitle) async {
+    await sessionManager.renameSession(id, newTitle);
+    notifyListeners();
   }
 
   /// Load session by ID

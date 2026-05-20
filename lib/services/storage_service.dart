@@ -78,6 +78,14 @@ class StorageService {
     if (file.existsSync()) file.deleteSync();
   }
 
+  void renameSession(String id, String newTitle) {
+    final session = getSession(id);
+    if (session != null) {
+      session['title'] = newTitle;
+      _writeSession(id, session);
+    }
+  }
+
   List<Map<String, dynamic>> listSessions() {
     final dir = Directory(sessionsPath);
     if (!dir.existsSync()) return [];
