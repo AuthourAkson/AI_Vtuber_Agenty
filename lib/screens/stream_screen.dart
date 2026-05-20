@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 
 class StreamScreen extends StatefulWidget {
   const StreamScreen({super.key});
@@ -24,7 +25,7 @@ class _StreamScreenState extends State<StreamScreen> {
           const SizedBox(height: 8),
           TextField(
             decoration: InputDecoration(
-              hintText: 'Enter YouTube live stream ID or URL',
+              hintText: AppLocalizations.of(context).streamIdHint,
               border: OutlineInputBorder(),
               filled: true,
               fillColor: ShadTheme.of(context).secondary,

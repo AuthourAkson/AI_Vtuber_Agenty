@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../models/appearance_prefs.dart';
 import '../providers/appearance_provider.dart';
 
@@ -120,7 +121,7 @@ children: [
 Icon(Icons.dark_mode, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Dark Mode', 'Switch between dark and light theme'),
+child: _sectionLabel(context, 'Dark Mode', AppLocalizations.of(context).appearanceDarkModeDesc),
 ),
 Switch(
 value: ap.isDark,
@@ -179,7 +180,7 @@ Center(
 child: Padding(
 padding: EdgeInsets.only(top: 8),
 child: Text(
-'The quick brown fox jumps over the lazy dog.',
+AppLocalizations.of(context).appearancePreview,
 style: TextStyle(fontSize: ap.fontSize, color: ShadTheme.of(context).foreground),
 ),
 ),
@@ -262,7 +263,7 @@ if (ap.themeColorEnabled) ...[
 if (!ap.themeColorEnabled)
   Padding(
     padding: EdgeInsets.only(top: 12),
-    child: Text('Theme color disabled — using default Blue',
+    child: Text(AppLocalizations.of(context).appearanceThemeDisabled,
         style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
   ),
 ],
@@ -342,7 +343,7 @@ Icon(Icons.image, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
 child: _sectionLabel(context, 'Background Image',
-    enabled && hasImage ? ap.bgImagePath!.split(Platform.pathSeparator).last : 'Set a custom background image'),
+    enabled && hasImage ? ap.bgImagePath!.split(Platform.pathSeparator).last : AppLocalizations.of(context).appearanceBgImageDesc),
 ),
 Switch(
 value: enabled,
@@ -484,7 +485,7 @@ children: [
 Icon(Icons.restore, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Default', 'Restore all appearance settings to factory defaults'),
+child: _sectionLabel(context, 'Default', AppLocalizations.of(context).appearanceResetDesc),
 ),
 OutlinedButton.icon(
 onPressed: () => _confirmReset(ap, context),
@@ -508,7 +509,7 @@ builder: (dCtx) => AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
 title: Text('Reset to Default', style: TextStyle(color: ShadTheme.of(context).foreground)),
 content: Text(
-'This will restore all appearance settings to their factory defaults.',
+AppLocalizations.of(context).appearanceResetConfirm,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground),
 ),
 actions: [

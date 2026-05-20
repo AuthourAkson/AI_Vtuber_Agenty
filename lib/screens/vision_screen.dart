@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/chat_provider.dart';
 
 class VisionScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _VisionScreenState extends State<VisionScreen> {
               TextField(
                 maxLines: 3,
                 decoration: InputDecoration(
-                  hintText: 'Describe the screen for the AI...',
+                  hintText: AppLocalizations.of(context).visionPromptHint,
                   border: OutlineInputBorder(),
                   filled: true,
                   fillColor: ShadTheme.of(context).secondary,
@@ -46,7 +47,7 @@ class _VisionScreenState extends State<VisionScreen> {
               TextField(
                 maxLines: 3,
                 decoration: InputDecoration(
-                  hintText: 'OCR text context for the AI...',
+                  hintText: AppLocalizations.of(context).visionOcrHint,
                   border: OutlineInputBorder(),
                   filled: true,
                   fillColor: ShadTheme.of(context).secondary,

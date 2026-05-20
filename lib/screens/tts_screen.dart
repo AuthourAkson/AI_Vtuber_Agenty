@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
@@ -48,7 +49,7 @@ color: ShadTheme.of(context).foreground,
 ),
 SizedBox(height: 6),
 Text(
-'Configure text-to-speech engine and voice settings',
+AppLocalizations.of(context).ttsSubtitle,
 style: TextStyle(
 fontSize: 14,
 color: ShadTheme.of(context).mutedForeground,

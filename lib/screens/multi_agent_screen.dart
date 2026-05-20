@@ -203,7 +203,7 @@ return Center(
 child: Padding(
 padding: EdgeInsets.all(24),
 child: Text(
-'No agents found.\nStart a wenzagent server to see agents here.',
+AppLocalizations.of(context).waNoAgents,
 textAlign: TextAlign.center,
 style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground),
 ),
@@ -345,7 +345,7 @@ SizedBox(height: 12),
 Text('No employees yet',
 style: TextStyle(fontSize: 14, color: ShadTheme.of(context).mutedForeground)),
 SizedBox(height: 4),
-Text('Create an AI employee to get started',
+Text(AppLocalizations.of(context).waEmptyHint,
 style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 ],
 ),
@@ -436,7 +436,7 @@ context: context,
 builder: (ctx) => AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
 title: Text('Delete Employee', style: TextStyle(color: ShadTheme.of(context).foreground)),
-content: Text('Delete "${emp.name}"? This cannot be undone.',
+content: Text(AppLocalizations.of(context).waDeleteConfirm,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
 actions: [
 TextButton(
@@ -521,7 +521,7 @@ controller: descCtrl,
 maxLines: 3,
 decoration: InputDecoration(
 labelText: 'Description',
-hintText: 'Describe what this agent does...',
+hintText: AppLocalizations.of(context).waDescHint,
 filled: true, fillColor: ShadTheme.of(context).secondary,
 border: OutlineInputBorder(),
 ),
@@ -701,7 +701,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Text('AI Provider Profiles', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 SizedBox(height: 4),
-Text('Create named profiles with base URL, API key, and model. Select a profile when starting an agent chat.',
+Text(AppLocalizations.of(context).aiSubtitle,
 style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
 ],
 ),
@@ -1051,7 +1051,7 @@ Icon(Icons.info_outline, size: 14, color: ShadTheme.of(context).mutedForeground)
 SizedBox(width: 6),
 Expanded(
 child: Text(
-'Run wenzagent_server.exe on this machine first,\nthen click Start to connect.',
+AppLocalizations.of(context).waServerHint,
 style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground),
 ),
 ),
@@ -1149,7 +1149,7 @@ SizedBox(height: 16),
 Text('Select a conversation to start chatting',
 style: TextStyle(fontSize: 15, color: ShadTheme.of(context).mutedForeground)),
 SizedBox(height: 6),
-Text('Messages are routed through the WenzAgent LAN network',
+Text(AppLocalizations.of(context).waEmptySub,
 style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 ],
 ),
@@ -1384,7 +1384,7 @@ showDialog(
 context: context,
 builder: (ctx) => AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
-title: Text('Select Profile for "${agent.name}"', style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 15)),
+title: Text(AppLocalizations.of(context).waSelectProfile, style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 15)),
 content: SizedBox(
 width: 350,
 child: ListView.builder(

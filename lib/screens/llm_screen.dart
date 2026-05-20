@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
@@ -62,7 +63,7 @@ class _LLMScreenState extends State<LLMScreen> {
                 maxLines: 10,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
-                  hintText: 'Enter the character system prompt...',
+                  hintText: AppLocalizations.of(context).llmPromptHint,
                   border: OutlineInputBorder(),
                   filled: true,
                   fillColor: ShadTheme.of(context).secondary,
@@ -72,20 +73,20 @@ class _LLMScreenState extends State<LLMScreen> {
 
               // Switches
               SwitchListTile(
-                title: const Text('Enable Memory Retrieval'),
-                subtitle: const Text('Use vector memory for context'),
+                title: Text('Enable Memory Retrieval'),
+                subtitle: Text(AppLocalizations.of(context).llmEnableMemoryDesc),
                 value: s.enableMemoryRetrieval,
                 onChanged: (v) => _saveSwitch(sp, s, memoryRetrieval: v),
               ),
               SwitchListTile(
                 title: const Text('Keep Model Loaded'),
-                subtitle: const Text('Keep LLM in VRAM for faster responses'),
+                subtitle: Text(AppLocalizations.of(context).llmKeepLoadedDesc),
                 value: s.keepModelLoaded,
                 onChanged: (v) => _saveSwitch(sp, s, keepLoaded: v),
               ),
               SwitchListTile(
                 title: const Text('API Relay Mode'),
-                subtitle: const Text('Use remote API instead of local LLM'),
+                subtitle: Text(AppLocalizations.of(context).llmApiRelayDesc),
                 value: s.apiRelayEnabled,
                 onChanged: (v) => _saveSwitch(sp, s, relayEnabled: v),
               ),

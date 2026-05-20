@@ -11,6 +11,7 @@ import '../services/live2d_model_service.dart';
 import '../services/live2d_server.dart';
 import '../widgets/live2d_view.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 
 class CharacterScreen extends StatefulWidget {
   const CharacterScreen({super.key});
@@ -92,7 +93,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
         final modelJson = _modelService.getModelJsonPath(modelName);
         _update(sp, sp.settings, selectedLive2DModel: modelJson);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Model "$modelName" imported'),
+          SnackBar(content: Text(AppLocalizations.of(context).charModelImported),
             backgroundColor: const Color(0xFF4CAF50)));
       }
     } catch (e) {
@@ -106,8 +107,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
   Future<void> _deleteModel(String modelName) async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) =>
       AlertDialog(backgroundColor: ShadTheme.of(context).card,
-        title: const Text('Delete Model?'),
-        content: Text('Delete "$modelName"? This cannot be undone.'),
+        title: Text('Delete Model?'),
+        content: Text(AppLocalizations.of(context).charDeleteConfirm),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(ctx, true),
@@ -134,7 +135,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
         const SizedBox(height: 24),
         SwitchListTile(title: const Text('Show Character'),
-          subtitle: const Text('Display Live2D/VRM character on screen'),
+          subtitle: Text(AppLocalizations.of(context).charShowCharacterDesc),
           value: s.renderModel, onChanged: (v) => _update(sp, s, renderModel: v)),
         const SizedBox(height: 16),
         Row(children: [
@@ -161,7 +162,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.person, size: 64, color: ShadTheme.of(context).mutedForeground),
                     SizedBox(height: 12), Text('No model selected', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
-                    Text('Upload a Live2D model to preview', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12))])))),
+                    Text(AppLocalizations.of(context).charUploadHint, style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12))])))),
           const SizedBox(height: 16),
           Text('Live2D Position', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
           const SizedBox(height: 8),
@@ -190,7 +191,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
             border: Border.all(color: ShadTheme.of(context).border)),
             child: Row(children: [
               Icon(Icons.info_outline, color: ShadTheme.of(context).mutedForeground, size: 18), SizedBox(width: 8),
-              Expanded(child: Text('No models installed. Upload a Live2D model folder.',
+              Expanded(child: Text(AppLocalizations.of(context).charNoModels,
                 style: TextStyle(color: ShadTheme.of(context).mutedForeground)))]))
         else ...(_models.map((m) {
           final isSelected = modelJsonPath != null && modelJsonPath.contains(m['name']!);
@@ -219,11 +220,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
           const SizedBox(width: 12),
           OutlinedButton.icon(onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('VRM upload coming in next update'), backgroundColor: ShadTheme.of(context).mutedForeground));
+              content: Text(AppLocalizations.of(context).charVRMComingToast), backgroundColor: ShadTheme.of(context).mutedForeground));
           }, icon: const Icon(Icons.upload_file, size: 18), label: const Text('Upload VRM')),
         ]),
         const SizedBox(height: 8),
-        Text('Select the .model3.json or .model.json file inside your Live2D model folder.',
+        Text(AppLocalizations.of(context).charUploadGuide,
           style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 11)),
         SizedBox(height: 32), Divider(color: ShadTheme.of(context).border), const SizedBox(height: 16),
         const Text('Transparent Overlay', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
@@ -278,8 +279,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
     if (Live2DServer.petRunning) return;
     final scriptPath = await _ensureScript();
     if (scriptPath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Failed to extract pet script.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context).charPetFailed), backgroundColor: Colors.red));
       return;
     }
     final modelUrl = Live2DServer.toModelUrl(modelPath);

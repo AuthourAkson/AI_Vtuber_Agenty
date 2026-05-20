@@ -214,7 +214,7 @@ color: ShadTheme.of(context).foreground,
 ),
 SizedBox(height: 4),
 Text(
-'Try adjusting your search criteria',
+AppLocalizations.of(context).memoryNoResultsHint,
 style: TextStyle(
 fontSize: 13,
 color: ShadTheme.of(context).mutedForeground,

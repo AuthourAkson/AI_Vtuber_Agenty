@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/settings_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/multi_agent_provider.dart';
@@ -57,7 +58,7 @@ Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
 SizedBox(height: 24),
 
 // ─── WenzAgent Multi-Agent LAN ──────────────────
-_sectionHeader('WenzAgent Multi-Agent Network'),
+_sectionHeader(AppLocalizations.of(context).waTitle),
 SizedBox(height: 8),
 _buildLanConfig(sp, wa),
 
@@ -83,7 +84,7 @@ Row(
 children: [
 Icon(Icons.check_circle, color: ShadTheme.of(context).primary, size: 16),
 SizedBox(width: 6),
-Text('Self-contained — no external backend needed',
+Text(AppLocalizations.of(context).settingsSelfContained,
 style: TextStyle(color: ShadTheme.of(context).primary, fontSize: 13)),
 ],
 ),
@@ -104,7 +105,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Text('AI VTuber Agent', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
 SizedBox(height: 4),
-Text('v1.0.0 — Flutter Desktop App',
+Text(AppLocalizations.of(context).appSubtitle,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 13)),
 SizedBox(height: 12),
 Text('Features:',
@@ -118,9 +119,9 @@ Text('• Local keyword-based memory'),
 Text('• Session history management'),
 Text('• WenzAgent multi-agent LAN networking'),
 SizedBox(height: 12),
-Text('Backend: Self-contained Dart services',
+Text(AppLocalizations.of(context).appBackend,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12)),
-Text('UI Framework: Flutter 3.x + Provider',
+Text(AppLocalizations.of(context).appFramework,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12)),
 ],
 ),
@@ -182,7 +183,7 @@ SwitchListTile(
 contentPadding: EdgeInsets.zero,
 title: Text('Enable multi-agent LAN', style: TextStyle(fontSize: 14)),
 subtitle: Text(
-'Connect to a WenzAgent LAN server for multi-device AI collaboration',
+AppLocalizations.of(context).waEnableDesc,
 style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground),
 ),
 value: sp.settings.wenzagentEnabled,
