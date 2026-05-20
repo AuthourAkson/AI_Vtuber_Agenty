@@ -32,7 +32,7 @@ padding: EdgeInsets.all(24),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-_sectionHeader(context, 'Appearance', Icons.palette_outlined, accent),
+_sectionHeader(context, AppLocalizations.of(context).appearanceTitle, Icons.palette_outlined, accent),
 SizedBox(height: 24),
 
 // 1. Dark Mode
@@ -121,7 +121,7 @@ children: [
 Icon(Icons.dark_mode, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Dark Mode', AppLocalizations.of(context).appearanceDarkModeDesc),
+child: _sectionLabel(context, AppLocalizations.of(context).appearanceDarkMode, AppLocalizations.of(context).appearanceDarkModeDesc),
 ),
 Switch(
 value: ap.isDark,
@@ -147,7 +147,7 @@ children: [
 Icon(Icons.format_size, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Font Size', 'Adjust text size across the app'),
+child: _sectionLabel(context, AppLocalizations.of(context).appearanceFontSize, AppLocalizations.of(context).appearanceFontSizeDesc),
 ),
 Container(
 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -205,7 +205,7 @@ children: [
 Icon(Icons.color_lens, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
     Expanded(
-      child: _sectionLabel(context, 'Theme Color', 'Choose a complete UI theme preset'),
+      child: _sectionLabel(context, AppLocalizations.of(context).appearanceThemeColor, AppLocalizations.of(context).appearanceThemeColorDesc),
     ),
     Switch(
       value: ap.themeColorEnabled,
@@ -275,6 +275,27 @@ if (!ap.themeColorEnabled)
 // 4. Background Pattern
 // ═══════════════════════════════════════════════════════
 
+
+String _patternLabel(BuildContext context, int index) {
+    final l10n = AppLocalizations.of(context);
+    switch (index) {
+      case 0: return l10n.patternNone;
+      case 1: return l10n.patternDots;
+      case 2: return l10n.patternGrid;
+      case 3: return l10n.patternDiagonal;
+      case 4: return l10n.patternLines;
+      case 5: return l10n.patternCross;
+      case 6: return l10n.patternZigzag;
+      case 7: return l10n.patternWaves;
+      case 8: return l10n.patternHexagon;
+      case 9: return l10n.patternCircles;
+      case 10: return l10n.patternTriangles;
+      case 11: return l10n.patternDiamonds;
+      case 12: return l10n.patternChess;
+      default: return '';
+    }
+  }
+
 Widget _buildBgPattern(BuildContext context, AppearanceProvider ap, Color accent) {
 final patterns = AppearancePrefs.bgPatterns;
 return _settingCard(context,
@@ -286,8 +307,8 @@ children: [
 Icon(Icons.texture, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Background Pattern',
-ap.bgPatternIndex == 0 ? 'No pattern' : patterns[ap.bgPatternIndex].label),
+child: _sectionLabel(context, AppLocalizations.of(context).appearanceBgPattern,
+ap.bgPatternIndex == 0 ? AppLocalizations.of(context).appearanceNoPattern : _patternLabel(context, ap.bgPatternIndex)),
 ),
 ],
 ),
@@ -300,7 +321,7 @@ final selected = ap.bgPatternIndex == i;
 return GestureDetector(
 onTap: () => ap.update(ap.prefs.copyWith(bgPatternIndex: i)),
 child: Tooltip(
-message: patterns[i].label,
+message: _patternLabel(context, i),
 child: AnimatedContainer(
 duration: Duration(milliseconds: 200),
 width: 64, height: 56,
@@ -342,7 +363,7 @@ children: [
 Icon(Icons.image, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Background Image',
+child: _sectionLabel(context, AppLocalizations.of(context).appearanceBgImage,
     enabled && hasImage ? ap.bgImagePath!.split(Platform.pathSeparator).last : AppLocalizations.of(context).appearanceBgImageDesc),
 ),
 Switch(
@@ -395,7 +416,7 @@ width: double.infinity,
 child: OutlinedButton.icon(
 onPressed: () => _pickBgImage(ap),
 icon: Icon(Icons.folder_open, size: 18),
-label: Text(hasImage ? 'Change Image' : 'Choose Image'),
+label: Text(hasImage ? AppLocalizations.of(context).appearanceChangeImage : AppLocalizations.of(context).appearanceChooseImage),
 style: OutlinedButton.styleFrom(
 foregroundColor: ShadTheme.of(context).foreground,
 side: BorderSide(color: ShadTheme.of(context).border),
@@ -434,8 +455,8 @@ children: [
 Icon(Icons.animation, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Startup Animation',
-'Smooth transition when launching the app'),
+child: _sectionLabel(context, AppLocalizations.of(context).appearanceStartupAnim,
+AppLocalizations.of(context).appearanceStartupAnimDesc),
 ),
 Switch(
 value: ap.startupAnimEnabled,
@@ -460,8 +481,8 @@ SizedBox(width: 8),
 Expanded(
 child: Text(
 ap.startupAnimEnabled
-? 'Startup animation will play when launching the app.'
-: 'This feature is not yet implemented. Enable it now to auto-activate when available.',
+? AppLocalizations.of(context).appearanceStartupInfo
+: AppLocalizations.of(context).appearanceStartupComing,
 style: TextStyle(fontSize: 12,
 color: ap.startupAnimEnabled ? ShadTheme.of(context).mutedForeground : Color(0xFFF59E0B)),
 ),
@@ -485,7 +506,7 @@ children: [
 Icon(Icons.restore, size: 22, color: ShadTheme.of(context).foreground),
 SizedBox(width: 12),
 Expanded(
-child: _sectionLabel(context, 'Default', AppLocalizations.of(context).appearanceResetDesc),
+child: _sectionLabel(context, AppLocalizations.of(context).appearanceDefault, AppLocalizations.of(context).appearanceResetDesc),
 ),
 OutlinedButton.icon(
 onPressed: () => _confirmReset(ap, context),
@@ -507,7 +528,7 @@ showDialog(
 context: context,
 builder: (dCtx) => AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
-title: Text('Reset to Default', style: TextStyle(color: ShadTheme.of(context).foreground)),
+title: Text(AppLocalizations.of(context).appearanceReset, style: TextStyle(color: ShadTheme.of(context).foreground)),
 content: Text(
 AppLocalizations.of(context).appearanceResetConfirm,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground),
@@ -515,14 +536,14 @@ style: TextStyle(color: ShadTheme.of(context).mutedForeground),
 actions: [
 TextButton(
 onPressed: () => Navigator.pop(dCtx),
-child: Text('Cancel', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
 ),
 TextButton(
 onPressed: () {
 ap.resetToDefaults();
 Navigator.pop(dCtx);
 },
-child: Text('Reset All', style: TextStyle(color: ShadTheme.of(context).destructive)),
+child: Text(AppLocalizations.of(context).resetAll, style: TextStyle(color: ShadTheme.of(context).destructive)),
 ),
 ],
 ),

@@ -82,6 +82,25 @@ class AppLocalizations {
   String get appearanceUploadImage => _t('appearanceUploadImage');
   String get appearanceClearImage => _t('appearanceClearImage');
   String get appearancePreview => _t('appearancePreview');
+  String get appearanceNoPattern => _t('appearanceNoPattern');
+  String get appearanceChangeImage => _t('appearanceChangeImage');
+  String get appearanceChooseImage => _t('appearanceChooseImage');
+  String get appearanceStartupInfo => _t('appearanceStartupInfo');
+  String get appearanceStartupComing => _t('appearanceStartupComing');
+  String get appearanceDefault => _t('appearanceDefault');
+  String get patternNone => _t('patternNone');
+  String get patternDots => _t('patternDots');
+  String get patternGrid => _t('patternGrid');
+  String get patternDiagonal => _t('patternDiagonal');
+  String get patternLines => _t('patternLines');
+  String get patternCross => _t('patternCross');
+  String get patternZigzag => _t('patternZigzag');
+  String get patternWaves => _t('patternWaves');
+  String get patternHexagon => _t('patternHexagon');
+  String get patternCircles => _t('patternCircles');
+  String get patternTriangles => _t('patternTriangles');
+  String get patternDiamonds => _t('patternDiamonds');
+  String get patternChess => _t('patternChess');
   String get llmTitle => _t('llmTitle');
   String get llmSystemPrompt => _t('llmSystemPrompt');
   String get llmPromptHint => _t('llmPromptHint');
@@ -307,6 +326,25 @@ class AppLocalizations {
     'appearanceUploadImage':    {'en': 'Upload Image',             'zh': '上传图片'},
     'appearanceClearImage':     {'en': 'Clear Image',              'zh': '清除图片'},
     'appearancePreview':        {'en': 'The quick brown fox jumps over the lazy dog.', 'zh': '敏捷的棕色狐狸跳过了懒狗。'},
+        'patternNone':      {'en': 'None',      'zh': '无'},
+    'patternDots':      {'en': 'Dots',      'zh': '圆点'},
+    'patternGrid':      {'en': 'Grid',      'zh': '网格'},
+    'patternDiagonal':  {'en': 'Diagonal',  'zh': '斜线'},
+    'patternLines':     {'en': 'Lines',     'zh': '横线'},
+    'patternCross':     {'en': 'Cross',     'zh': '交叉'},
+    'patternZigzag':    {'en': 'Zigzag',    'zh': '锯齿'},
+    'patternWaves':     {'en': 'Waves',     'zh': '波浪'},
+    'patternHexagon':   {'en': 'Hexagon',   'zh': '六边形'},
+    'patternCircles':   {'en': 'Circles',   'zh': '圆形'},
+    'patternTriangles': {'en': 'Triangles', 'zh': '三角'},
+    'patternDiamonds':  {'en': 'Diamonds',  'zh': '菱形'},
+    'patternChess':     {'en': 'Chess',     'zh': '棋盘'},
+    'appearanceNoPattern':      {'en': 'No pattern',               'zh': '无图案'},
+    'appearanceChangeImage':    {'en': 'Change Image',             'zh': '更换图片'},
+    'appearanceChooseImage':    {'en': 'Choose Image',             'zh': '选择图片'},
+    'appearanceStartupInfo':    {'en': 'Startup animation will play when launching the app.', 'zh': '启动应用时将播放过渡动画。'},
+    'appearanceStartupComing':  {'en': 'This feature is not yet implemented. Enable it now to auto-activate when available.', 'zh': '此功能尚未实现。现在启用以在可用时自动激活。'},
+    'appearanceDefault':        {'en': 'Default',                  'zh': '默认'},
     'llmTitle':           {'en': 'LLM Settings',                 'zh': 'LLM 设置'},
     'llmSystemPrompt':    {'en': 'System Prompt',                'zh': '系统提示词'},
     'llmPromptHint':      {'en': 'Enter the character system prompt...', 'zh': '输入角色系统提示词...'},
