@@ -89,7 +89,7 @@ offset: _isOpen
 : Offset(isRight ? 1.0 : -1.0, 0.0),
 child: Container(
 width: widget.width,
-color: const Color(0xFF151515), // LAV2 side panel bg
+color: ShadTheme.of(context).sidebar, // LAV2 side panel bg
 child: widget.child,
 ),
 ),

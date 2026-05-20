@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../app.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
@@ -54,17 +55,17 @@ class _LLMScreenState extends State<LLMScreen> {
               const SizedBox(height: 24),
 
               // System Prompt
-              const Text('System Prompt', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
+              Text('System Prompt', style: TextStyle(fontSize: 14, color: ShadTheme.of(context).mutedForeground)),
               const SizedBox(height: 8),
               TextField(
                 controller: _promptCtrl,
                 maxLines: 10,
                 style: const TextStyle(fontSize: 13),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Enter the character system prompt...',
                   border: OutlineInputBorder(),
                   filled: true,
-                  fillColor: Color(0xFF1E1E1E),
+                  fillColor: ShadTheme.of(context).secondary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -75,26 +76,23 @@ class _LLMScreenState extends State<LLMScreen> {
                 subtitle: const Text('Use vector memory for context'),
                 value: s.enableMemoryRetrieval,
                 onChanged: (v) => _saveSwitch(sp, s, memoryRetrieval: v),
-                activeColor: const Color(0xFF4CAF50),
               ),
               SwitchListTile(
                 title: const Text('Keep Model Loaded'),
                 subtitle: const Text('Keep LLM in VRAM for faster responses'),
                 value: s.keepModelLoaded,
                 onChanged: (v) => _saveSwitch(sp, s, keepLoaded: v),
-                activeColor: const Color(0xFF4CAF50),
               ),
               SwitchListTile(
                 title: const Text('API Relay Mode'),
                 subtitle: const Text('Use remote API instead of local LLM'),
                 value: s.apiRelayEnabled,
                 onChanged: (v) => _saveSwitch(sp, s, relayEnabled: v),
-                activeColor: const Color(0xFF4CAF50),
               ),
 
               if (s.apiRelayEnabled) ...[
                 const SizedBox(height: 16),
-                const Text('API Relay Config', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
+                Text('API Relay Config', style: TextStyle(fontSize: 14, color: ShadTheme.of(context).mutedForeground)),
                 const SizedBox(height: 8),
                 _settingField('Base URL', _baseUrlCtrl, false),
                 _settingField('API Key', _apiKeyCtrl, true),
@@ -107,9 +105,9 @@ class _LLMScreenState extends State<LLMScreen> {
                   final updated = _buildUpdatedSettings(s);
                   sp.saveSettings(updated);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text('Settings saved'),
-                      backgroundColor: Color(0xFF4CAF50),
+                      backgroundColor: ShadTheme.of(context).primary,
                       duration: Duration(seconds: 2),
                     ),
                   );
@@ -117,8 +115,8 @@ class _LLMScreenState extends State<LLMScreen> {
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('Save Settings'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
-                  foregroundColor: Colors.white,
+                  backgroundColor: ShadTheme.of(context).primary,
+                  foregroundColor: ShadTheme.of(context).primaryForeground,
                 ),
               ),
             ],
@@ -198,7 +196,7 @@ class _LLMScreenState extends State<LLMScreen> {
           labelText: label,
           border: const OutlineInputBorder(),
           filled: true,
-          fillColor: const Color(0xFF1E1E1E),
+          fillColor: ShadTheme.of(context).secondary,
         ),
         style: const TextStyle(fontSize: 13),
       ),

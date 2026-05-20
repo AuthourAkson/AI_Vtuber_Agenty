@@ -27,29 +27,29 @@ class _VisionScreenState extends State<VisionScreen> {
               const SizedBox(height: 24),
 
               // Vision prompt
-              const Text('Vision Prompt', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+              Text('Vision Prompt', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
               const SizedBox(height: 8),
               TextField(
                 maxLines: 3,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Describe the screen for the AI...',
                   border: OutlineInputBorder(),
                   filled: true,
-                  fillColor: Color(0xFF1E1E1E),
+                  fillColor: ShadTheme.of(context).secondary,
                 ),
                 onChanged: (v) => chat.visionPrompt = v,
               ),
 
               const SizedBox(height: 16),
-              const Text('OCR Prompt', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+              Text('OCR Prompt', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
               const SizedBox(height: 8),
               TextField(
                 maxLines: 3,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'OCR text context for the AI...',
                   border: OutlineInputBorder(),
                   filled: true,
-                  fillColor: Color(0xFF1E1E1E),
+                  fillColor: ShadTheme.of(context).secondary,
                 ),
                 onChanged: (v) => chat.ocrPrompt = v,
               ),
@@ -91,9 +91,9 @@ class _VisionScreenState extends State<VisionScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
+                    color: ShadTheme.of(context).secondary,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF2C2C2C)),
+                    border: Border.all(color: ShadTheme.of(context).border),
                   ),
                   child: Text(_screenshotResult,
                       style: const TextStyle(fontSize: 13, fontFamily: 'monospace')),
@@ -101,20 +101,20 @@ class _VisionScreenState extends State<VisionScreen> {
               ],
 
               const SizedBox(height: 16),
-              const Text('Current Vision Context',
-                  style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+              Text('Current Vision Context',
+                  style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
+                  color: ShadTheme.of(context).secondary,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF2C2C2C)),
+                  border: Border.all(color: ShadTheme.of(context).border),
                 ),
                 child: Text(
                   chat.visionPrompt.isEmpty ? 'No vision context' : chat.visionPrompt,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+                  style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground),
                 ),
               ),
             ],

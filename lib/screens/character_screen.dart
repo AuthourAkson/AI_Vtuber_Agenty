@@ -105,7 +105,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   Future<void> _deleteModel(String modelName) async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) =>
-      AlertDialog(backgroundColor: const Color(0xFF1E1E1E),
+      AlertDialog(backgroundColor: ShadTheme.of(context).card,
         title: const Text('Delete Model?'),
         content: Text('Delete "$modelName"? This cannot be undone.'),
         actions: [
@@ -146,24 +146,24 @@ class _CharacterScreenState extends State<CharacterScreen> {
         ]),
         const SizedBox(height: 24),
         if (!s.use3D) ...[
-          const Text('Live2D Preview',
-            style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+          Text('Live2D Preview',
+            style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
           const SizedBox(height: 8),
           Container(height: 350, decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF2C2C2C))),
+            border: Border.all(color: ShadTheme.of(context).border)),
             child: ClipRRect(borderRadius: BorderRadius.circular(12),
               child: modelJsonPath != null
                 ? Live2DView(modelPath: modelJsonPath,
                     positionX: s.live2DXPosition, positionY: s.live2DYPosition,
                     scale: s.live2DScale, interactive: false,
                     onEvent: (event) { if (event.type == 'modelError') debugPrint('Live2D error: ${event.data}'); })
-                : const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.person, size: 64, color: Color(0xFF666666)),
-                    SizedBox(height: 12), Text('No model selected', style: TextStyle(color: Color(0xFF666666))),
-                    Text('Upload a Live2D model to preview', style: TextStyle(color: Color(0xFF555555), fontSize: 12))])))),
+                : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.person, size: 64, color: ShadTheme.of(context).mutedForeground),
+                    SizedBox(height: 12), Text('No model selected', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+                    Text('Upload a Live2D model to preview', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12))])))),
           const SizedBox(height: 16),
-          const Text('Live2D Position', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+          Text('Live2D Position', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(child: _sliderSetting('X', s.live2DXPosition, 0, 100, (v) => _update(sp, s, live2DXPosition: v))),
@@ -174,24 +174,24 @@ class _CharacterScreenState extends State<CharacterScreen> {
         ],
         if (s.use3D) ...[
           Container(height: 300, decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF2C2C2C))),
-            child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.view_in_ar, size: 64, color: Color(0xFF666666)),
-              SizedBox(height: 12), Text('VRM 3D Preview', style: TextStyle(color: Color(0xFF666666))),
-              Text('Coming soon', style: TextStyle(color: Color(0xFF555555), fontSize: 12))]))),
+            color: ShadTheme.of(context).secondary, borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: ShadTheme.of(context).border)),
+            child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.view_in_ar, size: 64, color: ShadTheme.of(context).mutedForeground),
+              SizedBox(height: 12), Text('VRM 3D Preview', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+              Text('Coming soon', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12))]))),
           const SizedBox(height: 24),
         ],
-        const Text('Installed Models', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+        Text('Installed Models', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
         const SizedBox(height: 8),
         if (_models.isEmpty)
           Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFF2C2C2C))),
-            child: const Row(children: [
-              Icon(Icons.info_outline, color: Color(0xFF888888), size: 18), SizedBox(width: 8),
+            color: ShadTheme.of(context).secondary, borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: ShadTheme.of(context).border)),
+            child: Row(children: [
+              Icon(Icons.info_outline, color: ShadTheme.of(context).mutedForeground, size: 18), SizedBox(width: 8),
               Expanded(child: Text('No models installed. Upload a Live2D model folder.',
-                style: TextStyle(color: Color(0xFF888888))))]))
+                style: TextStyle(color: ShadTheme.of(context).mutedForeground)))]))
         else ...(_models.map((m) {
           final isSelected = modelJsonPath != null && modelJsonPath.contains(m['name']!);
           final shad = ShadTheme.of(context);
@@ -206,7 +206,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 onPressed: () => _deleteModel(m['name']!)),
               onTap: () => _update(sp, s, selectedLive2DModel: m['path'])));})),
         const SizedBox(height: 20),
-        const Text('Upload Model', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+        Text('Upload Model', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
         const SizedBox(height: 8),
         Row(children: [
           OutlinedButton.icon(
@@ -218,19 +218,19 @@ class _CharacterScreenState extends State<CharacterScreen> {
             label: Text(_importingModel != null ? 'Importing...' : 'Upload Live2D')),
           const SizedBox(width: 12),
           OutlinedButton.icon(onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('VRM upload coming in next update'), backgroundColor: Color(0xFF888888)));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('VRM upload coming in next update'), backgroundColor: ShadTheme.of(context).mutedForeground));
           }, icon: const Icon(Icons.upload_file, size: 18), label: const Text('Upload VRM')),
         ]),
         const SizedBox(height: 8),
-        const Text('Select the .model3.json or .model.json file inside your Live2D model folder.',
-          style: TextStyle(color: Color(0xFF555555), fontSize: 11)),
-        const SizedBox(height: 32), const Divider(color: Color(0xFF2C2C2C)), const SizedBox(height: 16),
+        Text('Select the .model3.json or .model.json file inside your Live2D model folder.',
+          style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 11)),
+        SizedBox(height: 32), Divider(color: ShadTheme.of(context).border), const SizedBox(height: 16),
         const Text('Transparent Overlay', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        const Text('Open a separate transparent, always-on-top window with your Live2D character. '
+        Text('Open a separate transparent, always-on-top window with your Live2D character. '
           'Default: click-through. F2 to toggle Interactive mode. ESC to close.',
-          style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
+          style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12)),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
           OutlinedButton.icon(
@@ -252,7 +252,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 side: BorderSide(color: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).border))),
             OutlinedButton.icon(onPressed: _reloadPetModel, icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Reload Model'), style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF888888), side: const BorderSide(color: Color(0xFF444444)))),
+                foregroundColor: ShadTheme.of(context).mutedForeground, side: BorderSide(color: ShadTheme.of(context).input))),
           ],
         ]),
       ]));
@@ -298,8 +298,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
       });
       await Future.delayed(const Duration(seconds: 2));
       if (Live2DServer.petRunning && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Desktop pet opened.'), backgroundColor: Color(0xFF4CAF50),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Desktop pet opened.'), backgroundColor: ShadTheme.of(context).primary,
           duration: Duration(seconds: 2)));
       }
     } catch (e) {
@@ -342,7 +342,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   Widget _sliderSetting(String label, double value, double min, double max, Function(double) onChanged) {
     return Column(children: [
-      Text('$label: ${value.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+      Text('$label: ${value.toStringAsFixed(2)}', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12)),
       Slider(value: value, min: min, max: max, onChanged: onChanged)]);
   }
 }

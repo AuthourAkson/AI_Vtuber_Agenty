@@ -20,14 +20,14 @@ class _StreamScreenState extends State<StreamScreen> {
           const SizedBox(height: 24),
 
           // YouTube stream ID
-          const Text('YouTube Stream ID', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+          Text('YouTube Stream ID', style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 14)),
           const SizedBox(height: 8),
           TextField(
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Enter YouTube live stream ID or URL',
               border: OutlineInputBorder(),
               filled: true,
-              fillColor: Color(0xFF1E1E1E),
+              fillColor: ShadTheme.of(context).secondary,
             ),
           ),
           const SizedBox(height: 16),
@@ -54,12 +54,12 @@ class _StreamScreenState extends State<StreamScreen> {
           Container(
             height: 400,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
+              color: ShadTheme.of(context).secondary,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF2C2C2C)),
+              border: Border.all(color: ShadTheme.of(context).border),
             ),
-            child: const Center(
-              child: Text('Not connected to stream', style: TextStyle(color: Color(0xFF666666))),
+            child: Center(
+              child: Text('Not connected to stream', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
             ),
           ),
 
@@ -69,15 +69,15 @@ class _StreamScreenState extends State<StreamScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
+              color: ShadTheme.of(context).secondary,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF2C2C2C)),
+              border: Border.all(color: ShadTheme.of(context).border),
             ),
-            child: const Column(
+            child: Column(
               children: [
-                Icon(Icons.queue_music, size: 48, color: Color(0xFF666666)),
-                SizedBox(height: 8),
-                Text('No items in setlist', style: TextStyle(color: Color(0xFF888888))),
+                Icon(Icons.queue_music, size: 48, color: ShadTheme.of(context).mutedForeground),
+                const SizedBox(height: 8),
+                Text('No items in setlist', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
               ],
             ),
           ),

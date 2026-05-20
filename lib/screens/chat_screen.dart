@@ -218,7 +218,7 @@ return AnimatedContainer(
 duration: Duration(milliseconds: 250),
 curve: Curves.easeInOut,
 width: 260,
-color: Color(0xFF151515),
+color: ShadTheme.of(context).sidebar,
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.stretch,
 children: [
@@ -327,7 +327,7 @@ return AnimatedContainer(
 duration: Duration(milliseconds: 250),
 curve: Curves.easeInOut,
 width: 420,
-color: Color(0xFF151515),
+color: ShadTheme.of(context).sidebar,
 child: Column(
 children: [
 // Header

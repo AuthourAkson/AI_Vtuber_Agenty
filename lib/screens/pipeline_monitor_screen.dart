@@ -29,13 +29,13 @@ border: Border(bottom: BorderSide(color: ShadTheme.of(context).border)),
 ),
 child: Row(
 children: [
-Icon(Icons.square_foot, color: Color(0xFF4CAF50)),
+Icon(Icons.square_foot, color: ShadTheme.of(context).primary),
 SizedBox(width: 8),
 Text('Pipeline Monitor',
 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
 Spacer(),
 Text('${tasks.length} tasks',
-style: TextStyle(color: Color(0xFF888888), fontSize: 13)),
+style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 13)),
 SizedBox(width: 12),
 IconButton(
 icon: Icon(Icons.delete_outline, size: 18),
@@ -50,7 +50,7 @@ Expanded(
 child: tasks.isEmpty
 ? Center(
 child: Text('No pipeline tasks',
-style: TextStyle(color: Color(0xFF888888))))
+style: TextStyle(color: ShadTheme.of(context).mutedForeground)))
 : ListView.builder(
 padding: EdgeInsets.all(16),
 itemCount: tasks.length,
@@ -103,12 +103,12 @@ if (task.input != null)
 Container(
 padding: EdgeInsets.all(8),
 decoration: BoxDecoration(
-color: Color(0xFF252525),
+color: ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(6),
 ),
 child: Text(
 'Input: ${task.input!.length > 80 ? '${task.input!.substring(0, 80)}...' : task.input}',
-style: TextStyle(fontSize: 12, color: Color(0xFFBBBBBB)),
+style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground),
 ),
 ),
 // Response segments
@@ -195,24 +195,24 @@ width: 24,
 height: 24,
 alignment: Alignment.center,
 decoration: BoxDecoration(
-color: Color(0xFF333333),
+color: ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(4),
 ),
-child: Text('$index', style: TextStyle(fontSize: 10, color: Color(0xFF888888))),
+child: Text('$index', style: TextStyle(fontSize: 10, color: ShadTheme.of(context).mutedForeground)),
 ),
 SizedBox(width: 8),
 Expanded(
 child: Text(
 response.text.length > 60 ? '${response.text.substring(0, 60)}...' : response.text,
-style: TextStyle(fontSize: 12, color: Color(0xFFBBBBBB)),
+style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground),
 ),
 ),
 if (response.audioUrl != null)
-Icon(Icons.volume_up, size: 14, color: Color(0xFF4CAF50)),
+Icon(Icons.volume_up, size: 14, color: ShadTheme.of(context).primary),
 if (response.playbackFinished)
 Padding(
 padding: EdgeInsets.only(left: 4),
-child: Icon(Icons.check, size: 14, color: Color(0xFF4CAF50)),
+child: Icon(Icons.check, size: 14, color: ShadTheme.of(context).primary),
 ),
 ],
 ),

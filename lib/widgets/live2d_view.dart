@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path/path.dart' as p;
+import '../app.dart';
 import '../services/live2d_server.dart';
 
 class Live2DEvent {
@@ -208,14 +209,14 @@ class Live2DViewState extends State<Live2DView> {
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Column(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(
-                      color: Color(0xFF4CAF50), strokeWidth: 2),
+                      color: ShadTheme.of(context).primary, strokeWidth: 2),
                     SizedBox(height: 8),
                     Text('Initializing Live2D...',
-                      style: TextStyle(color: Color(0xFFBBBBBB), fontSize: 12)),
+                      style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12)),
                   ],
                 ),
               ),

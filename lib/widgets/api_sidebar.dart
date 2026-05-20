@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import '../app.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
@@ -55,9 +56,9 @@ class _ApiSidebarState extends State<ApiSidebar> {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           width: 280,
-          decoration: const BoxDecoration(
-            color: Color(0xCC1A1A1A),
-            border: Border(left: BorderSide(color: Color(0x20FFFFFF))),
+          decoration: BoxDecoration(
+            color: ShadTheme.of(context).sidebar,
+            border: Border(left: BorderSide(color: ShadTheme.of(context).border)),
           ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -68,7 +69,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
                 // Header
                 Row(
                   children: [
-                    const Icon(Icons.api, size: 16, color: Color(0xFF4CAF50)),
+                    Icon(Icons.api, size: 16, color: ShadTheme.of(context).primary),
                     const SizedBox(width: 8),
                     const Text(
                       'API Config',
@@ -77,7 +78,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
                     const Spacer(),
                     GestureDetector(
                       onTap: () => widget.onClose?.call(),
-                      child: const Icon(Icons.close, size: 16, color: Color(0xFF888888)),
+                      child: Icon(Icons.close, size: 16, color: ShadTheme.of(context).mutedForeground),
                     ),
                   ],
                 ),
@@ -95,7 +96,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
                   obscure: _obscureKey,
                   suffix: GestureDetector(
                     onTap: () => setState(() => _obscureKey = !_obscureKey),
-                    child: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility, size: 16, color: const Color(0xFF888888)),
+                    child: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility, size: 16, color: ShadTheme.of(context).mutedForeground),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -114,8 +115,8 @@ class _ApiSidebarState extends State<ApiSidebar> {
                             : const Icon(Icons.wifi, size: 14),
                         label: Text(_testing ? 'Testing...' : 'Test'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFCCCCCC),
-                          side: const BorderSide(color: Color(0xFF333333)),
+                          foregroundColor: ShadTheme.of(context).mutedForeground,
+                          side: BorderSide(color: ShadTheme.of(context).input),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
@@ -128,8 +129,8 @@ class _ApiSidebarState extends State<ApiSidebar> {
                         icon: const Icon(Icons.save, size: 14),
                         label: const Text('Save'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          foregroundColor: Colors.white,
+                          backgroundColor: ShadTheme.of(context).primary,
+                          foregroundColor: ShadTheme.of(context).primaryForeground,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                         ),
@@ -138,7 +139,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                const Text('Quick Presets', style: TextStyle(fontSize: 11, color: Color(0xFF666666))),
+                Text('Quick Presets', style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
@@ -158,7 +159,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
   }
 
   Widget _sectionLabel(String text) {
-    return Text(text, style: const TextStyle(fontSize: 12, color: Color(0xFF888888), fontWeight: FontWeight.w500));
+    return Text(text, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground, fontWeight: FontWeight.w500));
   }
 
   Widget _buildTextField({
@@ -171,23 +172,23 @@ class _ApiSidebarState extends State<ApiSidebar> {
     return TextField(
       controller: controller,
       obscureText: obscure,
-      style: const TextStyle(fontSize: 13, color: Color(0xFFDDDDDD)),
+      style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF555555), fontSize: 12),
+        hintStyle: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 12),
         prefixIcon: Padding(
           padding: const EdgeInsets.all(10),
-          child: Icon(icon, size: 14, color: const Color(0xFF666666)),
+          child: Icon(icon, size: 14, color: ShadTheme.of(context).mutedForeground),
         ),
         suffixIcon: suffix != null
             ? Padding(padding: const EdgeInsets.all(10), child: suffix)
             : null,
         filled: true,
-        fillColor: const Color(0xFF252525),
+        fillColor: ShadTheme.of(context).secondary,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF333333))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF4CAF50))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: ShadTheme.of(context).input)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: ShadTheme.of(context).primary)),
       ),
     );
   }
@@ -203,11 +204,11 @@ class _ApiSidebarState extends State<ApiSidebar> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: const Color(0xFF252525),
+          color: ShadTheme.of(context).secondary,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF333333)),
+          border: Border.all(color: ShadTheme.of(context).input),
         ),
-        child: Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
+        child: Text(label, style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
       ),
     );
   }
@@ -238,9 +239,9 @@ class _ApiSidebarState extends State<ApiSidebar> {
     );
     sp.saveSettings(updated);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text('API settings saved'),
-        backgroundColor: Color(0xFF4CAF50),
+        backgroundColor: ShadTheme.of(context).primary,
         duration: Duration(seconds: 2),
       ),
     );
@@ -285,7 +286,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: success ? const Color(0xFF4CAF50) : const Color(0xFFCF6679),
+        backgroundColor: success ? ShadTheme.of(context).primary : const Color(ThemePreset.destructive),
         duration: const Duration(seconds: 3),
       ),
     );
