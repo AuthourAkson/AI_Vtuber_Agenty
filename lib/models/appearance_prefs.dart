@@ -33,6 +33,12 @@ class AppearancePrefs {
   /// Whether theme color overrides are active. When false, uses default Blue. (default: true)
   bool themeColorEnabled;
 
+  /// Whether to restore last active page on startup (default: false)
+  bool autoOpenLastPage;
+
+  /// UI language code: 'en', 'zh-CN', 'zh-TW' (default: 'en')
+  String language;
+
   // ─── Constructor ───────────────────────────────────────
 
   AppearancePrefs({
@@ -44,6 +50,8 @@ class AppearancePrefs {
     this.bgImageEnabled = true,
     this.startupAnimEnabled = false,
     this.themeColorEnabled = true,
+    this.autoOpenLastPage = false,
+    this.language = 'en',
   });
 
   // ─── 16-color theme palette ────────────────────────────
@@ -105,6 +113,8 @@ class AppearancePrefs {
     'bgImageEnabled': bgImageEnabled,
     'startupAnimEnabled': startupAnimEnabled,
     'themeColorEnabled': themeColorEnabled,
+    'autoOpenLastPage': autoOpenLastPage,
+    'language': language,
   };
 
   factory AppearancePrefs.fromJson(Map<String, dynamic> json) {
@@ -117,6 +127,8 @@ class AppearancePrefs {
       bgImageEnabled: json['bgImageEnabled'] as bool? ?? true,
       startupAnimEnabled: json['startupAnimEnabled'] as bool? ?? false,
       themeColorEnabled: json['themeColorEnabled'] as bool? ?? true,
+      autoOpenLastPage: json['autoOpenLastPage'] as bool? ?? false,
+      language: json['language'] as String? ?? 'en',
     );
   }
 
@@ -154,6 +166,8 @@ class AppearancePrefs {
     bool clearBgImage = false,
     bool? themeColorEnabled,
     bool? bgImageEnabled,
+    bool? autoOpenLastPage,
+    String? language,
   }) {
     return AppearancePrefs(
       darkMode: darkMode ?? this.darkMode,
@@ -164,6 +178,8 @@ class AppearancePrefs {
       startupAnimEnabled: startupAnimEnabled ?? this.startupAnimEnabled,
       themeColorEnabled: themeColorEnabled ?? this.themeColorEnabled,
       bgImageEnabled: bgImageEnabled ?? this.bgImageEnabled,
+      autoOpenLastPage: autoOpenLastPage ?? this.autoOpenLastPage,
+      language: language ?? this.language,
     );
   }
 }

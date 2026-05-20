@@ -23,6 +23,8 @@ class AppearanceProvider extends ChangeNotifier {
   bool get bgImageEnabled => _prefs.bgImageEnabled;
   bool get startupAnimEnabled => _prefs.startupAnimEnabled;
   bool get themeColorEnabled => _prefs.themeColorEnabled;
+  bool get autoOpenLastPage => _prefs.autoOpenLastPage;
+  String get language => _prefs.language;
 
   /// The currently selected theme accent color. Returns gray when disabled.
   int get accentColorValue =>

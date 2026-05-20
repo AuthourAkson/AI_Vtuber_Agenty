@@ -669,6 +669,8 @@ Widget _buildSettingsContent(AgentManager mgr) {
 switch (_activeSettingSection) {
 case 'pref_appearance':
 return MultiAgentAppearancePage();
+case 'pref_general':
+return _buildGeneralPanel();
 case 'ai_config':
 return _buildAiConfigPanel(mgr);
 case 'ai_mcp':
@@ -897,6 +899,90 @@ textAlign: TextAlign.center,
 style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
 ],
 ),
+);
+}
+
+// ─── General Preferences Panel ────────────────────────────
+
+Widget _buildGeneralPanel() {
+return Consumer<AppearanceProvider>(
+builder: (context, ap, _) {
+return SingleChildScrollView(
+padding: EdgeInsets.all(24),
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Text('General Preferences', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+SizedBox(height: 4),
+Text('Behaviour and language settings.', style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+SizedBox(height: 24),
+
+// ── Auto-open last page ──
+Container(
+padding: EdgeInsets.all(16),
+decoration: BoxDecoration(
+color: ShadTheme.of(context).card,
+borderRadius: BorderRadius.circular(10),
+border: Border.all(color: ShadTheme.of(context).border),
+),
+child: SwitchListTile(
+contentPadding: EdgeInsets.zero,
+title: Text('启动时自动打开上次的页面', style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground)),
+subtitle: Text('Auto-open last page on startup', style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+value: ap.autoOpenLastPage,
+onChanged: (v) => ap.update(ap.prefs.copyWith(autoOpenLastPage: v)),
+activeColor: ShadTheme.of(context).primary,
+),
+),
+SizedBox(height: 16),
+
+// ── Language ──
+Container(
+padding: EdgeInsets.all(16),
+decoration: BoxDecoration(
+color: ShadTheme.of(context).card,
+borderRadius: BorderRadius.circular(10),
+border: Border.all(color: ShadTheme.of(context).border),
+),
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Row(
+children: [
+Icon(Icons.translate, size: 20, color: ShadTheme.of(context).primary),
+SizedBox(width: 10),
+Text('语言 / Language', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+],
+),
+SizedBox(height: 4),
+Text('Select the UI display language.', style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+SizedBox(height: 12),
+DropdownButtonFormField<String>(
+value: ap.language,
+decoration: InputDecoration(
+filled: true,
+fillColor: ShadTheme.of(context).secondary,
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: ShadTheme.of(context).input)),
+contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+),
+dropdownColor: ShadTheme.of(context).card,
+style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground),
+items: const [
+DropdownMenuItem(value: 'en', child: Text('English')),
+DropdownMenuItem(value: 'zh-CN', child: Text('简体中文')),
+DropdownMenuItem(value: 'zh-TW', child: Text('繁體中文')),
+],
+onChanged: (v) {
+if (v != null) ap.update(ap.prefs.copyWith(language: v));
+},
+),
+],
+),
+),
+],
+),
+);
+},
 );
 }
 
