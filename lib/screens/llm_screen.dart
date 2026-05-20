@@ -73,19 +73,19 @@ class _LLMScreenState extends State<LLMScreen> {
 
               // Switches
               SwitchListTile(
-                title: Text('Enable Memory Retrieval'),
+                title: Text(AppLocalizations.of(context).llmEnableMemory),
                 subtitle: Text(AppLocalizations.of(context).llmEnableMemoryDesc),
                 value: s.enableMemoryRetrieval,
                 onChanged: (v) => _saveSwitch(sp, s, memoryRetrieval: v),
               ),
               SwitchListTile(
-                title: const Text('Keep Model Loaded'),
+                title: Text(AppLocalizations.of(context).llmKeepLoaded),
                 subtitle: Text(AppLocalizations.of(context).llmKeepLoadedDesc),
                 value: s.keepModelLoaded,
                 onChanged: (v) => _saveSwitch(sp, s, keepLoaded: v),
               ),
               SwitchListTile(
-                title: const Text('API Relay Mode'),
+                title: Text(AppLocalizations.of(context).llmApiRelay),
                 subtitle: Text(AppLocalizations.of(context).llmApiRelayDesc),
                 value: s.apiRelayEnabled,
                 onChanged: (v) => _saveSwitch(sp, s, relayEnabled: v),
@@ -107,14 +107,14 @@ class _LLMScreenState extends State<LLMScreen> {
                   sp.saveSettings(updated);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Settings saved'),
+                      content: Text(AppLocalizations.of(context).llmSaved),
                       backgroundColor: ShadTheme.of(context).primary,
                       duration: Duration(seconds: 2),
                     ),
                   );
                 },
                 icon: const Icon(Icons.save, size: 18),
-                label: const Text('Save Settings'),
+                label: Text(AppLocalizations.of(context).llmSave),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: ShadTheme.of(context).primary,
                   foregroundColor: ShadTheme.of(context).primaryForeground,

@@ -107,10 +107,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
   Future<void> _deleteModel(String modelName) async {
     final confirm = await showDialog<bool>(context: context, builder: (ctx) =>
       AlertDialog(backgroundColor: ShadTheme.of(context).card,
-        title: Text('Delete Model?'),
+        title: Text(AppLocalizations.of(context).charDelete),
         content: Text(AppLocalizations.of(context).charDeleteConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context).cancel)),
           TextButton(onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete', style: TextStyle(color: Colors.red))),
         ]));
@@ -134,7 +134,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
         const Text('Character Settings',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
         const SizedBox(height: 24),
-        SwitchListTile(title: const Text('Show Character'),
+        SwitchListTile(title: Text(AppLocalizations.of(context).charShowCharacter),
           subtitle: Text(AppLocalizations.of(context).charShowCharacterDesc),
           value: s.renderModel, onChanged: (v) => _update(sp, s, renderModel: v)),
         const SizedBox(height: 16),
@@ -221,7 +221,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
           OutlinedButton.icon(onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(AppLocalizations.of(context).charVRMComingToast), backgroundColor: ShadTheme.of(context).mutedForeground));
-          }, icon: const Icon(Icons.upload_file, size: 18), label: const Text('Upload VRM')),
+          }, icon: const Icon(Icons.upload_file, size: 18), label: Text(AppLocalizations.of(context).charUploadVRM)),
         ]),
         const SizedBox(height: 8),
         Text(AppLocalizations.of(context).charUploadGuide,
@@ -243,7 +243,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
               side: BorderSide(color: Theme.of(context).colorScheme.primary))),
           if (Live2DServer.petRunning) ...[
             OutlinedButton.icon(onPressed: _closePet, icon: const Icon(Icons.close, size: 18),
-              label: const Text('Close'), style: OutlinedButton.styleFrom(
+              label: Text(AppLocalizations.of(context).charClose), style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent))),
             OutlinedButton.icon(onPressed: _togglePetClickThrough,
               icon: Icon(_clickThrough ? Icons.touch_app : Icons.touch_app_outlined, size: 18),
@@ -252,7 +252,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 foregroundColor: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).mutedForeground,
                 side: BorderSide(color: _clickThrough ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).border))),
             OutlinedButton.icon(onPressed: _reloadPetModel, icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Reload Model'), style: OutlinedButton.styleFrom(
+              label: Text(AppLocalizations.of(context).charReloadModel), style: OutlinedButton.styleFrom(
                 foregroundColor: ShadTheme.of(context).mutedForeground, side: BorderSide(color: ShadTheme.of(context).input))),
           ],
         ]),
@@ -300,7 +300,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
       await Future.delayed(const Duration(seconds: 2));
       if (Live2DServer.petRunning && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Desktop pet opened.'), backgroundColor: ShadTheme.of(context).primary,
+          content: Text(AppLocalizations.of(context).charPetOpened), backgroundColor: ShadTheme.of(context).primary,
           duration: Duration(seconds: 2)));
       }
     } catch (e) {

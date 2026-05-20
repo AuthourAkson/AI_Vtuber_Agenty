@@ -127,7 +127,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
                       child: ElevatedButton.icon(
                         onPressed: () => _saveSettings(context, sp, s),
                         icon: const Icon(Icons.save, size: 14),
-                        label: const Text('Save'),
+                        label: Text(AppLocalizations.of(context).save),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: ShadTheme.of(context).primary,
                           foregroundColor: ShadTheme.of(context).primaryForeground,
@@ -240,7 +240,7 @@ class _ApiSidebarState extends State<ApiSidebar> {
     sp.saveSettings(updated);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('API settings saved'),
+        content: Text(AppLocalizations.of(context).apiSaved),
         backgroundColor: ShadTheme.of(context).primary,
         duration: Duration(seconds: 2),
       ),

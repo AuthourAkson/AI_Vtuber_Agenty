@@ -38,7 +38,7 @@ class _StreamScreenState extends State<StreamScreen> {
             child: ElevatedButton.icon(
               onPressed: () {},
               icon: const Icon(Icons.play_circle, size: 18),
-              label: const Text('Connect to Live Chat'),
+              label: Text(AppLocalizations.of(context).streamConnect),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,

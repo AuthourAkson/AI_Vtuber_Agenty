@@ -234,7 +234,7 @@ color: ShadTheme.of(context).mutedForeground, letterSpacing: 1.2)),
 if (filtered.isEmpty)
 Padding(
 padding: EdgeInsets.all(12),
-child: Text('No matching agents',
+child: Text(AppLocalizations.of(context).waNoMatching,
 style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 )
 else
@@ -342,7 +342,7 @@ mainAxisSize: MainAxisSize.min,
 children: [
 Icon(Icons.group_add_outlined, size: 40, color: ShadTheme.of(context).mutedForeground),
 SizedBox(height: 12),
-Text('No employees yet',
+Text(AppLocalizations.of(context).waNoEmployees,
 style: TextStyle(fontSize: 14, color: ShadTheme.of(context).mutedForeground)),
 SizedBox(height: 4),
 Text(AppLocalizations.of(context).waEmptyHint,
@@ -435,20 +435,20 @@ showDialog(
 context: context,
 builder: (ctx) => AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
-title: Text('Delete Employee', style: TextStyle(color: ShadTheme.of(context).foreground)),
+title: Text(AppLocalizations.of(context).waDeleteEmployee, style: TextStyle(color: ShadTheme.of(context).foreground)),
 content: Text(AppLocalizations.of(context).waDeleteConfirm,
 style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
 actions: [
 TextButton(
 onPressed: () => Navigator.pop(ctx),
-child: Text('Cancel', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
 ),
 TextButton(
 onPressed: () {
 mgr.deleteEmployee(emp.uuid);
 Navigator.pop(ctx);
 },
-child: Text('Delete', style: TextStyle(color: ShadTheme.of(context).destructive)),
+child: Text(AppLocalizations.of(context).delete, style: TextStyle(color: ShadTheme.of(context).destructive)),
 ),
 ],
 ),
@@ -466,7 +466,7 @@ width: double.infinity,
 child: OutlinedButton.icon(
 onPressed: () => _showCreateEmployeeDialog(),
 icon: Icon(Icons.add, size: 18),
-label: Text('Create Employee'),
+label: Text(AppLocalizations.of(context).waCreateEmployee),
 style: OutlinedButton.styleFrom(
 foregroundColor: Theme.of(context).colorScheme.primary,
 side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -490,7 +490,7 @@ context: context,
 builder: (ctx) {
 return AlertDialog(
 backgroundColor: ShadTheme.of(context).card,
-title: Text('Create AI Employee', style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 16)),
+title: Text(AppLocalizations.of(context).waCreateEmployee, style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 16)),
 content: SizedBox(
 width: 400,
 child: SingleChildScrollView(
@@ -551,7 +551,7 @@ description: descCtrl.text.trim(),
 );
 },
 style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
-    child: Text('Create', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+    child: Text(AppLocalizations.of(context).create, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
 ),
 ],
 );
@@ -595,28 +595,28 @@ child: Icon(Icons.close, size: 18, color: ShadTheme.of(context).mutedForeground)
 ),
 ),
 Divider(color: ShadTheme.of(context).border),
-_settingsGroup('Preferences', [
-_settingsItem('Appearance', 'pref_appearance', Icons.palette_outlined),
-_settingsItem('General', 'pref_general', Icons.tune),
+_settingsGroup(AppLocalizations.of(context).preferences, [
+_settingsItem(AppLocalizations.of(context).appearance, 'pref_appearance', Icons.palette_outlined),
+_settingsItem(AppLocalizations.of(context).general, 'pref_general', Icons.tune),
 ]),
-_settingsGroup('AI', [
-_settingsItem('AI Config', 'ai_config', Icons.api),
-_settingsItem('MCP Config', 'ai_mcp', Icons.extension),
-_settingsItem('Permissions', 'ai_permissions', Icons.security),
+_settingsGroup(AppLocalizations.of(context).aiSection, [
+_settingsItem(AppLocalizations.of(context).aiConfig, 'ai_config', Icons.api),
+_settingsItem(AppLocalizations.of(context).mcpConfig, 'ai_mcp', Icons.extension),
+_settingsItem(AppLocalizations.of(context).permissions, 'ai_permissions', Icons.security),
 ]),
-_settingsGroup('Data', [
-_settingsItem('Sync', 'data_sync', Icons.sync),
-_settingsItem('Storage', 'data_storage', Icons.storage),
-_settingsItem('Files', 'data_files', Icons.folder),
+_settingsGroup(AppLocalizations.of(context).dataSection, [
+_settingsItem(AppLocalizations.of(context).sync, 'data_sync', Icons.sync),
+_settingsItem(AppLocalizations.of(context).storage, 'data_storage', Icons.storage),
+_settingsItem(AppLocalizations.of(context).files, 'data_files', Icons.folder),
 ]),
-_settingsGroup('Network', [
-_settingsItem('LAN', 'net_lan', Icons.lan),
-_settingsItem('Devices', 'net_devices', Icons.devices),
+_settingsGroup(AppLocalizations.of(context).networkSection, [
+_settingsItem(AppLocalizations.of(context).lan, 'net_lan', Icons.lan),
+_settingsItem(AppLocalizations.of(context).devices, 'net_devices', Icons.devices),
 ]),
-_settingsGroup('System', [
-_settingsItem('Privacy', 'sys_privacy', Icons.privacy_tip_outlined),
-_settingsItem('Logs', 'sys_logs', Icons.article_outlined),
-_settingsItem('About', 'sys_about', Icons.info_outline),
+_settingsGroup(AppLocalizations.of(context).systemSection, [
+_settingsItem(AppLocalizations.of(context).privacy, 'sys_privacy', Icons.privacy_tip_outlined),
+_settingsItem(AppLocalizations.of(context).logs, 'sys_logs', Icons.article_outlined),
+_settingsItem(AppLocalizations.of(context).about, 'sys_about', Icons.info_outline),
 ]),
 ],
 ),
@@ -699,7 +699,7 @@ padding: EdgeInsets.all(24),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Text('AI Provider Profiles', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+Text(AppLocalizations.of(context).aiTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 SizedBox(height: 4),
 Text(AppLocalizations.of(context).aiSubtitle,
 style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
@@ -726,7 +726,7 @@ width: double.infinity,
 child: OutlinedButton.icon(
 onPressed: () => _showProfileDialog(mgr),
 icon: Icon(Icons.add, size: 18),
-label: Text('Add Profile'),
+label: Text(AppLocalizations.of(context).aiAddProfile),
 style: OutlinedButton.styleFrom(
 foregroundColor: Theme.of(context).colorScheme.primary,
 side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -844,7 +844,7 @@ mgr.addProfile(profile);
 Navigator.pop(ctx);
 },
 style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
-    child: Text('Save', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+    child: Text(AppLocalizations.of(context).save, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
 ),
 ],
 ),
@@ -874,7 +874,7 @@ mainAxisSize: MainAxisSize.min,
 children: [
 Icon(Icons.extension, size: 48, color: ShadTheme.of(context).mutedForeground),
 SizedBox(height: 16),
-Text('MCP Configuration', style: TextStyle(fontSize: 16, color: ShadTheme.of(context).foreground)),
+Text(AppLocalizations.of(context).mcpConfig, style: TextStyle(fontSize: 16, color: ShadTheme.of(context).foreground)),
 SizedBox(height: 8),
 Text('MCP (Model Context Protocol) server management\nwill be available soon.',
 textAlign: TextAlign.center,
@@ -893,7 +893,7 @@ mainAxisSize: MainAxisSize.min,
 children: [
 Icon(Icons.security, size: 48, color: ShadTheme.of(context).mutedForeground),
 SizedBox(height: 16),
-Text('Global Permissions', style: TextStyle(fontSize: 16, color: ShadTheme.of(context).foreground)),
+Text(AppLocalizations.of(context).permissions, style: TextStyle(fontSize: 16, color: ShadTheme.of(context).foreground)),
 SizedBox(height: 8),
 Text('Configure agent permissions globally.\nFile access, command whitelist, and tool authorization.',
 textAlign: TextAlign.center,
@@ -996,7 +996,7 @@ padding: EdgeInsets.all(24),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Text('LAN Network', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+Text(AppLocalizations.of(context).lan, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
 SizedBox(height: 4),
 Text(mgr.connected ? 'Connected to ${mgr.host}:${mgr.port}' : 'Not connected',
 style: TextStyle(fontSize: 13, color: mgr.connected ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground)),
@@ -1027,7 +1027,7 @@ width: double.infinity,
 child: ElevatedButton.icon(
 onPressed: () => mgr.joinLAN(host: _waHostCtrl.text, port: int.tryParse(_waPortCtrl.text) ?? 9090),
 icon: Icon(Icons.wifi, size: 16),
-label: Text('Join Network'),
+label: Text(AppLocalizations.of(context).waJoinNetwork),
 style: ElevatedButton.styleFrom(
     backgroundColor: Theme.of(context).colorScheme.primary,
     foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -1063,7 +1063,7 @@ width: double.infinity,
 child: ElevatedButton.icon(
 onPressed: () => mgr.createLAN(host: '127.0.0.1', port: int.tryParse(_waPortCtrl.text) ?? 9090),
 icon: Icon(Icons.play_arrow, size: 16),
-label: Text('Start & Connect'),
+label: Text(AppLocalizations.of(context).waStart),
 style: ElevatedButton.styleFrom(
 backgroundColor: Theme.of(context).colorScheme.primary,
 foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -1146,7 +1146,7 @@ mainAxisSize: MainAxisSize.min,
 children: [
 Icon(Icons.chat_bubble_outline, size: 56, color: ShadTheme.of(context).mutedForeground.withAlpha(100)),
 SizedBox(height: 16),
-Text('Select a conversation to start chatting',
+Text(AppLocalizations.of(context).waEmptyHint,
 style: TextStyle(fontSize: 15, color: ShadTheme.of(context).mutedForeground)),
 SizedBox(height: 6),
 Text(AppLocalizations.of(context).waEmptySub,

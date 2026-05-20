@@ -179,7 +179,7 @@ width: double.infinity,
 child: OutlinedButton.icon(
 onPressed: () {},
 icon: Icon(Icons.upload_file, size: 16),
-label: Text('Upload Voice Model'),
+label: Text(AppLocalizations.of(context).ttsUploadVoice),
 ),
 ),
 ],

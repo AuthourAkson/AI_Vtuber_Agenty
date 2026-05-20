@@ -490,7 +490,7 @@ child: _sectionLabel(context, 'Default', AppLocalizations.of(context).appearance
 OutlinedButton.icon(
 onPressed: () => _confirmReset(ap, context),
 icon: Icon(Icons.refresh, size: 16),
-label: Text('Reset'),
+label: Text(AppLocalizations.of(context).reset),
 style: OutlinedButton.styleFrom(
 foregroundColor: ShadTheme.of(context).destructive,
 side: BorderSide(color: ShadTheme.of(context).destructive),

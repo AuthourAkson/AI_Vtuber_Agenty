@@ -251,7 +251,7 @@ final ctrl = TextEditingController(text: '');
 final title = await showDialog<String>(
 context: context,
 builder: (ctx) => AlertDialog(
-title: Text('New Session'),
+title: Text(AppLocalizations.of(context).chatNewSession),
 content: TextField(
 controller: ctrl,
 autofocus: true,
@@ -264,10 +264,10 @@ border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
 onSubmitted: (v) => Navigator.pop(ctx, v.trim().isNotEmpty ? v.trim() : 'Chat Session'),
 ),
 actions: [
-TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context).cancel)),
 TextButton(
 onPressed: () => Navigator.pop(ctx, ctrl.text.trim().isNotEmpty ? ctrl.text.trim() : 'Chat Session'),
-child: Text('Create')),
+child: Text(AppLocalizations.of(context).create)),
 ],
 ),
 );
@@ -502,7 +502,7 @@ apiRelayModel: modelCtrl.text.trim(),
 systemPrompt: promptCtrl.text,
 ));
 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-content: Text('Settings saved'),
+content: Text(AppLocalizations.of(context).chatSaveSettings),
 backgroundColor: ShadTheme.of(context).primary,
 duration: Duration(seconds: 2)));
 },
