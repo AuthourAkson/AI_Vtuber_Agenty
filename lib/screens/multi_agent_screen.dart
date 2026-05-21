@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:provider/provider.dart';
 import '../app.dart';
 import '../providers/multi_agent_provider.dart';
@@ -581,20 +582,7 @@ final List<Map<String, String>> _mcpServers = [
 ];
 
 // ── Permissions state ──
-final List<_PermItem> _permItems = [
-  _PermItem('file_read', 'permFileRead', 'permFileReadDesc', true),
-  _PermItem('file_write', 'permFileWrite', 'permFileWriteDesc', false),
-  _PermItem('file_delete', 'permFileDelete', 'permFileDeleteDesc', false),
-  _PermItem('file_patch', 'permFilePatch', 'permFilePatchDesc', false),
-  _PermItem('directory_create', 'permDirCreate', 'permDirCreateDesc', false),
-  _PermItem('command_execute', 'permCmdExec', 'permCmdExecDesc', false),
-  _PermItem('bg_command', 'permBgCmd', 'permBgCmdDesc', false),
-  _PermItem('git_operations', 'permGitOps', 'permGitOpsDesc', false),
-  _PermItem('file_read', 'permDocRead', 'permDocReadDesc', true, idSuffix: '_doc'),
-  _PermItem('file_write', 'permDocWrite', 'permDocWriteDesc', false, idSuffix: '_doc'),
-  _PermItem('todo_read', 'permTaskRead', 'permTaskReadDesc', true),
-  _PermItem('todo_write', 'permTaskWrite', 'permTaskWriteDesc', false),
-];
+// (permission toggles are now stored in AgentManager for persistence)
 
 int _lanTab = 0;
 final _waHostCtrl = TextEditingController(text: '127.0.0.1');
@@ -1155,15 +1143,17 @@ Widget _buildPermissionsPanel(AgentManager mgr) {
         SizedBox(height: 4),
         Text(l10n.permSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
         SizedBox(height: 24),
-        ..._permItems.map((item) => _permToggleCard(item, l10n)),
+        ...AgentManager._builtinPermDefs.map((def) => _permToggleCard(mgr, def, l10n)),
       ],
     ),
   );
 }
 
-Widget _permToggleCard(_PermItem item, AppLocalizations l10n) {
-  final label = _permItemLabel(item, l10n);
-  final desc = _permItemDesc(item, l10n);
+Widget _permToggleCard(AgentManager mgr, Map<String, String> def, AppLocalizations l10n) {
+  final toolId = def['id']!;
+  final label = _permItemLabelByKey(def['label']!, l10n);
+  final desc = _permItemDescByKey(def['desc']!, l10n);
+  final enabled = mgr.isPermEnabled(toolId);
   return Container(
     margin: EdgeInsets.only(bottom: 8),
     decoration: BoxDecoration(
@@ -1171,116 +1161,19 @@ Widget _permToggleCard(_PermItem item, AppLocalizations l10n) {
       borderRadius: BorderRadius.circular(10),
       border: Border.all(color: ShadTheme.of(context).border),
     ),
-    child: Column(
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ShadTheme.of(context).foreground)),
-          subtitle: Text(desc, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
-          value: item.enabled,
-          onChanged: (v) => setState(() => item.enabled = v),
-          activeColor: ShadTheme.of(context).primary,
-        ),
-        // ── Rules section (only when enabled) ──
-        if (item.enabled) ...[
-          Divider(height: 1, color: ShadTheme.of(context).border),
-          Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              children: [
-                Text(l10n.permRulePattern, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: ShadTheme.of(context).mutedForeground)),
-                Spacer(),
-                GestureDetector(
-                  onTap: () => setState(() => item.rules.add(_PermRule())),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 15, color: Theme.of(context).colorScheme.primary),
-                      SizedBox(width: 3),
-                      Text(l10n.permAddRule,
-                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ...item.rules.asMap().entries.map((e) => _permRuleRow(item, e.key, e.value, l10n)),
-          SizedBox(height: 8),
-        ],
-      ],
+    child: SwitchListTile(
+      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ShadTheme.of(context).foreground)),
+      subtitle: Text(desc, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+      value: enabled,
+      onChanged: (_) => mgr.togglePerm(toolId),
+      activeColor: ShadTheme.of(context).primary,
     ),
   );
 }
 
-Widget _permRuleRow(_PermItem item, int idx, _PermRule rule, AppLocalizations l10n) {
-  return Padding(
-    padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
-    child: Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: TextField(
-            controller: TextEditingController(text: rule.pattern),
-            onChanged: (v) => rule.pattern = v,
-            decoration: InputDecoration(
-              hintText: l10n.permPatternHint,
-              filled: true, fillColor: ShadTheme.of(context).secondary,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
-              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              isDense: true,
-            ),
-            style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: ShadTheme.of(context).foreground),
-          ),
-        ),
-        SizedBox(width: 6),
-        Expanded(
-          flex: 2,
-          child: TextField(
-            controller: TextEditingController(text: rule.description),
-            onChanged: (v) => rule.description = v,
-            decoration: InputDecoration(
-              hintText: l10n.permDescHint,
-              filled: true, fillColor: ShadTheme.of(context).secondary,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
-              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              isDense: true,
-            ),
-            style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground),
-          ),
-        ),
-        SizedBox(width: 6),
-        GestureDetector(
-          onTap: () => setState(() => rule.isAllow = !rule.isAllow),
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: rule.isAllow ? Color(0xFF4CAF50).withAlpha(25) : ShadTheme.of(context).destructive.withAlpha(20),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: rule.isAllow ? Color(0xFF4CAF50).withAlpha(70) : ShadTheme.of(context).destructive.withAlpha(60)),
-            ),
-            child: Text(rule.isAllow ? l10n.permRuleAllow : l10n.permRuleDeny,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                color: rule.isAllow ? Color(0xFF4CAF50) : ShadTheme.of(context).destructive)),
-          ),
-        ),
-        SizedBox(width: 4),
-        GestureDetector(
-          onTap: () => setState(() {
-            item.rules.removeAt(idx);
-            if (rule.pattern.isNotEmpty || rule.description.isNotEmpty) {
-              item.rules.insert(idx, _PermRule());
-            }
-          }),
-          child: Icon(Icons.delete_outline, size: 16, color: ShadTheme.of(context).mutedForeground),
-        ),
-      ],
-    ),
-  );
-}
-
-String _permItemLabel(_PermItem item, AppLocalizations l10n) {
-  switch (item.labelKey) {
+String _permItemLabelByKey(String key, AppLocalizations l10n) {
+  switch (key) {
     case 'permFileRead': return l10n.permFileRead;
     case 'permFileWrite': return l10n.permFileWrite;
     case 'permFileDelete': return l10n.permFileDelete;
@@ -1293,12 +1186,12 @@ String _permItemLabel(_PermItem item, AppLocalizations l10n) {
     case 'permDocWrite': return l10n.permDocWrite;
     case 'permTaskRead': return l10n.permTaskRead;
     case 'permTaskWrite': return l10n.permTaskWrite;
-    default: return item.labelKey;
+    default: return key;
   }
 }
 
-String _permItemDesc(_PermItem item, AppLocalizations l10n) {
-  switch (item.descKey) {
+String _permItemDescByKey(String key, AppLocalizations l10n) {
+  switch (key) {
     case 'permFileReadDesc': return l10n.permFileReadDesc;
     case 'permFileWriteDesc': return l10n.permFileWriteDesc;
     case 'permFileDeleteDesc': return l10n.permFileDeleteDesc;
@@ -1311,7 +1204,7 @@ String _permItemDesc(_PermItem item, AppLocalizations l10n) {
     case 'permDocWriteDesc': return l10n.permDocWriteDesc;
     case 'permTaskReadDesc': return l10n.permTaskReadDesc;
     case 'permTaskWriteDesc': return l10n.permTaskWriteDesc;
-    default: return item.descKey;
+    default: return key;
   }
 }
 
@@ -2427,29 +2320,4 @@ class _DummyAgent {
   final String uuid;
   final String name;
   _DummyAgent(this.uuid, this.name);
-}
-
-/// Permission toggle item model.
-class _PermItem {
-  final String toolId;
-  final String labelKey;
-  final String descKey;
-  bool enabled;
-  final List<_PermRule> rules;
-  final String _idSuffix;
-
-  _PermItem(this.toolId, this.labelKey, this.descKey, this.enabled, {String? idSuffix})
-      : rules = [],
-        _idSuffix = idSuffix ?? '';
-
-  String get uniqueId => '$toolId$_idSuffix';
-}
-
-/// A single validation rule for a permission item.
-class _PermRule {
-  String pattern;
-  String description;
-  bool isAllow; // true = allow, false = deny
-
-  _PermRule({this.pattern = '', this.description = '', this.isAllow = true});
 }

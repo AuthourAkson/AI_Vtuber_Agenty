@@ -116,6 +116,63 @@ class AgentManager extends ChangeNotifier {
 
   bool get hasUnreadMessages => _agentSummaries.any((a) => a.status == 'unread');
 
+  // ─── Permission Config ──────────────────────
+
+  /// Built-in tool permission presets matching WenzAgent tool names.
+  static const List<Map<String, String>> _builtinPermDefs = [
+    {'id': 'file_read', 'label': 'permFileRead', 'desc': 'permFileReadDesc', 'default': 'true'},
+    {'id': 'file_write', 'label': 'permFileWrite', 'desc': 'permFileWriteDesc', 'default': 'false'},
+    {'id': 'file_delete', 'label': 'permFileDelete', 'desc': 'permFileDeleteDesc', 'default': 'false'},
+    {'id': 'file_patch', 'label': 'permFilePatch', 'desc': 'permFilePatchDesc', 'default': 'false'},
+    {'id': 'directory_create', 'label': 'permDirCreate', 'desc': 'permDirCreateDesc', 'default': 'false'},
+    {'id': 'command_execute', 'label': 'permCmdExec', 'desc': 'permCmdExecDesc', 'default': 'false'},
+    {'id': 'bg_command', 'label': 'permBgCmd', 'desc': 'permBgCmdDesc', 'default': 'false'},
+    {'id': 'git_operations', 'label': 'permGitOps', 'desc': 'permGitOpsDesc', 'default': 'false'},
+    {'id': 'doc_read', 'label': 'permDocRead', 'desc': 'permDocReadDesc', 'default': 'true'},
+    {'id': 'doc_write', 'label': 'permDocWrite', 'desc': 'permDocWriteDesc', 'default': 'false'},
+    {'id': 'todo_read', 'label': 'permTaskRead', 'desc': 'permTaskReadDesc', 'default': 'true'},
+    {'id': 'todo_write', 'label': 'permTaskWrite', 'desc': 'permTaskWriteDesc', 'default': 'false'},
+  ];
+
+  final Map<String, bool> _permEnabled = {};
+
+  /// Whether a tool permission is enabled.
+  bool isPermEnabled(String toolId) => _permEnabled[toolId] ?? false;
+
+  /// Toggle a tool permission.
+  void togglePerm(String toolId) {
+    _permEnabled[toolId] = !(_permEnabled[toolId] ?? false);
+    _saveProfiles();
+    notifyListeners();
+  }
+
+  /// Build a PermissionConfig JSON string from current toggle state.
+  String buildPermissionConfigJson() {
+    final whitelist = <Map<String, dynamic>>[];
+    for (final def in _builtinPermDefs) {
+      final toolId = def['id']!;
+      if (_permEnabled[toolId] == true) {
+        whitelist.add({
+          'tool': toolId,
+          'mode': 'all',
+        });
+      }
+    }
+    return jsonEncode({'whitelist': whitelist, 'blacklist': []});
+  }
+
+  void _loadPermState(Map<String, dynamic> saved) {
+    final permMap = saved['permEnabled'] as Map<String, dynamic>?;
+    if (permMap != null) {
+      permMap.forEach((k, v) => _permEnabled[k] = v == true);
+    }
+    // Ensure all defs have a value
+    for (final def in _builtinPermDefs) {
+      final id = def['id']!;
+      _permEnabled.putIfAbsent(id, () => def['default'] == 'true');
+    }
+  }
+
   // ─── Lifecycle ──────────────────────────────
 
   Future<void> initIfEnabled({
@@ -270,6 +327,7 @@ class AgentManager extends ChangeNotifier {
               .toList();
           if (profiles.isNotEmpty) _providerProfiles = profiles;
         }
+        _loadPermState(raw is Map<String, dynamic> ? raw : {});
       }
     } catch (e) {
       print('[AgentManager] loadProfiles failed: $e');
@@ -283,6 +341,7 @@ class AgentManager extends ChangeNotifier {
       file.writeAsStringSync(jsonEncode({
         'profiles': _providerProfiles.map((p) => p.toJson()).toList(),
         'lastProfileIndex': _lastProfileIndex,
+        'permEnabled': _permEnabled,
       }));
     } catch (e) {
       print('[AgentManager] saveProfiles failed: $e');
@@ -322,12 +381,14 @@ class AgentManager extends ChangeNotifier {
     String? model,
   }) async {
     try {
+      final permJson = buildPermissionConfigJson();
       final entity = await wenzagent.createEmployee(
         name: name,
         description: description ?? '',
         deviceId: deviceId,
         provider: provider ?? 'openai',
         model: model ?? 'gpt-4o',
+        permissionConfigJson: permJson,
       );
       if (entity != null) {
         await refreshEmployees();

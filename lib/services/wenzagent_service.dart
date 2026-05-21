@@ -290,6 +290,7 @@ class WenzAgentService {
     String? deviceId,
     String provider = 'openai',
     String model = 'gpt-4o',
+    String? permissionConfigJson,
   }) async {
     if (_client == null) return null;
     try {
@@ -309,9 +310,10 @@ class WenzAgentService {
         sortOrder: 0,
         enableTools: 1,
         enableMcp: 0,
-        autoApprove: 0,
+        autoApprove: 1,           // Auto-approve tool calls to avoid "Cancelled"
         isPinned: 0,
         deleted: 0,
+        permissionConfig: permissionConfigJson,  // Inject global permission rules
       );
       await _client!.employeeManager.createEmployee(entity);
       return entity;
