@@ -253,6 +253,7 @@ class AgentManager extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopStreamingPoll();
     _msgSub?.cancel();
     _statusSub?.cancel();
     _connSub?.cancel();
@@ -531,8 +532,20 @@ class AgentManager extends ChangeNotifier {
 
   void _onMessage(Map<String, dynamic> event) {
     final type = event['type'] as String?;
-    if (type == 'message' && event['employeeId'] == _activeEmployeeId) {
-      _refreshActiveMessages();
+    if (type == 'message') {
+      final msgData = event['message'] as Map<String, dynamic>?;
+      final empId = event['employeeId'] as String?;
+      if (msgData != null && empId != null && empId == _activeEmployeeId) {
+        // Merge directly for real-time display (no DB round-trip)
+        final msgId = msgData['id'] as String?;
+        final existingIdx = _activeMessages.indexWhere((m) => m['id'] == msgId);
+        if (existingIdx >= 0) {
+          _activeMessages[existingIdx] = msgData;
+        } else {
+          _activeMessages.add(msgData);
+        }
+        notifyListeners();
+      }
     }
     if (type == 'unread') {
       refreshSummaries();
@@ -541,8 +554,28 @@ class AgentManager extends ChangeNotifier {
 
   void _onStatusChange(Map<String, dynamic> event) {
     if (event['employeeId'] == _activeEmployeeId) {
+      final status = event['status'] as String?;
+      // Start/stop streaming poll
+      if (status == 'streaming' || status == 'processing') {
+        _startStreamingPoll();
+      } else {
+        _stopStreamingPoll();
+        _refreshActiveMessages(); // Final refresh when done
+      }
       notifyListeners();
     }
+  }
+
+  Timer? _streamingTimer;
+  void _startStreamingPoll() {
+    _stopStreamingPoll();
+    _streamingTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      _refreshActiveMessages();
+    });
+  }
+  void _stopStreamingPoll() {
+    _streamingTimer?.cancel();
+    _streamingTimer = null;
   }
 
   void _onConnectionChange(bool connected) {

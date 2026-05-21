@@ -406,11 +406,8 @@ class WenzAgentService {
         _messageController.add({
           'type': 'message',
           'employeeId': employeeId,
-          'content': message.content ?? '',
-          'role': message.role,
-          'msgType': message.type,
+          'message': _msgToMap(message),  // Full message data for real-time UI
           'isRemote': isRemote,
-          'messageId': message.id,
         });
         break;
 
