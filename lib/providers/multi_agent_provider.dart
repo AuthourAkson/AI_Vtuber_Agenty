@@ -119,7 +119,7 @@ class AgentManager extends ChangeNotifier {
   // ─── Permission Config ──────────────────────
 
   /// Built-in tool permission presets matching WenzAgent tool names.
-  static const List<Map<String, String>> _builtinPermDefs = [
+  static const List<Map<String, String>> builtinPermDefs = [
     {'id': 'file_read', 'label': 'permFileRead', 'desc': 'permFileReadDesc', 'default': 'true'},
     {'id': 'file_write', 'label': 'permFileWrite', 'desc': 'permFileWriteDesc', 'default': 'false'},
     {'id': 'file_delete', 'label': 'permFileDelete', 'desc': 'permFileDeleteDesc', 'default': 'false'},
@@ -149,7 +149,7 @@ class AgentManager extends ChangeNotifier {
   /// Build a PermissionConfig JSON string from current toggle state.
   String buildPermissionConfigJson() {
     final whitelist = <Map<String, dynamic>>[];
-    for (final def in _builtinPermDefs) {
+    for (final def in builtinPermDefs) {
       final toolId = def['id']!;
       if (_permEnabled[toolId] == true) {
         whitelist.add({
@@ -167,7 +167,7 @@ class AgentManager extends ChangeNotifier {
       permMap.forEach((k, v) => _permEnabled[k] = v == true);
     }
     // Ensure all defs have a value
-    for (final def in _builtinPermDefs) {
+    for (final def in builtinPermDefs) {
       final id = def['id']!;
       _permEnabled.putIfAbsent(id, () => def['default'] == 'true');
     }

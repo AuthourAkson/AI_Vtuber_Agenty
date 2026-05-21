@@ -1143,7 +1143,7 @@ Widget _buildPermissionsPanel(AgentManager mgr) {
         SizedBox(height: 4),
         Text(l10n.permSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
         SizedBox(height: 24),
-        ...AgentManager._builtinPermDefs.map((def) => _permToggleCard(mgr, def, l10n)),
+        ...AgentManager.builtinPermDefs.map((def) => _permToggleCard(mgr, def, l10n)),
       ],
     ),
   );
