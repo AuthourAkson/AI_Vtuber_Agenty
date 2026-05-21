@@ -252,6 +252,22 @@ class AppLocalizations {
   String get privacy => _t('privacy');
   String get logs => _t('logs');
   String get about => _t('about');
+  String get logTitle => _t('logTitle');
+  String get logSubtitle => _t('logSubtitle');
+  String get logSearch => _t('logSearch');
+  String get logAll => _t('logAll');
+  String get logExport => _t('logExport');
+  String get logClear => _t('logClear');
+  String get logClearConfirm => _t('logClearConfirm');
+  String get logCount => _t('logCount');
+  String get logEmpty => _t('logEmpty');
+  String get logEmptyHint => _t('logEmptyHint');
+  String get logLevel => _t('logLevel');
+  String get logModule => _t('logModule');
+  String get logMessage => _t('logMessage');
+  String get logStackTrace => _t('logStackTrace');
+  String get logExported => _t('logExported');
+  String get logExportFailed => _t('logExportFailed');
   String get sync => _t('sync');
   String get storage => _t('storage');
   String get files => _t('files');
@@ -500,6 +516,22 @@ class AppLocalizations {
     'storage':      {'en': 'Storage',      'zh': '存储'},
     'files':        {'en': 'Files',        'zh': '文件'},
     'comingSoon':   {'en': 'coming soon',  'zh': '即将推出'},
+    'logTitle':         {'en': 'System Logs',                        'zh': '系统日志'},
+    'logSubtitle':      {'en': 'View, search, export and clear diagnostic logs.', 'zh': '查看、搜索、导出和清除诊断日志。'},
+    'logSearch':        {'en': 'Search logs...',                     'zh': '搜索日志...'},
+    'logAll':           {'en': 'All',                                'zh': '全部'},
+    'logExport':        {'en': 'Export',                             'zh': '导出日志'},
+    'logClear':         {'en': 'Clear',                              'zh': '清空日志'},
+    'logClearConfirm':  {'en': 'Clear all logs? This cannot be undone.', 'zh': '清空所有日志？此操作不可撤销。'},
+    'logCount':         {'en': r'Total: $count logs',                'zh': r'共 $count 条日志'},
+    'logEmpty':         {'en': 'No Logs',                            'zh': '暂无日志'},
+    'logEmptyHint':     {'en': 'When the system runs, diagnostic entries will appear here.', 'zh': '系统运行后，诊断条目将出现在此处。'},
+    'logLevel':         {'en': 'Level',                              'zh': '级别'},
+    'logModule':        {'en': 'Module',                             'zh': '模块'},
+    'logMessage':       {'en': 'Message',                            'zh': '消息'},
+    'logStackTrace':    {'en': 'Stack Trace',                        'zh': '堆栈跟踪'},
+    'logExported':      {'en': 'Logs exported.',                     'zh': '日志已导出。'},
+    'logExportFailed':  {'en': 'Export failed.',                     'zh': '导出失败。'},
   };
 }
 

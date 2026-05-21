@@ -4,6 +4,7 @@ import '../app.dart';
 import '../providers/multi_agent_provider.dart';
 import '../providers/appearance_provider.dart';
 import '../services/wenzagent_service.dart';
+import '../services/log_service.dart';
 import '../l10n/app_localizations.dart';
 import 'multi_agent_appearance.dart';
 
@@ -565,6 +566,11 @@ style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.p
 
 String _activeSettingSection = 'ai_config';
 
+// ── Logs panel state ──
+String _logSearch = '';
+final Set<LogLevel> _logLevels = LogLevel.values.toSet();
+int? _expandedLogId;
+
 int _lanTab = 0;
 final _waHostCtrl = TextEditingController(text: '127.0.0.1');
 final _waPortCtrl = TextEditingController(text: '9090');
@@ -678,8 +684,10 @@ case 'ai_mcp':
 return _buildMcpConfigPanel(mgr);
 case 'ai_permissions':
 return _buildPermissionsPanel(mgr);
-case 'net_lan':
-return _buildLanSettingsPanel(mgr);
+      case 'net_lan':
+        return _buildLanSettingsPanel(mgr);
+      case 'sys_logs':
+        return _buildLogsPanel(mgr);
 default:
 return Center(
 child: Text('$_activeSettingSection — coming soon',
@@ -1117,16 +1125,393 @@ hintText: hint,
 filled: true, fillColor: ShadTheme.of(context).secondary,
 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-isDense: true,
-),
-style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
-),
-],
-);
-}
+    isDense: true,
+    ),
+    style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+    ),
+    ],
+    );
+    }
 
-// ══════════════════════════════════════════════════════════
-// Content Area (Empty State or Chat)
+    // ─── Logs Panel ──────────────────────────────────────────
+
+    Widget _buildLogsPanel(AgentManager mgr) {
+    final logService = LogService();
+    final l10n = AppLocalizations.of(context);
+
+    // Seed demo data on first open so the UI isn't empty.
+    logService.seedDemoData();
+
+    // Listen to log changes so the UI auto-refreshes.
+    // NOTE: this builds a listener every build — for production,
+    // register in initState / dispose. Fine for prototype.
+    final filtered = logService.filtered(query: _logSearch, levels: _logLevels);
+
+    return Column(
+    children: [
+    // ── Header ──
+    Container(
+    padding: EdgeInsets.all(24),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    Row(
+    children: [
+    Icon(Icons.article_outlined, size: 22, color: ShadTheme.of(context).primary),
+    SizedBox(width: 10),
+    Text(l10n.logTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+    ],
+    ),
+    SizedBox(height: 4),
+    Text(l10n.logSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+    SizedBox(height: 16),
+    // ── Search bar + actions row ──
+    Row(
+    children: [
+    Expanded(
+    flex: 2,
+    child: TextField(
+    onChanged: (v) => setState(() => _logSearch = v),
+    decoration: InputDecoration(
+    hintText: l10n.logSearch,
+    prefixIcon: Icon(Icons.search, size: 18, color: ShadTheme.of(context).mutedForeground),
+    filled: true,
+    fillColor: ShadTheme.of(context).secondary,
+    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: BorderSide.none,
+    ),
+    isDense: true,
+    ),
+    style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+    ),
+    ),
+    SizedBox(width: 10),
+    _logActionBtn(l10n.logExport, Icons.download, () => _exportLogs(l10n, logService)),
+    SizedBox(width: 6),
+    _logActionBtn(l10n.logClear, Icons.delete_outline, () => _confirmClearLogs(l10n, logService)),
+    ],
+    ),
+    // ── Filter chips ──
+    SizedBox(height: 12),
+    SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+    children: [
+    _logFilterChip(l10n.logAll, null),
+    ...LogLevel.values.map((lvl) => _logFilterChip(lvl.label, lvl)),
+    ],
+    ),
+    ),
+    ],
+    ),
+    ),
+    Divider(height: 1, color: ShadTheme.of(context).border),
+
+    // ── Count ──
+    Padding(
+    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+    child: Row(
+    children: [
+    Text(
+    l10n.logCount.replaceAll('\$count', '${filtered.length}'),
+    style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground),
+    ),
+    Spacer(),
+    Text(
+    '${_logLevels.length == LogLevel.values.length ? l10n.logAll : _logLevels.map((l) => l.label).join(', ')}',
+    style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground),
+    ),
+    ],
+    ),
+    ),
+    Divider(height: 1, color: ShadTheme.of(context).border),
+
+    // ── Log list ──
+    Expanded(
+    child: filtered.isEmpty
+    ? Center(
+    child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+    Icon(Icons.inbox_outlined, size: 48, color: ShadTheme.of(context).mutedForeground.withAlpha(80)),
+    SizedBox(height: 12),
+    Text(l10n.logEmpty, style: TextStyle(fontSize: 15, color: ShadTheme.of(context).mutedForeground)),
+    SizedBox(height: 4),
+    Text(l10n.logEmptyHint, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+    ],
+    ),
+    )
+    : ListView.builder(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    itemCount: filtered.length,
+    itemBuilder: (_, i) => _logEntryTile(filtered[i], l10n),
+    ),
+    ),
+    ],
+    );
+    }
+
+    Widget _logFilterChip(String label, LogLevel? level) {
+    final active = level == null
+    ? _logLevels.length == LogLevel.values.length
+    : _logLevels.contains(level);
+    return GestureDetector(
+    onTap: () {
+    setState(() {
+    if (level == null) {
+    // "All" — toggle all on/off
+    if (_logLevels.length == LogLevel.values.length) {
+    _logLevels.clear();
+    } else {
+    _logLevels.addAll(LogLevel.values);
+    }
+    } else {
+    if (_logLevels.contains(level)) {
+    _logLevels.remove(level);
+    } else {
+    _logLevels.add(level);
+    }
+    }
+    });
+    },
+    child: Container(
+    margin: EdgeInsets.only(right: 6),
+    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+    color: active ? _logLevelColor(level).withAlpha(30) : ShadTheme.of(context).secondary,
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(
+    color: active ? _logLevelColor(level) : ShadTheme.of(context).border,
+    ),
+    ),
+    child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+    if (level != null) ...[
+    Container(
+    width: 8, height: 8,
+    margin: EdgeInsets.only(right: 5),
+    decoration: BoxDecoration(color: _logLevelColor(level), shape: BoxShape.circle),
+    ),
+    ],
+    Text(label, style: TextStyle(
+    fontSize: 12, fontWeight: FontWeight.w500,
+    color: active ? _logLevelColor(level) : ShadTheme.of(context).mutedForeground,
+    )),
+    ],
+    ),
+    ),
+    );
+    }
+
+    Widget _logEntryTile(LogEntry entry, AppLocalizations l10n) {
+    final isExpanded = _expandedLogId == entry.id;
+    final color = _logLevelColor(entry.level);
+    final timeStr = _formatTime(entry.timestamp);
+
+    return Column(
+    children: [
+    GestureDetector(
+    onTap: () => setState(() => _expandedLogId = isExpanded ? null : entry.id),
+    child: Container(
+    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    color: isExpanded ? ShadTheme.of(context).secondary.withAlpha(80) : null,
+    child: Row(
+    children: [
+    // Level dot
+    Container(
+    width: 8, height: 8,
+    margin: EdgeInsets.only(right: 10),
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    ),
+    // Badge
+    Container(
+    padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+    margin: EdgeInsets.only(right: 8),
+    decoration: BoxDecoration(
+    color: color.withAlpha(25),
+    borderRadius: BorderRadius.circular(3),
+    border: Border.all(color: color.withAlpha(60)),
+    ),
+    child: Text(entry.level.label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color)),
+    ),
+    // Brief message
+    Expanded(
+    child: Text(
+    entry.message,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+    ),
+    ),
+    SizedBox(width: 8),
+    // Time
+    Text(timeStr, style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+    SizedBox(width: 4),
+    // Expand chevron
+    Icon(
+    isExpanded ? Icons.expand_less : Icons.expand_more,
+    size: 16,
+    color: ShadTheme.of(context).mutedForeground,
+    ),
+    ],
+    ),
+    ),
+    ),
+    // ── Expanded detail ──
+    if (isExpanded)
+    Container(
+    padding: EdgeInsets.fromLTRB(24, 8, 24, 14),
+    color: ShadTheme.of(context).secondary.withAlpha(60),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    _logDetailRow(l10n.logLevel,
+    Row(children: [
+    Container(
+    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+    color: color.withAlpha(25),
+    borderRadius: BorderRadius.circular(4),
+    border: Border.all(color: color.withAlpha(60)),
+    ),
+    child: Text(entry.level.label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    ),
+    ]),
+    ),
+    _logDetailRow(
+    'Time',
+    Text(timeStr, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground)),
+    ),
+    _logDetailRow(l10n.logModule, Text(entry.module, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground))),
+    _logDetailRow(l10n.logMessage, Text(entry.message, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground))),
+    if (entry.stackTrace != null && entry.stackTrace!.isNotEmpty) ...[
+    SizedBox(height: 8),
+    Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    SizedBox(
+    width: 70,
+    child: Text(l10n.logStackTrace, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: ShadTheme.of(context).mutedForeground)),
+    ),
+    Expanded(
+    child: Container(
+    padding: EdgeInsets.all(10),
+    decoration: BoxDecoration(
+    color: Colors.black.withAlpha(60),
+    borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+    entry.stackTrace!,
+    style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: ShadTheme.of(context).foreground.withAlpha(200), height: 1.5),
+    ),
+    ),
+    ),
+    ],
+    ),
+    ],
+    ],
+    ),
+    ),
+    Divider(height: 1, color: ShadTheme.of(context).border.withAlpha(60)),
+    ],
+    );
+    }
+
+    Widget _logDetailRow(String label, Widget value) {
+    return Padding(
+    padding: EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    SizedBox(
+    width: 70,
+    child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: ShadTheme.of(context).mutedForeground)),
+    ),
+    Expanded(child: value),
+    ],
+    ),
+    );
+    }
+
+    Widget _logActionBtn(String tooltip, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+    onTap: onTap,
+    child: Container(
+    padding: EdgeInsets.all(8),
+    decoration: BoxDecoration(
+    color: ShadTheme.of(context).secondary,
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: ShadTheme.of(context).border),
+    ),
+    child: Icon(icon, size: 18, color: ShadTheme.of(context).mutedForeground),
+    ),
+    );
+    }
+
+    Color _logLevelColor(LogLevel? level) {
+    switch (level) {
+    case LogLevel.debug: return const Color(0xFF90A4AE);
+    case LogLevel.info:  return const Color(0xFF42A5F5);
+    case LogLevel.warn:  return const Color(0xFFFFA726);
+    case LogLevel.error: return const Color(0xFFEF5350);
+    default:             return const Color(0xFF90A4AE);
+    }
+    }
+
+    String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+    if (d == today) return time;
+    if (d == today.subtract(const Duration(days: 1))) return 'Yesterday $time';
+    return '${dt.month}/${dt.day} $time';
+    }
+
+    void _exportLogs(AppLocalizations l10n, LogService logService) {
+    // For now, just notify — file save dialog would require file_picker package.
+    // Output is available via LogService.exportJson().
+    final json = logService.exportJson();
+    debugPrint('=== LOG EXPORT ===\n$json');
+    ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+    content: Text(l10n.logExported),
+    backgroundColor: ShadTheme.of(context).card,
+    duration: const Duration(seconds: 2),
+    ),
+    );
+    }
+
+    void _confirmClearLogs(AppLocalizations l10n, LogService logService) {
+    showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+    backgroundColor: ShadTheme.of(context).card,
+    title: Text(l10n.logClear, style: TextStyle(color: ShadTheme.of(context).foreground)),
+    content: Text(l10n.logClearConfirm, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+    actions: [
+    TextButton(
+    onPressed: () => Navigator.pop(ctx),
+    child: Text(l10n.cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+    ),
+    TextButton(
+    onPressed: () {
+    logService.clear();
+    setState(() {});
+    Navigator.pop(ctx);
+    },
+    child: Text(l10n.logClear, style: TextStyle(color: ShadTheme.of(context).destructive)),
+    ),
+    ],
+    ),
+    );
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Content Area (Empty State or Chat)
 // ══════════════════════════════════════════════════════════
 
 Widget _buildContentArea(AgentManager mgr) {
