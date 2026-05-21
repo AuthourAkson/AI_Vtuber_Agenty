@@ -2240,36 +2240,6 @@ Widget _buildToolResultSection(String result) {
   );
 }
 
-/// Tool call header badge.
-Widget _buildToolCallHeader(String name, bool hasResult) {
-  return Padding(
-    padding: EdgeInsets.only(bottom: content.isNotEmpty ? 6 : 0),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withAlpha(25),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(60)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.build, size: 13, color: Theme.of(context).colorScheme.primary),
-              SizedBox(width: 4),
-              Text(hasResult ? 'TOOL RESULT: $name' : 'TOOL CALL: $name',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.primary)),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 /// Individual tool call item with arguments.
 Widget _buildToolCallItem(Map<String, dynamic> tc) {
   final tcName = tc['name']?.toString() ?? '';
@@ -2337,67 +2307,34 @@ String _prettyJson(dynamic obj) {
   }
 }
 
-/// Stateful widget for collapsible sections.
-class _CollapsibleSection extends StatefulWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final Widget child;
-  final bool initiallyExpanded;
-
-  const _CollapsibleSection({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.child,
-    this.initiallyExpanded = false,
-  });
-
-  @override
-  State<_CollapsibleSection> createState() => _CollapsibleSectionState();
-}
-
-class _CollapsibleSectionState extends State<_CollapsibleSection> {
-  late bool _expanded;
-
-  @override
-  void initState() {
-    super.initState();
-    _expanded = widget.initiallyExpanded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+/// Tool call header badge.
+Widget _buildToolCallHeader(String name, bool hasResult) {
+  return Padding(
+    padding: EdgeInsets.only(bottom: 6),
+    child: Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GestureDetector(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, size: 14, color: widget.color),
-                SizedBox(width: 4),
-                Text(widget.title,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: widget.color)),
-                SizedBox(width: 4),
-                Icon(_expanded ? Icons.expand_less : Icons.expand_more,
-                  size: 14, color: widget.color.withAlpha(150)),
-              ],
-            ),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withAlpha(25),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(60)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.build, size: 13, color: Theme.of(context).colorScheme.primary),
+              SizedBox(width: 4),
+              Text(hasResult ? 'TOOL RESULT: $name' : 'TOOL CALL: $name',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary)),
+            ],
           ),
         ),
-        if (_expanded)
-          Padding(
-            padding: EdgeInsets.only(bottom: 6),
-            child: widget.child,
-          ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 Widget _buildChatInput(AgentManager mgr) {
@@ -2503,6 +2440,69 @@ mgr.openAgentWithProfile(agent.uuid, agent.name, i);
 ),
 );
 }
+}
+
+/// Stateful widget for collapsible sections.
+class _CollapsibleSection extends StatefulWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final Widget child;
+  final bool initiallyExpanded;
+
+  const _CollapsibleSection({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.child,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  State<_CollapsibleSection> createState() => _CollapsibleSectionState();
+}
+
+class _CollapsibleSectionState extends State<_CollapsibleSection> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, size: 14, color: widget.color),
+                SizedBox(width: 4),
+                Text(widget.title,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: widget.color)),
+                SizedBox(width: 4),
+                Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 14, color: widget.color.withAlpha(150)),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded)
+          Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: widget.child,
+          ),
+      ],
+    );
+  }
 }
 
 class _DummyAgent {
