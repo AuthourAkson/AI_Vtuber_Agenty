@@ -483,6 +483,8 @@ class AgentManager extends ChangeNotifier {
       final messages = await wenzagent.getActiveMessages();
       _activeMessages = messages;
       notifyListeners();
+      // Refresh summaries so the new agent appears in AGENTS sidebar
+      await refreshSummaries();
     }
   }
 

@@ -29,6 +29,7 @@ bool _initialized = false;
 bool _contactsMode = false;
 bool _showSettings = false;
 String _searchQuery = '';
+int _lastMsgCount = 0; // Track to auto-scroll only on new messages
 
 @override
 void initState() {
@@ -2179,7 +2180,10 @@ color: ShadTheme.of(context).card,
 child: Row(
 children: [
 GestureDetector(
-onTap: () => mgr.closeAgent(),
+onTap: () {
+  _lastMsgCount = 0;
+  mgr.closeAgent();
+},
 child: Icon(Icons.arrow_back, size: 20, color: ShadTheme.of(context).mutedForeground),
 ),
 SizedBox(width: 10),
@@ -2216,26 +2220,30 @@ child: Icon(Icons.stop, size: 18, color: ShadTheme.of(context).mutedForeground),
             ? Center(
                 child: Text('Start a conversation', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
               )
-            : ListView.builder(
-                controller: _scrollCtrl,
-                padding: EdgeInsets.all(16),
-                itemCount: mgr.activeMessages.length + (mgr.activeAgentStatus == 'processing' || mgr.activeAgentStatus == 'streaming' ? 1 : 0),
-                itemBuilder: (_, i) {
-                  if (i < mgr.activeMessages.length) {
-                    final msg = mgr.activeMessages[i];
-                    // Auto-scroll when new messages arrive
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (_scrollCtrl.hasClients) {
-                        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
-                          duration: Duration(milliseconds: 150), curve: Curves.easeOut);
-                      }
-                    });
-                    return _msgBubble(msg);
-                  }
-                  // Loading indicator at the end
-                  return _buildThinkingIndicator();
-                },
-              ),
+            : Builder(builder: (context) {
+                final totalItems = mgr.activeMessages.length + (mgr.activeAgentStatus == 'processing' || mgr.activeAgentStatus == 'streaming' ? 1 : 0);
+                // Auto-scroll only when new messages arrive (not on every rebuild)
+                if (mgr.activeMessages.length > _lastMsgCount) {
+                  _lastMsgCount = mgr.activeMessages.length;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_scrollCtrl.hasClients) {
+                      _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
+                        duration: Duration(milliseconds: 150), curve: Curves.easeOut);
+                    }
+                  });
+                }
+                return ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: EdgeInsets.all(16),
+                  itemCount: totalItems,
+                  itemBuilder: (_, i) {
+                    if (i < mgr.activeMessages.length) {
+                      return _msgBubble(mgr.activeMessages[i]);
+                    }
+                    return _buildThinkingIndicator();
+                  },
+                );
+              }),
       ),
 Divider(height: 1, color: ShadTheme.of(context).border),
 // Profile switcher
@@ -2501,8 +2509,9 @@ duration: Duration(milliseconds: 200), curve: Curves.easeOut);
 });
 }
 
-void _selectAgent(dynamic agent, AgentManager mgr) {
-final profiles = mgr.providerProfiles;
+  void _selectAgent(dynamic agent, AgentManager mgr) {
+  _lastMsgCount = 0; // Reset for new conversation
+  final profiles = mgr.providerProfiles;
 if (profiles.isEmpty) return;
 
 // Check if this employee has a last-used profile
