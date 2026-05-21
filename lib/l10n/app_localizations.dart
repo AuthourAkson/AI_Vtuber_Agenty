@@ -268,6 +268,68 @@ class AppLocalizations {
   String get logStackTrace => _t('logStackTrace');
   String get logExported => _t('logExported');
   String get logExportFailed => _t('logExportFailed');
+  String get logTime => _t('logTime');
+  String get mcpTitle => _t('mcpTitle');
+  String get mcpSubtitle => _t('mcpSubtitle');
+  String get mcpRunning => _t('mcpRunning');
+  String get mcpStopped => _t('mcpStopped');
+  String get mcpStart => _t('mcpStart');
+  String get mcpStop => _t('mcpStop');
+  String get mcpEditConfig => _t('mcpEditConfig');
+  String get mcpHost => _t('mcpHost');
+  String get mcpPort => _t('mcpPort');
+  String get mcpConfigJson => _t('mcpConfigJson');
+  String get mcpConfigHint => _t('mcpConfigHint');
+  String get mcpSaveConfig => _t('mcpSaveConfig');
+  String get mcpNoServers => _t('mcpNoServers');
+  String get mcpAddServer => _t('mcpAddServer');
+  String get permTitle => _t('permTitle');
+  String get permSubtitle => _t('permSubtitle');
+  String get permEnabled => _t('permEnabled');
+  String get permDisabled => _t('permDisabled');
+  String get permAddRule => _t('permAddRule');
+  String get permDeleteRule => _t('permDeleteRule');
+  String get permRulePattern => _t('permRulePattern');
+  String get permRuleDesc => _t('permRuleDesc');
+  String get permRuleType => _t('permRuleType');
+  String get permRuleAllow => _t('permRuleAllow');
+  String get permRuleDeny => _t('permRuleDeny');
+  String get permPatternHint => _t('permPatternHint');
+  String get permDescHint => _t('permDescHint');
+  String get permFileRead => _t('permFileRead');
+  String get permFileReadDesc => _t('permFileReadDesc');
+  String get permFileWrite => _t('permFileWrite');
+  String get permFileWriteDesc => _t('permFileWriteDesc');
+  String get permFileDelete => _t('permFileDelete');
+  String get permFileDeleteDesc => _t('permFileDeleteDesc');
+  String get permFilePatch => _t('permFilePatch');
+  String get permFilePatchDesc => _t('permFilePatchDesc');
+  String get permDirCreate => _t('permDirCreate');
+  String get permDirCreateDesc => _t('permDirCreateDesc');
+  String get permCmdExec => _t('permCmdExec');
+  String get permCmdExecDesc => _t('permCmdExecDesc');
+  String get permBgCmd => _t('permBgCmd');
+  String get permBgCmdDesc => _t('permBgCmdDesc');
+  String get permGitOps => _t('permGitOps');
+  String get permGitOpsDesc => _t('permGitOpsDesc');
+  String get permDocRead => _t('permDocRead');
+  String get permDocReadDesc => _t('permDocReadDesc');
+  String get permDocWrite => _t('permDocWrite');
+  String get permDocWriteDesc => _t('permDocWriteDesc');
+  String get permTaskRead => _t('permTaskRead');
+  String get permTaskReadDesc => _t('permTaskReadDesc');
+  String get permTaskWrite => _t('permTaskWrite');
+  String get permTaskWriteDesc => _t('permTaskWriteDesc');
+  String get dataFilesTitle => _t('dataFilesTitle');
+  String get dataFilesSubtitle => _t('dataFilesSubtitle');
+  String get dataFilesOpenDir => _t('dataFilesOpenDir');
+  String get dataFilesEmpty => _t('dataFilesEmpty');
+  String get dataStorageTitle => _t('dataStorageTitle');
+  String get dataStorageSubtitle => _t('dataStorageSubtitle');
+  String get dataStorageSpace => _t('dataStorageSpace');
+  String get dataStorageFiles => _t('dataStorageFiles');
+  String get dataStorageManage => _t('dataStorageManage');
+  String get dataStorageOpen => _t('dataStorageOpen');
   String get sync => _t('sync');
   String get storage => _t('storage');
   String get files => _t('files');
@@ -532,6 +594,68 @@ class AppLocalizations {
     'logStackTrace':    {'en': 'Stack Trace',                        'zh': '堆栈跟踪'},
     'logExported':      {'en': 'Logs exported.',                     'zh': '日志已导出。'},
     'logExportFailed':  {'en': 'Export failed.',                     'zh': '导出失败。'},
+    'logTime':          {'en': 'Time',                               'zh': '时间'},
+    'mcpTitle':         {'en': 'MCP Server Config',                  'zh': 'MCP 服务器配置'},
+    'mcpSubtitle':      {'en': 'Manage MCP (Model Context Protocol) server connections and tools.', 'zh': '管理 MCP（模型上下文协议）服务器连接和工具。'},
+    'mcpRunning':       {'en': 'Running',                            'zh': '运行中'},
+    'mcpStopped':       {'en': 'Stopped',                            'zh': '已停止'},
+    'mcpStart':         {'en': 'Start Service',                      'zh': '启动服务'},
+    'mcpStop':          {'en': 'Stop Service',                       'zh': '停止服务'},
+    'mcpEditConfig':    {'en': 'Edit Config',                        'zh': '编辑配置'},
+    'mcpHost':          {'en': 'Host',                               'zh': '主机'},
+    'mcpPort':          {'en': 'Port',                               'zh': '端口'},
+    'mcpConfigJson':    {'en': 'Configuration',                      'zh': '配置'},
+    'mcpConfigHint':    {'en': 'Paste MCP server config JSON here',  'zh': '在此粘贴 MCP 服务器配置 JSON'},
+    'mcpSaveConfig':    {'en': 'Save Config',                        'zh': '保存配置'},
+    'mcpNoServers':     {'en': 'No MCP servers configured yet.',     'zh': '尚未配置 MCP 服务器。'},
+    'mcpAddServer':     {'en': 'Add MCP Server',                     'zh': '添加 MCP 服务器'},
+    'permTitle':        {'en': 'Global Permissions',                 'zh': '全局权限'},
+    'permSubtitle':     {'en': 'Control which tools agents are allowed to use and set validation rules.', 'zh': '控制代理可使用的工具并设置校验规则。'},
+    'permEnabled':      {'en': 'Enabled',                            'zh': '已启用'},
+    'permDisabled':     {'en': 'Disabled',                           'zh': '已禁用'},
+    'permAddRule':      {'en': 'Add Rule',                           'zh': '添加规则'},
+    'permDeleteRule':   {'en': 'Delete Rule',                        'zh': '删除规则'},
+    'permRulePattern':  {'en': 'Match Pattern (RegExp)',             'zh': '匹配模式（正则表达式）'},
+    'permRuleDesc':     {'en': 'Rule Description',                   'zh': '规则描述'},
+    'permRuleType':     {'en': 'Rule Type',                          'zh': '规则类型'},
+    'permRuleAllow':    {'en': 'Allow',                              'zh': '允许'},
+    'permRuleDeny':     {'en': 'Deny',                               'zh': '禁止'},
+    'permPatternHint':  {'en': 'e.g. *.dart, /workspace/.*',         'zh': '例如 *.dart, /workspace/.*'},
+    'permDescHint':     {'en': 'Describe what this rule matches',    'zh': '描述此规则的匹配条件'},
+    'permFileRead':     {'en': 'File Read',                          'zh': '文件读取'},
+    'permFileReadDesc': {'en': 'Allow reading any file',             'zh': '允许读取任何文件'},
+    'permFileWrite':    {'en': 'File Write',                         'zh': '文件写入'},
+    'permFileWriteDesc':{'en': 'Allow modifying any file',           'zh': '允许修改任何文件'},
+    'permFileDelete':   {'en': 'File Delete',                        'zh': '文件删除'},
+    'permFileDeleteDesc':{'en': 'Allow deleting any file',           'zh': '允许删除任何文件'},
+    'permFilePatch':    {'en': 'File Patch',                         'zh': '文件补丁'},
+    'permFilePatchDesc':{'en': 'Allow patching files',               'zh': '允许对文件进行补丁修改'},
+    'permDirCreate':    {'en': 'Directory Create',                   'zh': '目录创建'},
+    'permDirCreateDesc':{'en': 'Allow creating any directory',       'zh': '允许创建任何目录'},
+    'permCmdExec':      {'en': 'Command Execute',                    'zh': '命令执行'},
+    'permCmdExecDesc':  {'en': 'Allow executing any command',        'zh': '允许执行任何命令'},
+    'permBgCmd':        {'en': 'Background Command',                 'zh': '后台命令'},
+    'permBgCmdDesc':    {'en': 'Allow executing background commands','zh': '允许执行后台命令'},
+    'permGitOps':       {'en': 'Git Operations',                     'zh': 'Git 操作'},
+    'permGitOpsDesc':   {'en': 'Allow Git related operations',       'zh': '允许执行 Git 相关操作'},
+    'permDocRead':      {'en': 'Document Read',                      'zh': '文档读取'},
+    'permDocReadDesc':  {'en': 'Allow reading any document',         'zh': '允许读取任何文档'},
+    'permDocWrite':     {'en': 'Document Write',                     'zh': '文档写入'},
+    'permDocWriteDesc': {'en': 'Allow modifying any document',       'zh': '允许修改任何文档'},
+    'permTaskRead':     {'en': 'Task Read',                          'zh': '任务读取'},
+    'permTaskReadDesc': {'en': 'Allow reading any task',             'zh': '允许读取任何任务'},
+    'permTaskWrite':    {'en': 'Task Write',                         'zh': '任务写入'},
+    'permTaskWriteDesc':{'en': 'Allow modifying any task',           'zh': '允许修改任何任务'},
+    'dataFilesTitle':   {'en': 'File Access',                        'zh': '文件访问'},
+    'dataFilesSubtitle':{'en': 'Manage folders accessible to agents.', 'zh': '管理代理可访问的文件夹。'},
+    'dataFilesOpenDir': {'en': 'Open Folder',                        'zh': '打开文件夹'},
+    'dataFilesEmpty':   {'en': 'No accessible folders configured.',  'zh': '未配置可访问的文件夹。'},
+    'dataStorageTitle': {'en': 'Storage',                            'zh': '存储空间'},
+    'dataStorageSubtitle':{'en': 'View storage usage and manage files.', 'zh': '查看存储占用并管理文件。'},
+    'dataStorageSpace': {'en': 'Disk Usage',                         'zh': '空间占用'},
+    'dataStorageFiles': {'en': 'Associated Files',                   'zh': '关联文件数'},
+    'dataStorageManage':{'en': 'Manage Files',                       'zh': '管理文件'},
+    'dataStorageOpen':  {'en': 'Open Storage Folder',                'zh': '打开存储目录'},
   };
 }
 

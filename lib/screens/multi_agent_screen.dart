@@ -571,6 +571,31 @@ String _logSearch = '';
 final Set<LogLevel> _logLevels = LogLevel.values.toSet();
 int? _expandedLogId;
 
+// ── MCP Config state ──
+bool _mcpRunning = false;
+String _mcpHost = 'localhost';
+int _mcpPort = 9898;
+String _mcpConfigJson = '{\n  "mcpServers": {\n    "filesystem": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]\n    }\n  }\n}';
+final List<Map<String, String>> _mcpServers = [
+  {'name': 'filesystem', 'url': 'http://localhost:9898', 'status': 'stopped'},
+];
+
+// ── Permissions state ──
+final List<_PermItem> _permItems = [
+  _PermItem('file_read', 'permFileRead', 'permFileReadDesc', true),
+  _PermItem('file_write', 'permFileWrite', 'permFileWriteDesc', false),
+  _PermItem('file_delete', 'permFileDelete', 'permFileDeleteDesc', false),
+  _PermItem('file_patch', 'permFilePatch', 'permFilePatchDesc', false),
+  _PermItem('directory_create', 'permDirCreate', 'permDirCreateDesc', false),
+  _PermItem('command_execute', 'permCmdExec', 'permCmdExecDesc', false),
+  _PermItem('bg_command', 'permBgCmd', 'permBgCmdDesc', false),
+  _PermItem('git_operations', 'permGitOps', 'permGitOpsDesc', false),
+  _PermItem('file_read', 'permDocRead', 'permDocReadDesc', true, idSuffix: '_doc'),
+  _PermItem('file_write', 'permDocWrite', 'permDocWriteDesc', false, idSuffix: '_doc'),
+  _PermItem('todo_read', 'permTaskRead', 'permTaskReadDesc', true),
+  _PermItem('todo_write', 'permTaskWrite', 'permTaskWriteDesc', false),
+];
+
 int _lanTab = 0;
 final _waHostCtrl = TextEditingController(text: '127.0.0.1');
 final _waPortCtrl = TextEditingController(text: '9090');
@@ -678,12 +703,16 @@ case 'pref_appearance':
 return MultiAgentAppearancePage();
 case 'pref_general':
 return _buildGeneralPanel();
-case 'ai_config':
-return _buildAiConfigPanel(mgr);
-case 'ai_mcp':
-return _buildMcpConfigPanel(mgr);
-case 'ai_permissions':
-return _buildPermissionsPanel(mgr);
+      case 'ai_config':
+        return _buildAiConfigPanel(mgr);
+      case 'ai_mcp':
+        return _buildMcpConfigPanel(mgr);
+      case 'ai_permissions':
+        return _buildPermissionsPanel(mgr);
+      case 'data_files':
+        return _buildDataFilesPanel(mgr);
+      case 'data_storage':
+        return _buildDataStoragePanel(mgr);
       case 'net_lan':
         return _buildLanSettingsPanel(mgr);
       case 'sys_logs':
@@ -876,39 +905,635 @@ style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
 // ─── MCP Config Panel ────────────────────────────────────
 
 Widget _buildMcpConfigPanel(AgentManager mgr) {
-return Center(
-child: Column(
-mainAxisSize: MainAxisSize.min,
-children: [
-Icon(Icons.extension, size: 48, color: ShadTheme.of(context).mutedForeground),
-SizedBox(height: 16),
-Text(AppLocalizations.of(context).mcpConfig, style: TextStyle(fontSize: 16, color: ShadTheme.of(context).foreground)),
-SizedBox(height: 8),
-Text('MCP (Model Context Protocol) server management\nwill be available soon.',
-textAlign: TextAlign.center,
-style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
-],
-),
-);
+  final l10n = AppLocalizations.of(context);
+  return SingleChildScrollView(
+    padding: EdgeInsets.all(24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.mcpTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+        SizedBox(height: 4),
+        Text(l10n.mcpSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+        SizedBox(height: 24),
+
+        // ── Servers list ──
+        if (_mcpServers.isEmpty)
+          _emptyCard(l10n.mcpNoServers)
+        else
+          ..._mcpServers.map((srv) => _mcpServerCard(srv, l10n)),
+        SizedBox(height: 16),
+
+        // ── Add Server button ──
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showMcpAddDialog(l10n),
+            icon: Icon(Icons.add, size: 18),
+            label: Text(l10n.mcpAddServer),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              side: BorderSide(color: Theme.of(context).colorScheme.primary),
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _mcpServerCard(Map<String, String> srv, AppLocalizations l10n) {
+  final running = srv['status'] == 'running';
+  final color = running ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground;
+  return Container(
+    margin: EdgeInsets.only(bottom: 12),
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: ShadTheme.of(context).card,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: ShadTheme.of(context).border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 10, height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(srv['name'] ?? 'MCP Server',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+            ),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: color.withAlpha(25),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: color.withAlpha(80)),
+              ),
+              child: Text(running ? l10n.mcpRunning : l10n.mcpStopped,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        Text(srv['url'] ?? '', style: TextStyle(fontSize: 13, fontFamily: 'monospace', color: ShadTheme.of(context).mutedForeground)),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            _mcpActionBtn(
+              running ? Icons.stop : Icons.play_arrow,
+              running ? l10n.mcpStop : l10n.mcpStart,
+              running ? ShadTheme.of(context).destructive : Color(0xFF4CAF50),
+              () => setState(() {
+                srv['status'] = running ? 'stopped' : 'running';
+                _mcpRunning = srv['status'] == 'running';
+              }),
+            ),
+            SizedBox(width: 8),
+            _mcpActionBtn(Icons.edit, l10n.mcpEditConfig, Theme.of(context).colorScheme.primary,
+              () => _showMcpEditDialog(srv, l10n)),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _mcpActionBtn(IconData icon, String label, Color c, VoidCallback onTap) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: c.withAlpha(20),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: c.withAlpha(60)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: c),
+          SizedBox(width: 5),
+          Text(label, style: TextStyle(fontSize: 12, color: c)),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showMcpEditDialog(Map<String, String> srv, AppLocalizations l10n) {
+  final hostCtrl = TextEditingController(text: _mcpHost);
+  final portCtrl = TextEditingController(text: '$_mcpPort');
+  final configCtrl = TextEditingController(text: _mcpConfigJson);
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: ShadTheme.of(context).card,
+      title: Text('${l10n.mcpEditConfig} — ${srv['name']}', style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 15)),
+      content: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: hostCtrl,
+                      decoration: InputDecoration(
+                        labelText: l10n.mcpHost, filled: true,
+                        fillColor: ShadTheme.of(context).secondary, border: OutlineInputBorder(),
+                      ),
+                      style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  SizedBox(
+                    width: 100,
+                    child: TextField(
+                      controller: portCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: l10n.mcpPort, filled: true,
+                        fillColor: ShadTheme.of(context).secondary, border: OutlineInputBorder(),
+                      ),
+                      style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 12),
+              TextField(
+                controller: configCtrl,
+                maxLines: 8,
+                decoration: InputDecoration(
+                  labelText: l10n.mcpConfigJson,
+                  hintText: l10n.mcpConfigHint,
+                  filled: true, fillColor: ShadTheme.of(context).secondary,
+                  border: OutlineInputBorder(),
+                ),
+                style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: ShadTheme.of(context).foreground),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground))),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _mcpHost = hostCtrl.text;
+              _mcpPort = int.tryParse(portCtrl.text) ?? 9898;
+              _mcpConfigJson = configCtrl.text;
+              srv['url'] = 'http://$_mcpHost:$_mcpPort';
+            });
+            Navigator.pop(ctx);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+          child: Text(l10n.mcpSaveConfig, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showMcpAddDialog(AppLocalizations l10n) {
+  final nameCtrl = TextEditingController();
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: ShadTheme.of(context).card,
+      title: Text(l10n.mcpAddServer, style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 15)),
+      content: SizedBox(
+        width: 350,
+        child: TextField(
+          controller: nameCtrl,
+          decoration: InputDecoration(
+            labelText: 'Name', filled: true,
+            fillColor: ShadTheme.of(context).secondary, border: OutlineInputBorder(),
+          ),
+          style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground))),
+        ElevatedButton(
+          onPressed: () {
+            final name = nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            setState(() => _mcpServers.add({
+              'name': name,
+              'url': 'http://$_mcpHost:$_mcpPort',
+              'status': 'stopped',
+            }));
+            Navigator.pop(ctx);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary),
+          child: Text(l10n.create, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
+        ),
+      ],
+    ),
+  );
 }
 
 // ─── Permissions Panel ───────────────────────────────────
 
 Widget _buildPermissionsPanel(AgentManager mgr) {
-return Center(
-child: Column(
-mainAxisSize: MainAxisSize.min,
-children: [
-Icon(Icons.security, size: 48, color: ShadTheme.of(context).mutedForeground),
-SizedBox(height: 16),
-Text(AppLocalizations.of(context).permissions, style: TextStyle(fontSize: 16, color: ShadTheme.of(context).foreground)),
-SizedBox(height: 8),
-Text('Configure agent permissions globally.\nFile access, command whitelist, and tool authorization.',
-textAlign: TextAlign.center,
-style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
-],
-),
-);
+  final l10n = AppLocalizations.of(context);
+  return SingleChildScrollView(
+    padding: EdgeInsets.all(24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.permTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+        SizedBox(height: 4),
+        Text(l10n.permSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+        SizedBox(height: 24),
+        ..._permItems.map((item) => _permToggleCard(item, l10n)),
+      ],
+    ),
+  );
+}
+
+Widget _permToggleCard(_PermItem item, AppLocalizations l10n) {
+  final label = _permItemLabel(item, l10n);
+  final desc = _permItemDesc(item, l10n);
+  return Container(
+    margin: EdgeInsets.only(bottom: 8),
+    decoration: BoxDecoration(
+      color: ShadTheme.of(context).card,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: ShadTheme.of(context).border),
+    ),
+    child: Column(
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ShadTheme.of(context).foreground)),
+          subtitle: Text(desc, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+          value: item.enabled,
+          onChanged: (v) => setState(() => item.enabled = v),
+          activeColor: ShadTheme.of(context).primary,
+        ),
+        // ── Rules section (only when enabled) ──
+        if (item.enabled) ...[
+          Divider(height: 1, color: ShadTheme.of(context).border),
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Row(
+              children: [
+                Text(l10n.permRulePattern, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: ShadTheme.of(context).mutedForeground)),
+                Spacer(),
+                GestureDetector(
+                  onTap: () => setState(() => item.rules.add(_PermRule())),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 15, color: Theme.of(context).colorScheme.primary),
+                      SizedBox(width: 3),
+                      Text(l10n.permAddRule,
+                        style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...item.rules.asMap().entries.map((e) => _permRuleRow(item, e.key, e.value, l10n)),
+          SizedBox(height: 8),
+        ],
+      ],
+    ),
+  );
+}
+
+Widget _permRuleRow(_PermItem item, int idx, _PermRule rule, AppLocalizations l10n) {
+  return Padding(
+    padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+    child: Row(
+      children: [
+        Expanded(
+          flex: 3,
+          child: TextField(
+            controller: TextEditingController(text: rule.pattern),
+            onChanged: (v) => rule.pattern = v,
+            decoration: InputDecoration(
+              hintText: l10n.permPatternHint,
+              filled: true, fillColor: ShadTheme.of(context).secondary,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              isDense: true,
+            ),
+            style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: ShadTheme.of(context).foreground),
+          ),
+        ),
+        SizedBox(width: 6),
+        Expanded(
+          flex: 2,
+          child: TextField(
+            controller: TextEditingController(text: rule.description),
+            onChanged: (v) => rule.description = v,
+            decoration: InputDecoration(
+              hintText: l10n.permDescHint,
+              filled: true, fillColor: ShadTheme.of(context).secondary,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide.none),
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              isDense: true,
+            ),
+            style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground),
+          ),
+        ),
+        SizedBox(width: 6),
+        GestureDetector(
+          onTap: () => setState(() => rule.isAllow = !rule.isAllow),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: rule.isAllow ? Color(0xFF4CAF50).withAlpha(25) : ShadTheme.of(context).destructive.withAlpha(20),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: rule.isAllow ? Color(0xFF4CAF50).withAlpha(70) : ShadTheme.of(context).destructive.withAlpha(60)),
+            ),
+            child: Text(rule.isAllow ? l10n.permRuleAllow : l10n.permRuleDeny,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                color: rule.isAllow ? Color(0xFF4CAF50) : ShadTheme.of(context).destructive)),
+          ),
+        ),
+        SizedBox(width: 4),
+        GestureDetector(
+          onTap: () => setState(() {
+            item.rules.removeAt(idx);
+            if (rule.pattern.isNotEmpty || rule.description.isNotEmpty) {
+              item.rules.insert(idx, _PermRule());
+            }
+          }),
+          child: Icon(Icons.delete_outline, size: 16, color: ShadTheme.of(context).mutedForeground),
+        ),
+      ],
+    ),
+  );
+}
+
+String _permItemLabel(_PermItem item, AppLocalizations l10n) {
+  switch (item.labelKey) {
+    case 'permFileRead': return l10n.permFileRead;
+    case 'permFileWrite': return l10n.permFileWrite;
+    case 'permFileDelete': return l10n.permFileDelete;
+    case 'permFilePatch': return l10n.permFilePatch;
+    case 'permDirCreate': return l10n.permDirCreate;
+    case 'permCmdExec': return l10n.permCmdExec;
+    case 'permBgCmd': return l10n.permBgCmd;
+    case 'permGitOps': return l10n.permGitOps;
+    case 'permDocRead': return l10n.permDocRead;
+    case 'permDocWrite': return l10n.permDocWrite;
+    case 'permTaskRead': return l10n.permTaskRead;
+    case 'permTaskWrite': return l10n.permTaskWrite;
+    default: return item.labelKey;
+  }
+}
+
+String _permItemDesc(_PermItem item, AppLocalizations l10n) {
+  switch (item.descKey) {
+    case 'permFileReadDesc': return l10n.permFileReadDesc;
+    case 'permFileWriteDesc': return l10n.permFileWriteDesc;
+    case 'permFileDeleteDesc': return l10n.permFileDeleteDesc;
+    case 'permFilePatchDesc': return l10n.permFilePatchDesc;
+    case 'permDirCreateDesc': return l10n.permDirCreateDesc;
+    case 'permCmdExecDesc': return l10n.permCmdExecDesc;
+    case 'permBgCmdDesc': return l10n.permBgCmdDesc;
+    case 'permGitOpsDesc': return l10n.permGitOpsDesc;
+    case 'permDocReadDesc': return l10n.permDocReadDesc;
+    case 'permDocWriteDesc': return l10n.permDocWriteDesc;
+    case 'permTaskReadDesc': return l10n.permTaskReadDesc;
+    case 'permTaskWriteDesc': return l10n.permTaskWriteDesc;
+    default: return item.descKey;
+  }
+}
+
+// ─── Data Files Panel ────────────────────────────────────
+
+Widget _buildDataFilesPanel(AgentManager mgr) {
+  final l10n = AppLocalizations.of(context);
+  final storagePath = r'D:\AiVtuber_Agent_profile\wenzagent';
+  final dir = Directory(storagePath);
+  List<FileSystemEntity> entries = [];
+  if (dir.existsSync()) {
+    entries = dir.listSync().toList();
+  }
+  return Column(
+    children: [
+      Container(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.dataFilesTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+            SizedBox(height: 4),
+            Text(l10n.dataFilesSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+            SizedBox(height: 16),
+            // Accessible folders
+            _folderCard(storagePath, 'WenzAgent Data', l10n),
+            _folderCard(r'D:\AiVtuber_Agent_profile', 'Agent Profile', l10n),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _folderCard(String path, String name, AppLocalizations l10n) {
+  final dir = Directory(path);
+  final exists = dir.existsSync();
+  int fileCount = 0;
+  if (exists) {
+    try {
+      fileCount = dir.listSync(recursive: true).where((e) => e is File).length;
+    } catch (_) {}
+  }
+  return Container(
+    margin: EdgeInsets.only(bottom: 8),
+    padding: EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: ShadTheme.of(context).card,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: ShadTheme.of(context).border),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.folder, size: 24, color: Theme.of(context).colorScheme.primary),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ShadTheme.of(context).foreground)),
+              SizedBox(height: 2),
+              Text(exists ? path : '$path (not found)',
+                style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+            ],
+          ),
+        ),
+        SizedBox(width: 8),
+        Text('$fileCount files', style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+        SizedBox(width: 8),
+        GestureDetector(
+          onTap: () {
+            if (exists) {
+              Process.run('explorer', [path]);
+            }
+          },
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: ShadTheme.of(context).secondary,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: ShadTheme.of(context).border),
+            ),
+            child: Text(l10n.dataFilesOpenDir, style: TextStyle(fontSize: 11, color: ShadTheme.of(context).foreground)),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ─── Data Storage Panel ──────────────────────────────────
+
+Widget _buildDataStoragePanel(AgentManager mgr) {
+  final l10n = AppLocalizations.of(context);
+  final storagePath = r'D:\AiVtuber_Agent_profile';
+  final dir = Directory(storagePath);
+  int totalFiles = 0;
+  int totalSize = 0;
+  if (dir.existsSync()) {
+    try {
+      final all = dir.listSync(recursive: true);
+      totalFiles = all.where((e) => e is File).length;
+      for (final f in all) {
+        if (f is File) {
+          try { totalSize += f.lengthSync(); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+  final sizeStr = totalSize > 1024 * 1024
+    ? '${(totalSize / (1024 * 1024)).toStringAsFixed(1)} MB'
+    : '${(totalSize / 1024).toStringAsFixed(1)} KB';
+
+  return SingleChildScrollView(
+    padding: EdgeInsets.all(24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.dataStorageTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+        SizedBox(height: 4),
+        Text(l10n.dataStorageSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+        SizedBox(height: 24),
+
+        // ── Space usage card ──
+        Container(
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: ShadTheme.of(context).card,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: ShadTheme.of(context).border),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.donut_large, size: 22, color: Theme.of(context).colorScheme.primary),
+                  SizedBox(width: 10),
+                  Text(l10n.dataStorageSpace, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+                ],
+              ),
+              SizedBox(height: 16),
+              Row(
+                children: [
+                  _storageStat(l10n.dataStorageSpace, sizeStr, Icons.disc_full, Theme.of(context).colorScheme.primary),
+                  SizedBox(width: 24),
+                  _storageStat(l10n.dataStorageFiles, '$totalFiles', Icons.insert_drive_file, ShadTheme.of(context).mutedForeground),
+                ],
+              ),
+              SizedBox(height: 6),
+              // Simple progress bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: totalSize > 0 ? (totalSize / (500 * 1024 * 1024)).clamp(0.0, 1.0) : 0.05,
+                  backgroundColor: ShadTheme.of(context).secondary,
+                  valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
+                  minHeight: 6,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 16),
+
+        // ── Manage button ──
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              if (dir.existsSync()) {
+                Process.run('explorer', [storagePath]);
+              }
+            },
+            icon: Icon(Icons.folder_open, size: 18),
+            label: Text(l10n.dataStorageOpen),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              side: BorderSide(color: Theme.of(context).colorScheme.primary),
+              padding: EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _storageStat(String label, String value, IconData icon, Color c) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 18, color: c),
+      SizedBox(width: 6),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: ShadTheme.of(context).foreground)),
+          Text(label, style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+        ],
+      ),
+    ],
+  );
+}
+
+Widget _emptyCard(String message) {
+  return Container(
+    padding: EdgeInsets.all(32),
+    decoration: BoxDecoration(
+      color: ShadTheme.of(context).card,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: ShadTheme.of(context).border),
+    ),
+    child: Center(
+      child: Column(
+        children: [
+          Icon(Icons.inbox_outlined, size: 36, color: ShadTheme.of(context).mutedForeground.withAlpha(80)),
+          SizedBox(height: 8),
+          Text(message, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── General Preferences Panel ────────────────────────────
@@ -1382,7 +2007,7 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     ]),
     ),
     _logDetailRow(
-    'Time',
+    l10n.logTime,
     Text(timeStr, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground)),
     ),
     _logDetailRow(l10n.logModule, Text(entry.module, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground))),
@@ -1799,7 +2424,32 @@ mgr.openAgentWithProfile(agent.uuid, agent.name, i);
 }
 
 class _DummyAgent {
-final String uuid;
-final String name;
-_DummyAgent(this.uuid, this.name);
+  final String uuid;
+  final String name;
+  _DummyAgent(this.uuid, this.name);
+}
+
+/// Permission toggle item model.
+class _PermItem {
+  final String toolId;
+  final String labelKey;
+  final String descKey;
+  bool enabled;
+  final List<_PermRule> rules;
+  final String _idSuffix;
+
+  _PermItem(this.toolId, this.labelKey, this.descKey, this.enabled, {String? idSuffix})
+      : rules = [],
+        _idSuffix = idSuffix ?? '';
+
+  String get uniqueId => '$toolId$_idSuffix';
+}
+
+/// A single validation rule for a permission item.
+class _PermRule {
+  String pattern;
+  String description;
+  bool isAllow; // true = allow, false = deny
+
+  _PermRule({this.pattern = '', this.description = '', this.isAllow = true});
 }
