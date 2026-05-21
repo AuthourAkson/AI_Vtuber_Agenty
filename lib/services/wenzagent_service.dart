@@ -43,6 +43,11 @@ class MultiAgentInfo {
     this.hasPendingPermission = false,
     this.hasPendingConfirm = false,
   });
+
+  String get lastMsgPreview =>
+      latestMessage != null && latestMessage!.length > 40
+          ? '${latestMessage!.substring(0, 40)}...'
+          : (latestMessage ?? '');
 }
 
 /// Lightweight wrapper for a LAN device node.
@@ -259,9 +264,7 @@ class WenzAgentService {
       return summaries.map((s) {
         return MultiAgentInfo(
           employeeId: s.employeeId,
-          name: s.employeeId.length >= 8
-              ? s.employeeId.substring(0, 8)
-              : s.employeeId,
+          name: s.employeeId, // Will be resolved by AgentManager using employee name map
           deviceId: s.deviceId,
           latestMessage: s.lastMsgContent,
           status: 'idle',

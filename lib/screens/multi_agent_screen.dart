@@ -215,7 +215,7 @@ style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground),
 );
 }
 
-return ListView(
+  return ListView(
 children: [
 // ── Devices section ──
 if (mgr.onlineDevices.isNotEmpty) ...[
@@ -228,12 +228,35 @@ color: ShadTheme.of(context).mutedForeground, letterSpacing: 1.2)),
 ...mgr.onlineDevices.map((d) => _deviceTile(d)),
 Divider(height: 1, color: ShadTheme.of(context).border),
 ],
-// ── Agents section ──
+// ── Agents section header with "New Conversation" button ──
 Padding(
-padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
-child: Text('AGENTS (${filtered.length})',
+padding: EdgeInsets.fromLTRB(12, 8, 8, 4),
+child: Row(
+children: [
+Text('AGENTS (${filtered.length})',
 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
 color: ShadTheme.of(context).mutedForeground, letterSpacing: 1.2)),
+Spacer(),
+GestureDetector(
+onTap: () => _showNewConversationDialog(mgr),
+child: Container(
+padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+decoration: BoxDecoration(
+color: Theme.of(context).colorScheme.primary.withAlpha(25),
+borderRadius: BorderRadius.circular(4),
+),
+child: Row(
+mainAxisSize: MainAxisSize.min,
+children: [
+Icon(Icons.add, size: 14, color: Theme.of(context).colorScheme.primary),
+SizedBox(width: 2),
+Text('New', style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.primary)),
+],
+),
+),
+),
+],
+),
 ),
 if (filtered.isEmpty)
 Padding(
@@ -273,13 +296,15 @@ color: Color(0xFF4CAF50), shape: BoxShape.circle)),
 
 Widget _agentTile(AgentModel agent, AgentManager mgr) {
 final isActive = mgr.activeEmployeeId == agent.uuid;
+final lastMsg = agent.description ?? '';
+final timeStr = ''; // Could show last reply time if available
 
 return Padding(
 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
 child: GestureDetector(
 onTap: () => _selectAgent(agent, mgr),
 child: Container(
-padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
 decoration: BoxDecoration(
 color: isActive ? ShadTheme.of(context).sidebarAccent : ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(6),
@@ -296,8 +321,8 @@ children: [
 Text(agent.name, style: TextStyle(fontSize: 13,
 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
 color: ShadTheme.of(context).foreground)),
-if (agent.description != null && agent.description!.isNotEmpty)
-Text(agent.description!, maxLines: 1, overflow: TextOverflow.ellipsis,
+if (lastMsg.isNotEmpty)
+Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis,
 style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
 ],
 ),
@@ -2065,6 +2090,79 @@ style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
 // Chat Panel
 // ══════════════════════════════════════════════════════════
 
+Widget _buildThinkingIndicator() {
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 16, height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation(ShadTheme.of(context).mutedForeground),
+          ),
+        ),
+        SizedBox(width: 8),
+        Text('Thinking...', style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+      ],
+    ),
+  );
+}
+
+void _showNewConversationDialog(AgentManager mgr) {
+  final employees = mgr.employees;
+  if (employees.isEmpty) {
+    // No employees yet — prompt to create one
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ShadTheme.of(context).card,
+        title: Text('No Employees', style: TextStyle(color: ShadTheme.of(context).foreground)),
+        content: Text('Create an AI employee first in the Contacts tab.',
+          style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+            child: Text('OK', style: TextStyle(color: ShadTheme.of(context).mutedForeground))),
+        ],
+      ),
+    );
+    return;
+  }
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: ShadTheme.of(context).card,
+      title: Text('New Conversation', style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 15)),
+      content: SizedBox(
+        width: 350,
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: employees.length,
+          itemBuilder: (_, i) {
+            final emp = employees[i];
+            return ListTile(
+              leading: Icon(Icons.smart_toy, color: Theme.of(context).colorScheme.primary),
+              title: Text(emp.name, style: TextStyle(color: ShadTheme.of(context).foreground)),
+              subtitle: emp.description != null && emp.description!.isNotEmpty
+                  ? Text(emp.description!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground))
+                  : null,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              tileColor: ShadTheme.of(context).secondary,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              onTap: () {
+                Navigator.pop(ctx);
+                _selectAgent(emp, mgr);
+              },
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
 Widget _buildChatPanel(AgentManager mgr) {
 final statusColor = mgr.activeAgentStatus == 'streaming'
 ? Color(0xFF4CAF50)
@@ -2111,16 +2209,34 @@ child: Icon(Icons.stop, size: 18, color: ShadTheme.of(context).mutedForeground),
 ],
 ),
 ),
-Divider(height: 1, color: ShadTheme.of(context).border),
-// Messages
-Expanded(
-child: ListView.builder(
-controller: _scrollCtrl,
-padding: EdgeInsets.all(16),
-itemCount: mgr.activeMessages.length,
-itemBuilder: (_, i) => _msgBubble(mgr.activeMessages[i]),
-),
-),
+      Divider(height: 1, color: ShadTheme.of(context).border),
+      // Messages
+      Expanded(
+        child: mgr.activeMessages.isEmpty
+            ? Center(
+                child: Text('Start a conversation', style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+              )
+            : ListView.builder(
+                controller: _scrollCtrl,
+                padding: EdgeInsets.all(16),
+                itemCount: mgr.activeMessages.length + (mgr.activeAgentStatus == 'processing' || mgr.activeAgentStatus == 'streaming' ? 1 : 0),
+                itemBuilder: (_, i) {
+                  if (i < mgr.activeMessages.length) {
+                    final msg = mgr.activeMessages[i];
+                    // Auto-scroll when new messages arrive
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (_scrollCtrl.hasClients) {
+                        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
+                          duration: Duration(milliseconds: 150), curve: Curves.easeOut);
+                      }
+                    });
+                    return _msgBubble(msg);
+                  }
+                  // Loading indicator at the end
+                  return _buildThinkingIndicator();
+                },
+              ),
+      ),
 Divider(height: 1, color: ShadTheme.of(context).border),
 // Profile switcher
 if (mgr.activeProfile != null)

@@ -292,11 +292,21 @@ class AgentManager extends ChangeNotifier {
   }
 
   Future<void> refreshSummaries() async {
-    _agentSummaries = wenzagent.getAgentSummaries().map((a) => AgentModel(
-      uuid: a.employeeId,
-      name: a.name,
-      deviceId: a.deviceId,
-    )).toList();
+    _agentSummaries = wenzagent.getAgentSummaries().map((a) {
+      // Resolve real name from employees list
+      final emp = _employees.cast<AgentModel?>().firstWhere(
+        (e) => e?.uuid == a.employeeId,
+        orElse: () => null,
+      );
+      final lastMsg = a.lastMsgPreview;
+      return AgentModel(
+        uuid: a.employeeId,
+        name: emp?.name ?? a.employeeId,
+        deviceId: a.deviceId,
+        description: lastMsg.isNotEmpty ? lastMsg : null,
+        status: a.status,
+      );
+    }).toList();
     notifyListeners();
   }
 
@@ -486,10 +496,14 @@ class AgentManager extends ChangeNotifier {
       'id': 'local-${DateTime.now().millisecondsSinceEpoch}',
     });
     notifyListeners();
+    _scrollToBottom();
 
     await wenzagent.sendMessage(text);
-    await Future.delayed(const Duration(milliseconds: 500));
-    await _refreshActiveMessages();
+    // No polling — _onMessage will trigger _refreshActiveMessages via stream
+  }
+
+  void _scrollToBottom() {
+    // Will be called after build — the chat panel's ScrollController handles it
   }
 
   Future<void> _refreshActiveMessages() async {
