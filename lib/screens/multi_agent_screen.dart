@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import '../app.dart';
 import '../providers/multi_agent_provider.dart';
@@ -2166,49 +2168,236 @@ Widget _msgBubble(Map<String, dynamic> msg) {
 final isUser = (msg['role'] ?? 'user') == 'user';
 final content = msg['content']?.toString() ?? '';
 final type = msg['type']?.toString() ?? 'text';
+final toolName = msg['toolName']?.toString();
+final toolResult = msg['toolResult']?.toString();
+final toolCalls = msg['toolCalls'] as List?;
+
+// Determine if this message has tool-related data
+final hasToolCalls = toolCalls != null && toolCalls.isNotEmpty;
+final hasToolName = toolName != null && toolName.isNotEmpty;
+final hasToolResult = toolResult != null && toolResult.isNotEmpty;
+final isToolMessage = type == 'functionCall' || type == 'functionResult';
 
 return Align(
 alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
 child: Container(
 margin: EdgeInsets.only(bottom: 8),
 padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-constraints: BoxConstraints(maxWidth: 520),
+constraints: BoxConstraints(maxWidth: 560),
 decoration: BoxDecoration(
-color: isUser ? Theme.of(context).colorScheme.primary.withAlpha(25) : ShadTheme.of(context).secondary,
+color: isUser
+? Theme.of(context).colorScheme.primary.withAlpha(25)
+: isToolMessage
+? Theme.of(context).colorScheme.primary.withAlpha(8)
+: ShadTheme.of(context).secondary,
 borderRadius: BorderRadius.circular(12),
+border: isToolMessage
+? Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(40))
+: null,
 ),
 child: Column(
-crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+crossAxisAlignment: CrossAxisAlignment.start,
+mainAxisSize: MainAxisSize.min,
 children: [
-if (type == 'functionCall')
-_toolLabel('TOOL CALL'),
-if (type == 'functionResult')
-_toolLabel('TOOL RESULT'),
-Text(content, style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground, height: 1.5)),
-if (msg['toolResult'] != null && msg['toolResult'].toString().isNotEmpty)
-Container(
-margin: EdgeInsets.only(top: 6),
-padding: EdgeInsets.all(8),
-decoration: BoxDecoration(color: Colors.black.withAlpha(50), borderRadius: BorderRadius.circular(6)),
-child: Text(msg['toolResult'].toString(), maxLines: 5, overflow: TextOverflow.ellipsis,
-style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
-),
+// ── Tool call header ──
+if (isToolMessage && hasToolName)
+  _buildToolCallHeader(toolName!, hasToolResult),
+// ── Tool calls list ──
+if (hasToolCalls)
+  ...toolCalls!.map((tc) => _buildToolCallItem(tc as Map<String, dynamic>)),
+// ── Content (markdown if assistant, plain text if user) ──
+if (content.isNotEmpty)
+  isUser
+  ? Text(content, style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground, height: 1.5))
+  : _buildAssistantContent(content),
+// ── Tool result (collapsible) ──
+if (hasToolResult)
+  _buildToolResultSection(toolResult!),
 ],
 ),
 ),
 );
 }
 
-Widget _toolLabel(String text) {
-return Container(
-padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-margin: EdgeInsets.only(bottom: 4),
-decoration: BoxDecoration(
-color: ShadTheme.of(context).mutedForeground.withAlpha(25),
-borderRadius: BorderRadius.circular(4),
-),
-child: Text(text, style: TextStyle(fontSize: 9, color: ShadTheme.of(context).mutedForeground)),
-);
+/// Collapsible tool result section.
+Widget _buildToolResultSection(String result) {
+  return _CollapsibleSection(
+    title: '执行结果',
+    icon: Icons.check_circle_outline,
+    color: Color(0xFF4CAF50),
+    initiallyExpanded: true,
+    child: Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(50),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(result,
+        style: TextStyle(fontSize: 12, fontFamily: 'monospace',
+          color: ShadTheme.of(context).foreground.withAlpha(200), height: 1.5)),
+    ),
+  );
+}
+
+/// Tool call header badge.
+Widget _buildToolCallHeader(String name, bool hasResult) {
+  return Padding(
+    padding: EdgeInsets.only(bottom: content.isNotEmpty ? 6 : 0),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withAlpha(25),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(60)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.build, size: 13, color: Theme.of(context).colorScheme.primary),
+              SizedBox(width: 4),
+              Text(hasResult ? 'TOOL RESULT: $name' : 'TOOL CALL: $name',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Individual tool call item with arguments.
+Widget _buildToolCallItem(Map<String, dynamic> tc) {
+  final tcName = tc['name']?.toString() ?? '';
+  final tcArgs = tc['arguments'];
+  return _CollapsibleSection(
+    title: '函数: $tcName',
+    icon: Icons.code,
+    color: Theme.of(context).colorScheme.primary,
+    initiallyExpanded: false,
+    child: Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(40),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('调用参数',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+              color: ShadTheme.of(context).mutedForeground)),
+          SizedBox(height: 4),
+          Text(
+            tcArgs != null
+              ? (tcArgs is String ? tcArgs : _prettyJson(tcArgs))
+              : '(无参数)',
+            style: TextStyle(fontSize: 11, fontFamily: 'monospace',
+              color: ShadTheme.of(context).foreground.withAlpha(200), height: 1.5)),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Assistant content with markdown rendering.
+Widget _buildAssistantContent(String content) {
+  return MarkdownBody(
+    data: content,
+    selectable: true,
+    styleSheet: MarkdownStyleSheet(
+      p: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground, height: 1.5),
+      code: TextStyle(fontSize: 13, fontFamily: 'monospace',
+        color: ShadTheme.of(context).foreground,
+        backgroundColor: ShadTheme.of(context).secondary),
+      codeblockDecoration: BoxDecoration(
+        color: Colors.black.withAlpha(40),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: ShadTheme.of(context).secondary,
+        border: Border(left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 3)),
+      ),
+    ),
+  );
+}
+
+String _prettyJson(dynamic obj) {
+  try {
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(obj);
+  } catch (_) {
+    return obj.toString();
+  }
+}
+
+/// Stateful widget for collapsible sections.
+class _CollapsibleSection extends StatefulWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final Widget child;
+  final bool initiallyExpanded;
+
+  const _CollapsibleSection({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.child,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  State<_CollapsibleSection> createState() => _CollapsibleSectionState();
+}
+
+class _CollapsibleSectionState extends State<_CollapsibleSection> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, size: 14, color: widget.color),
+                SizedBox(width: 4),
+                Text(widget.title,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: widget.color)),
+                SizedBox(width: 4),
+                Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 14, color: widget.color.withAlpha(150)),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded)
+          Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: widget.child,
+          ),
+      ],
+    );
+  }
 }
 
 Widget _buildChatInput(AgentManager mgr) {
