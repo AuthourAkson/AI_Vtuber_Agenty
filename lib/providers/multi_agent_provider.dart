@@ -567,7 +567,23 @@ class AgentManager extends ChangeNotifier {
         if (existingIdx >= 0) {
           _activeMessages[existingIdx] = msgData;
         } else {
-          _activeMessages.add(msgData);
+          // If this is the server's version of our optimistic local message
+          // (different ID, same content), replace the local one to avoid duplication.
+          final role = msgData['role'] as String?;
+          if (role == 'user') {
+            final content = msgData['content'] as String? ?? '';
+            final localIdx = _activeMessages.indexWhere((m) =>
+                m['role'] == 'user' &&
+                (m['id'] as String?)?.startsWith('local-') == true &&
+                (m['content'] as String?) == content);
+            if (localIdx >= 0) {
+              _activeMessages[localIdx] = msgData;
+            } else {
+              _activeMessages.add(msgData);
+            }
+          } else {
+            _activeMessages.add(msgData);
+          }
         }
         notifyListeners();
       }
