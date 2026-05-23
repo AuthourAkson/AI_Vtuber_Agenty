@@ -262,6 +262,8 @@ class AppLocalizations {
   String get deviceIp => _t('deviceIp');
   String get deviceConnectedAt => _t('deviceConnectedAt');
   String get deviceIdLabel => _t('deviceIdLabel');
+  String get deviceConfig => _t('deviceConfig');
+  String get deviceNameLabel => _t('deviceNameLabel');
   String get privacy => _t('privacy');
   String get logs => _t('logs');
   String get about => _t('about');
@@ -597,6 +599,8 @@ class AppLocalizations {
     'deviceIp':     {'en': 'IP Address',   'zh': 'IP 地址'},
     'deviceConnectedAt': {'en': 'Connected At', 'zh': '连接时间'},
     'deviceIdLabel': {'en': 'Device ID',    'zh': '设备 ID'},
+    'deviceConfig': {'en': 'Device Config', 'zh': '设备配置'},
+    'deviceNameLabel': {'en': 'Device Name', 'zh': '设备名称'},
     'privacy':      {'en': 'Privacy',      'zh': '隐私'},
     'logs':         {'en': 'Logs',         'zh': '日志'},
     'about':        {'en': 'About',        'zh': '关于'},

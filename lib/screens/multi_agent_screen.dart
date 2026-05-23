@@ -47,6 +47,7 @@ _searchCtrl.dispose();
 _waHostCtrl.dispose();
 _waPortCtrl.dispose();
 _waTopicCtrl.dispose();
+_deviceNameCtrl.dispose();
 super.dispose();
 }
 
@@ -661,6 +662,11 @@ int _lanTab = 0;
 final _waHostCtrl = TextEditingController(text: '127.0.0.1');
 final _waPortCtrl = TextEditingController(text: '9090');
 final _waTopicCtrl = TextEditingController();
+
+// ── Devices panel state ──
+final Set<String> _expandedDevices = {};
+String? _editingNameFor;
+final _deviceNameCtrl = TextEditingController();
 
 Widget _buildSettingsPage(AgentManager mgr) {
 return Row(
@@ -1716,8 +1722,11 @@ Widget _buildDevicesPanel(AgentManager mgr) {
 }
 
 Widget _deviceDetailCard(LanDeviceInfo device, AgentManager mgr) {
+  final isExpanded = _expandedDevices.contains(device.id);
+  final isEditing = _editingNameFor == device.id;
   final typeLabel = (device.type == 'mobile') ? AppLocalizations.of(context).deviceTypeMobile : AppLocalizations.of(context).deviceTypeDesktop;
   final osLabel = device.os ?? AppLocalizations.of(context).notSet;
+  final ipLabel = device.ip ?? AppLocalizations.of(context).notSet;
   final deviceIdLabel = device.deviceId ?? AppLocalizations.of(context).notSet;
   final connectedTime = device.connectedAt != null
       ? '${device.connectedAt!.year}-${_pad(device.connectedAt!.month)}-${_pad(device.connectedAt!.day)} ${_pad(device.connectedAt!.hour)}:${_pad(device.connectedAt!.minute)}'
@@ -1727,37 +1736,140 @@ Widget _deviceDetailCard(LanDeviceInfo device, AgentManager mgr) {
     color: ShadTheme.of(context).secondary,
     margin: EdgeInsets.only(bottom: 12),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    child: Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row: icon + name + status + host badge
-          Row(
-            children: [
-              Icon(device.type == 'mobile' ? Icons.phone_android : Icons.computer, size: 20, color: Color(0xFF4CAF50)),
-              SizedBox(width: 10),
-              Expanded(child: Text(device.name ?? device.id, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground))),
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle)),
-              if (device.isHost) ...[
-                SizedBox(width: 8),
-                Container(padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withAlpha(30), borderRadius: BorderRadius.circular(3)),
-                  child: Text('HOST', style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.primary))),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => setState(() {
+        if (isExpanded) {
+          _expandedDevices.remove(device.id);
+        } else {
+          _expandedDevices.add(device.id);
+        }
+      }),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ═══ Header row (always visible) ═══
+            Row(
+              children: [
+                Icon(device.type == 'mobile' ? Icons.phone_android : Icons.computer, size: 20, color: Color(0xFF4CAF50)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: isEditing
+                      ? TextField(
+                          controller: _deviceNameCtrl,
+                          autofocus: true,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          onSubmitted: (_) => _saveDeviceName(),
+                        )
+                      : Text(device.name ?? device.id, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+                ),
+                Container(width: 8, height: 8, decoration: BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle)),
+                if (device.isHost) ...[
+                  SizedBox(width: 8),
+                  Container(padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withAlpha(30), borderRadius: BorderRadius.circular(3)),
+                    child: Text('HOST', style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.primary))),
+                ],
+                SizedBox(width: 4),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0.0,
+                  duration: Duration(milliseconds: 200),
+                  child: Icon(Icons.expand_more, size: 20, color: ShadTheme.of(context).mutedForeground),
+                ),
               ],
+            ),
+            // ═══ Subtitle (always visible, shows type / OS / IP) ═══
+            Padding(
+              padding: EdgeInsets.only(left: 30, top: 4),
+              child: Text('$typeLabel · $osLabel · $ipLabel',
+                style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+            ),
+            // ═══ Expanded details ═══
+            if (isExpanded) ...[
+              SizedBox(height: 12),
+              Divider(height: 1, color: ShadTheme.of(context).border),
+              SizedBox(height: 10),
+              // Device config header
+              Row(
+                children: [
+                  Icon(Icons.settings, size: 14, color: ShadTheme.of(context).mutedForeground),
+                  SizedBox(width: 6),
+                  Text(AppLocalizations.of(context).deviceConfig, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ShadTheme.of(context).mutedForeground)),
+                ],
+              ),
+              SizedBox(height: 8),
+              // Editable name
+              _editableRow(
+                AppLocalizations.of(context).deviceNameLabel,
+                device.name ?? device.id,
+                () {
+                  _deviceNameCtrl.text = device.name ?? '';
+                  setState(() => _editingNameFor = device.id);
+                },
+                isEditing: isEditing,
+              ),
+              SizedBox(height: 8),
+              // Detail rows
+              _detailRow(AppLocalizations.of(context).deviceTypeLabel, typeLabel),
+              _detailRow(AppLocalizations.of(context).devicePlatform, device.platform ?? AppLocalizations.of(context).notSet),
+              _detailRow(AppLocalizations.of(context).deviceOs, osLabel),
+              _detailRow(AppLocalizations.of(context).deviceIp, ipLabel),
+              _detailRow(AppLocalizations.of(context).deviceConnectedAt, connectedTime),
+              _detailRow(AppLocalizations.of(context).deviceIdLabel, deviceIdLabel),
             ],
-          ),
-          SizedBox(height: 12),
-          Divider(height: 1, color: ShadTheme.of(context).border),
-          SizedBox(height: 10),
-          // Detail rows
-          _detailRow(AppLocalizations.of(context).deviceTypeLabel, typeLabel),
-          _detailRow(AppLocalizations.of(context).devicePlatform, device.platform ?? AppLocalizations.of(context).notSet),
-          _detailRow(AppLocalizations.of(context).deviceOs, osLabel),
-          _detailRow(AppLocalizations.of(context).deviceIp, device.ip ?? AppLocalizations.of(context).notSet),
-          _detailRow(AppLocalizations.of(context).deviceConnectedAt, connectedTime),
-          _detailRow(AppLocalizations.of(context).deviceIdLabel, deviceIdLabel),
-        ],
+          ],
+        ),
       ),
+    ),
+  );
+}
+
+void _saveDeviceName() {
+  _editingNameFor = null;
+  _deviceNameCtrl.clear();
+  setState(() {});
+}
+
+Widget _editableRow(String label, String value, VoidCallback onEdit, {bool isEditing = false}) {
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 110, child: Text(label, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground))),
+        Expanded(
+          child: isEditing
+              ? SizedBox(
+                  height: 32,
+                  child: TextField(
+                    controller: _deviceNameCtrl,
+                    autofocus: true,
+                    style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    onSubmitted: (_) => _saveDeviceName(),
+                  ),
+                )
+              : Row(
+                  children: [
+                    Expanded(child: Text(value, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground))),
+                    GestureDetector(
+                      onTap: onEdit,
+                      child: Icon(Icons.edit, size: 14, color: ShadTheme.of(context).mutedForeground),
+                    ),
+                  ],
+                ),
+        ),
+      ],
     ),
   );
 }
