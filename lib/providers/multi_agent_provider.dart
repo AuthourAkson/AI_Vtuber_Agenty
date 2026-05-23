@@ -81,6 +81,10 @@ class AgentManager extends ChangeNotifier {
   List<AgentModel> _agentSummaries = [];
   List<DeviceInfo> _onlineDevices = [];
 
+  /// Employee IDs of sessions the user has deleted (SDK doesn't clear summaries
+  /// on session delete, so we filter them out ourselves). Persisted to profiles JSON.
+  final Set<String> _hiddenSessionIds = {};
+
   // ─── Getters ────────────────────────────────
 
   String? _activeEmployeeId;
@@ -297,7 +301,11 @@ class AgentManager extends ChangeNotifier {
       // Filter out orphaned sessions whose employee no longer exists.
       // This prevents "Employee not found" errors when the SDK tries to
       // restore agents for deleted employees during initialization.
-      return _employees.any((e) => e.uuid == a.employeeId);
+      if (!_employees.any((e) => e.uuid == a.employeeId)) return false;
+      // Filter out sessions the user explicitly deleted (SDK doesn't clear
+      // the summary table on session delete, so we track them here).
+      if (_hiddenSessionIds.contains(a.employeeId)) return false;
+      return true;
     }).map((a) {
       // Resolve real name from employees list
       final emp = _employees.firstWhere(
@@ -343,6 +351,11 @@ class AgentManager extends ChangeNotifier {
           if (profiles.isNotEmpty) _providerProfiles = profiles;
         }
         _loadPermState(raw is Map<String, dynamic> ? raw : {});
+          // Load hidden session IDs
+          final hidden = raw['hiddenSessionIds'];
+          if (hidden is List) {
+            _hiddenSessionIds.addAll(hidden.cast<String>());
+          }
       }
     } catch (e) {
       print('[AgentManager] loadProfiles failed: $e');
@@ -357,6 +370,7 @@ class AgentManager extends ChangeNotifier {
         'profiles': _providerProfiles.map((p) => p.toJson()).toList(),
         'lastProfileIndex': _lastProfileIndex,
         'permEnabled': _permEnabled,
+        'hiddenSessionIds': _hiddenSessionIds.toList(),
       }));
     } catch (e) {
       print('[AgentManager] saveProfiles failed: $e');
@@ -427,6 +441,8 @@ class AgentManager extends ChangeNotifier {
   Future<void> deleteEmployee(String uuid) async {
     try {
       await wenzagent.deleteEmployee(uuid);
+      _hiddenSessionIds.remove(uuid); // Employee gone, no need to track its session
+      _saveProfiles();
       await refreshEmployees();
       await refreshSummaries(); // Clean up orphaned agent session
       notifyListeners();
@@ -437,6 +453,8 @@ class AgentManager extends ChangeNotifier {
   Future<void> deleteAgentSession(String employeeId) async {
     try {
       await wenzagent.deleteAgentSession(employeeId);
+      _hiddenSessionIds.add(employeeId); // SDK doesn't clear summary, we filter manually
+      _saveProfiles();
       await refreshSummaries();
       notifyListeners();
     } catch (_) {}
@@ -489,6 +507,12 @@ class AgentManager extends ChangeNotifier {
   }
 
   Future<void> openAgent(String employeeId, String name) async {
+    // If this employee's session was previously hidden (deleted), unhide it
+    // so a fresh session can start. Messages were hard-deleted by deleteAgentSession.
+    if (_hiddenSessionIds.remove(employeeId)) {
+      _saveProfiles();
+    }
+
     _activeEmployeeId = employeeId;
     _activeEmployeeName = name;
     _activeMessages = [];

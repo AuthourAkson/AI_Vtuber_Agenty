@@ -374,6 +374,8 @@ class WenzAgentService {
   Future<void> deleteAgentSession(String employeeId) async {
     if (_client == null) return;
     try {
+      // Hard-delete messages + summary (SDK's deleteSession is soft-delete only)
+      await _client!.messageStore.deleteMessages(_deviceId, employeeId);
       await _client!.deleteSession(employeeId);
     } catch (_) {}
   }
