@@ -305,8 +305,6 @@ child: Text('HOST', style: TextStyle(fontSize: 8, color: Theme.of(context).color
 ),
 ),
 );
-),
-);
 }
 
 Widget _agentTile(AgentModel agent, AgentManager mgr) {
