@@ -334,8 +334,16 @@ padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
 decoration: BoxDecoration(color: ShadTheme.of(context).destructive, borderRadius: BorderRadius.circular(8)),
 child: Text('NEW', style: TextStyle(fontSize: 9, color: Colors.white)),
 ),
-SizedBox(width: 4),
-Icon(Icons.chevron_right, size: 16, color: ShadTheme.of(context).mutedForeground),
+SizedBox(width: 2),
+// Delete session button — larger tap area to avoid gesture conflict with outer tile
+GestureDetector(
+behavior: HitTestBehavior.opaque,
+onTap: () => _confirmDeleteSession(agent, mgr),
+child: Container(
+padding: EdgeInsets.all(6),
+child: Icon(Icons.close, size: 16, color: ShadTheme.of(context).mutedForeground),
+),
+),
 ],
 ),
 ),
@@ -476,6 +484,31 @@ child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: ShadThe
 TextButton(
 onPressed: () {
 mgr.deleteEmployee(emp.uuid);
+Navigator.pop(ctx);
+},
+child: Text(AppLocalizations.of(context).delete, style: TextStyle(color: ShadTheme.of(context).destructive)),
+),
+],
+),
+);
+}
+
+void _confirmDeleteSession(AgentModel agent, AgentManager mgr) {
+showDialog(
+context: context,
+builder: (ctx) => AlertDialog(
+backgroundColor: ShadTheme.of(context).card,
+title: Text(AppLocalizations.of(context).waDeleteSession, style: TextStyle(color: ShadTheme.of(context).foreground)),
+content: Text(AppLocalizations.of(context).waDeleteSessionConfirm,
+style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+actions: [
+TextButton(
+onPressed: () => Navigator.pop(ctx),
+child: Text(AppLocalizations.of(context).cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+),
+TextButton(
+onPressed: () {
+mgr.deleteAgentSession(agent.uuid);
 Navigator.pop(ctx);
 },
 child: Text(AppLocalizations.of(context).delete, style: TextStyle(color: ShadTheme.of(context).destructive)),

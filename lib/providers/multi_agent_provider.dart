@@ -293,16 +293,20 @@ class AgentManager extends ChangeNotifier {
   }
 
   Future<void> refreshSummaries() async {
-    _agentSummaries = wenzagent.getAgentSummaries().map((a) {
+    _agentSummaries = wenzagent.getAgentSummaries().where((a) {
+      // Filter out orphaned sessions whose employee no longer exists.
+      // This prevents "Employee not found" errors when the SDK tries to
+      // restore agents for deleted employees during initialization.
+      return _employees.any((e) => e.uuid == a.employeeId);
+    }).map((a) {
       // Resolve real name from employees list
-      final emp = _employees.cast<AgentModel?>().firstWhere(
-        (e) => e?.uuid == a.employeeId,
-        orElse: () => null,
+      final emp = _employees.firstWhere(
+        (e) => e.uuid == a.employeeId,
       );
       final lastMsg = a.lastMsgPreview;
       return AgentModel(
         uuid: a.employeeId,
-        name: emp?.name ?? a.employeeId,
+        name: emp.name,
         deviceId: a.deviceId,
         description: lastMsg.isNotEmpty ? lastMsg : null,
         status: a.status,
@@ -429,6 +433,15 @@ class AgentManager extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Delete an agent session without deleting the employee.
+  Future<void> deleteAgentSession(String employeeId) async {
+    try {
+      await wenzagent.deleteAgentSession(employeeId);
+      await refreshSummaries();
+      notifyListeners();
+    } catch (_) {}
+  }
+
   // ─── Active Chat ────────────────────────────
 
   /// Last used profile index per employee.
@@ -488,6 +501,16 @@ class AgentManager extends ChangeNotifier {
       notifyListeners();
       // Refresh summaries so the new agent appears in AGENTS sidebar
       await refreshSummaries();
+    } else {
+      // Employee not found (likely deleted) — clean up orphaned session state
+      print('[AgentManager] Employee not found: $employeeId, auto-cleaning');
+      _activeEmployeeId = null;
+      _activeEmployeeName = null;
+      try {
+        await wenzagent.deleteAgentSession(employeeId);
+        await refreshSummaries();
+      } catch (_) {}
+      notifyListeners();
     }
   }
 

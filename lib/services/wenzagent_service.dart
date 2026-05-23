@@ -370,6 +370,14 @@ class WenzAgentService {
     } catch (_) {}
   }
 
+  /// Delete an agent session (keeps the employee, just clears chat history).
+  Future<void> deleteAgentSession(String employeeId) async {
+    if (_client == null) return;
+    try {
+      await _client!.deleteSession(employeeId);
+    } catch (_) {}
+  }
+
   // ─── Agent Summaries (for AgentManager) ───────────────────
 
   /// Get agent summaries as AgentModel-compatible list.

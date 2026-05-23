@@ -226,6 +226,8 @@ class AppLocalizations {
   String get waSelectProfile => _t('waSelectProfile');
   String get waDeleteEmployee => _t('waDeleteEmployee');
   String get waDeleteConfirm => _t('waDeleteConfirm');
+  String get waDeleteSession => _t('waDeleteSession');
+  String get waDeleteSessionConfirm => _t('waDeleteSessionConfirm');
   String get waEmptyHint => _t('waEmptyHint');
   String get waEmptySub => _t('waEmptySub');
   String get waSendMessage => _t('waSendMessage');
@@ -548,6 +550,8 @@ class AppLocalizations {
     'waSelectProfile':    {'en': r'Select Profile for "${agent.name}"', 'zh': r'为"${agent.name}"选择配置'},
     'waDeleteEmployee':   {'en': 'Delete Employee',              'zh': '删除员工'},
     'waDeleteConfirm':    {'en': r'Delete "${emp.name}"? This cannot be undone.', 'zh': r'删除"${emp.name}"？此操作不可撤销。'},
+    'waDeleteSession':    {'en': 'Delete Chat Session',          'zh': '删除会话'},
+    'waDeleteSessionConfirm': {'en': 'Delete this chat session? The employee will not be deleted.', 'zh': '删除此聊天会话？员工不会被删除。'},
     'waEmptyHint':        {'en': 'Create an AI employee to get started', 'zh': '创建 AI 员工以开始使用'},
     'waEmptySub':         {'en': 'Messages are routed through the WenzAgent LAN network', 'zh': '消息通过 WenzAgent LAN 网络路由'},
     'waSendMessage':      {'en': 'Send message to agent...',     'zh': '发送消息给代理...'},
