@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
+import 'package:wenzagent/wenzagent.dart';
 import '../app.dart';
 import '../providers/multi_agent_provider.dart';
 import '../providers/appearance_provider.dart';
@@ -271,7 +272,7 @@ else
 );
 }
 
-Widget _deviceTile(DeviceInfo device) {
+Widget _deviceTile(LanDeviceInfo device) {
 return Padding(
 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
 child: Container(
@@ -285,12 +286,25 @@ children: [
 Icon(Icons.computer, size: 16, color: Color(0xFF4CAF50)),
 SizedBox(width: 8),
 Expanded(
-child: Text(device.deviceName, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
-),
-Container(width: 8, height: 8, decoration: BoxDecoration(
-color: Color(0xFF4CAF50), shape: BoxShape.circle)),
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Text(device.name ?? device.id, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+if (device.ip != null)
+Text(device.ip!, style: TextStyle(fontSize: 10, color: ShadTheme.of(context).mutedForeground)),
 ],
 ),
+),
+if (device.isHost)
+Container(
+padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withAlpha(30), borderRadius: BorderRadius.circular(3)),
+child: Text('HOST', style: TextStyle(fontSize: 8, color: Theme.of(context).colorScheme.primary)),
+),
+],
+),
+),
+);
 ),
 );
 }
@@ -764,6 +778,8 @@ return _buildGeneralPanel();
         return _buildDataStoragePanel(mgr);
       case 'net_lan':
         return _buildLanSettingsPanel(mgr);
+      case 'net_devices':
+        return _buildDevicesPanel(mgr);
       case 'sys_logs':
         return _buildLogsPanel(mgr);
 default:
@@ -1659,10 +1675,109 @@ padding: EdgeInsets.symmetric(vertical: 12),
 ),
 ),
 ],
-],
-),
-);
+  ],
+  ),
+  );
 }
+
+// ─── Devices Panel ─────────────────────────────────────
+
+Widget _buildDevicesPanel(AgentManager mgr) {
+  final devices = mgr.onlineDevices;
+  return Column(
+    children: [
+      // Header
+      Container(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(AppLocalizations.of(context).devices, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+            SizedBox(height: 4),
+            Text('${devices.length} ${AppLocalizations.of(context).devicesOnline}',
+              style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+          ],
+        ),
+      ),
+      Divider(height: 1, color: ShadTheme.of(context).border),
+      // Device list
+      Expanded(
+        child: devices.isEmpty
+            ? Center(
+                child: Text(AppLocalizations.of(context).noDevicesOnline,
+                  style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+              )
+            : ListView.builder(
+                padding: EdgeInsets.all(16),
+                itemCount: devices.length,
+                itemBuilder: (_, i) => _deviceDetailCard(devices[i], mgr),
+              ),
+      ),
+    ],
+  );
+}
+
+Widget _deviceDetailCard(LanDeviceInfo device, AgentManager mgr) {
+  final typeLabel = (device.type == 'mobile') ? AppLocalizations.of(context).deviceTypeMobile : AppLocalizations.of(context).deviceTypeDesktop;
+  final osLabel = device.os ?? AppLocalizations.of(context).notSet;
+  final deviceIdLabel = device.deviceId ?? AppLocalizations.of(context).notSet;
+  final connectedTime = device.connectedAt != null
+      ? '${device.connectedAt!.year}-${_pad(device.connectedAt!.month)}-${_pad(device.connectedAt!.day)} ${_pad(device.connectedAt!.hour)}:${_pad(device.connectedAt!.minute)}'
+      : AppLocalizations.of(context).notSet;
+
+  return Card(
+    color: ShadTheme.of(context).secondary,
+    margin: EdgeInsets.only(bottom: 12),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row: icon + name + status + host badge
+          Row(
+            children: [
+              Icon(device.type == 'mobile' ? Icons.phone_android : Icons.computer, size: 20, color: Color(0xFF4CAF50)),
+              SizedBox(width: 10),
+              Expanded(child: Text(device.name ?? device.id, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground))),
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle)),
+              if (device.isHost) ...[
+                SizedBox(width: 8),
+                Container(padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withAlpha(30), borderRadius: BorderRadius.circular(3)),
+                  child: Text('HOST', style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.primary))),
+              ],
+            ],
+          ),
+          SizedBox(height: 12),
+          Divider(height: 1, color: ShadTheme.of(context).border),
+          SizedBox(height: 10),
+          // Detail rows
+          _detailRow(AppLocalizations.of(context).deviceTypeLabel, typeLabel),
+          _detailRow(AppLocalizations.of(context).devicePlatform, device.platform ?? AppLocalizations.of(context).notSet),
+          _detailRow(AppLocalizations.of(context).deviceOs, osLabel),
+          _detailRow(AppLocalizations.of(context).deviceIp, device.ip ?? AppLocalizations.of(context).notSet),
+          _detailRow(AppLocalizations.of(context).deviceConnectedAt, connectedTime),
+          _detailRow(AppLocalizations.of(context).deviceIdLabel, deviceIdLabel),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _detailRow(String label, String value) {
+  return Padding(
+    padding: EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 110, child: Text(label, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground))),
+        Expanded(child: Text(value, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground))),
+      ],
+    ),
+  );
+}
+
+String _pad(int n) => n.toString().padLeft(2, '0');
 
 Widget _lanTabBtn(String label, int index) {
 final active = _lanTab == index;

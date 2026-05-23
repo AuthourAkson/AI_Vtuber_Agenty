@@ -50,17 +50,6 @@ class MultiAgentInfo {
           : (latestMessage ?? '');
 }
 
-/// Lightweight wrapper for a LAN device node.
-class DeviceInfo {
-  final String deviceId;
-  final String deviceName;
-
-  const DeviceInfo({
-    required this.deviceId,
-    required this.deviceName,
-  });
-}
-
 /// Bridge service between AiVtuber_Agent and the wenzagent multi-agent SDK.
 class WenzAgentService {
   DeviceClient? _client;
@@ -242,16 +231,10 @@ class WenzAgentService {
 
   // ─── Device / Employee Queries ───────────────────────────
 
-  Future<List<DeviceInfo>> getOnlineDevices() async {
+  Future<List<LanDeviceInfo>> getOnlineDevices() async {
     if (_client == null || !_connected) return [];
     try {
-      final devices = await _client!.getOnlineDevices();
-      return devices
-          .map((d) => DeviceInfo(
-                deviceId: d.id,
-                deviceName: d.name ?? 'Unknown',
-              ))
-          .toList();
+      return await _client!.getOnlineDevices();
     } catch (e) {
       return [];
     }

@@ -79,7 +79,7 @@ class AgentManager extends ChangeNotifier {
   ];
   List<AgentModel> _employees = [];
   List<AgentModel> _agentSummaries = [];
-  List<DeviceInfo> _onlineDevices = [];
+  List<LanDeviceInfo> _onlineDevices = [];
 
   /// Employee IDs of sessions the user has deleted (SDK doesn't clear summaries
   /// on session delete, so we filter them out ourselves). Persisted to profiles JSON.
@@ -110,7 +110,7 @@ class AgentManager extends ChangeNotifier {
 
   List<AgentModel> get employees => _employees;
   List<AgentModel> get agentSummaries => _agentSummaries;
-  List<DeviceInfo> get onlineDevices => _onlineDevices;
+  List<LanDeviceInfo> get onlineDevices => _onlineDevices;
   List<ProviderProfile> get providerProfiles => _providerProfiles;
 
   String? get activeEmployeeId => _activeEmployeeId;

@@ -251,6 +251,17 @@ class AppLocalizations {
   String get permissions => _t('permissions');
   String get lan => _t('lan');
   String get devices => _t('devices');
+  String get devicesOnline => _t('devicesOnline');
+  String get noDevicesOnline => _t('noDevicesOnline');
+  String get notSet => _t('notSet');
+  String get deviceTypeLabel => _t('deviceTypeLabel');
+  String get deviceTypeDesktop => _t('deviceTypeDesktop');
+  String get deviceTypeMobile => _t('deviceTypeMobile');
+  String get devicePlatform => _t('devicePlatform');
+  String get deviceOs => _t('deviceOs');
+  String get deviceIp => _t('deviceIp');
+  String get deviceConnectedAt => _t('deviceConnectedAt');
+  String get deviceIdLabel => _t('deviceIdLabel');
   String get privacy => _t('privacy');
   String get logs => _t('logs');
   String get about => _t('about');
@@ -575,6 +586,17 @@ class AppLocalizations {
     'permissions':  {'en': 'Permissions',  'zh': '权限'},
     'lan':          {'en': 'LAN',          'zh': '局域网'},
     'devices':      {'en': 'Devices',      'zh': '设备'},
+    'devicesOnline': {'en': 'online',       'zh': '在线'},
+    'noDevicesOnline': {'en': 'No devices online', 'zh': '暂无在线设备'},
+    'notSet':       {'en': 'Not set',      'zh': '未设定'},
+    'deviceTypeLabel': {'en': 'Device Type', 'zh': '设备类型'},
+    'deviceTypeDesktop': {'en': 'Desktop',  'zh': '桌面端'},
+    'deviceTypeMobile': {'en': 'Mobile',    'zh': '移动端'},
+    'devicePlatform': {'en': 'Platform',    'zh': '平台'},
+    'deviceOs':     {'en': 'OS',           'zh': '操作系统'},
+    'deviceIp':     {'en': 'IP Address',   'zh': 'IP 地址'},
+    'deviceConnectedAt': {'en': 'Connected At', 'zh': '连接时间'},
+    'deviceIdLabel': {'en': 'Device ID',    'zh': '设备 ID'},
     'privacy':      {'en': 'Privacy',      'zh': '隐私'},
     'logs':         {'en': 'Logs',         'zh': '日志'},
     'about':        {'en': 'About',        'zh': '关于'},
