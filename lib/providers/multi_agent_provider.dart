@@ -264,11 +264,11 @@ class AgentManager extends ChangeNotifier {
   // ─── Refresh Data ───────────────────────────
 
   Future<void> refreshAll() async {
-    await Future.wait([
-      refreshDevices(),
-      refreshEmployees(),
-      refreshSummaries(),
-    ]);
+    // Must be sequential: refreshSummaries() reads _employees,
+    // so refreshEmployees() must complete first.
+    await refreshDevices();
+    await refreshEmployees();
+    await refreshSummaries();
   }
 
   Future<void> refreshDevices() async {
@@ -424,6 +424,8 @@ class AgentManager extends ChangeNotifier {
     try {
       await wenzagent.deleteEmployee(uuid);
       await refreshEmployees();
+      await refreshSummaries(); // Clean up orphaned agent session
+      notifyListeners();
     } catch (_) {}
   }
 
