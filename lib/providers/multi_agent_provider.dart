@@ -449,6 +449,31 @@ class AgentManager extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Clear ALL MultiAgent cache: delete all employee sessions, messages,
+  /// and employees. Full reset requiring re-setup afterwards.
+  Future<void> clearAllCache() async {
+    // First delete all agent sessions (messages + session records)
+    for (final emp in List<AgentModel>.from(_employees)) {
+      try {
+        await wenzagent.deleteAgentSession(emp.uuid);
+      } catch (_) {}
+    }
+    // Then delete all employees
+    for (final emp in List<AgentModel>.from(_employees)) {
+      try {
+        await wenzagent.deleteEmployee(emp.uuid);
+      } catch (_) {}
+    }
+    _employees = [];
+    _agentSummaries = [];
+    _hiddenSessionIds.clear();
+    _activeEmployeeId = null;
+    _activeEmployeeName = null;
+    _activeMessages = [];
+    _saveProfiles();
+    notifyListeners();
+  }
+
   /// Delete an agent session without deleting the employee.
   Future<void> deleteAgentSession(String employeeId) async {
     try {

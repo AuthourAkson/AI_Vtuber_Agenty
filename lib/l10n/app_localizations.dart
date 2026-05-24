@@ -265,6 +265,13 @@ class AppLocalizations {
   String get deviceConfig => _t('deviceConfig');
   String get deviceNameLabel => _t('deviceNameLabel');
   String get privacy => _t('privacy');
+  String get privacyTitle => _t('privacyTitle');
+  String get privacySubtitle => _t('privacySubtitle');
+  String get privacyClearCache => _t('privacyClearCache');
+  String get privacyClearCacheDesc => _t('privacyClearCacheDesc');
+  String get privacyClearCacheConfirm => _t('privacyClearCacheConfirm');
+  String get privacyCacheCleared => _t('privacyCacheCleared');
+  String get privacyClearCacheButton => _t('privacyClearCacheButton');
   String get logs => _t('logs');
   String get about => _t('about');
   String get logTitle => _t('logTitle');
@@ -602,6 +609,13 @@ class AppLocalizations {
     'deviceConfig': {'en': 'Device Config', 'zh': '设备配置'},
     'deviceNameLabel': {'en': 'Device Name', 'zh': '设备名称'},
     'privacy':      {'en': 'Privacy',      'zh': '隐私'},
+    'privacyTitle': {'en': 'Privacy',      'zh': '隐私'},
+    'privacySubtitle': {'en': 'Manage cache and data privacy settings.', 'zh': '管理缓存和数据隐私设置。'},
+    'privacyClearCache': {'en': 'Clear MultiAgent Cache', 'zh': '清除MultiAgent缓存'},
+    'privacyClearCacheDesc': {'en': 'Clear all employee and session cache data.', 'zh': '清除员工及会话缓存数据。'},
+    'privacyClearCacheConfirm': {'en': 'This will clear all employee and session cache data. This cannot be undone.', 'zh': '将清除所有员工及会话缓存数据，此操作不可撤销。'},
+    'privacyCacheCleared': {'en': 'MultiAgent cache cleared.', 'zh': 'MultiAgent缓存已清除。'},
+    'privacyClearCacheButton': {'en': 'Clear Cache', 'zh': '清除缓存'},
     'logs':         {'en': 'Logs',         'zh': '日志'},
     'about':        {'en': 'About',        'zh': '关于'},
     'sync':         {'en': 'Sync',         'zh': '同步'},

@@ -786,6 +786,8 @@ return _buildGeneralPanel();
         return _buildDevicesPanel(mgr);
       case 'sys_logs':
         return _buildLogsPanel(mgr);
+      case 'sys_privacy':
+        return _buildPrivacyPanel(mgr);
 default:
 return Center(
 child: Text('$_activeSettingSection — coming soon',
@@ -2054,6 +2056,101 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     ),
     ),
     ],
+    );
+    }
+
+    Widget _buildPrivacyPanel(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    return SingleChildScrollView(
+    padding: EdgeInsets.all(24),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    // ── Header ──
+    Row(
+    children: [
+    Icon(Icons.privacy_tip_outlined, size: 22, color: ShadTheme.of(context).primary),
+    SizedBox(width: 10),
+    Text(l10n.privacyTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+    ],
+    ),
+    SizedBox(height: 4),
+    Text(l10n.privacySubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+    SizedBox(height: 24),
+    // ── Clear Cache Card ──
+    Container(
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+    color: ShadTheme.of(context).card,
+    borderRadius: BorderRadius.circular(10),
+    border: Border.all(color: ShadTheme.of(context).border),
+    ),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    Row(
+    children: [
+    Icon(Icons.cleaning_services_outlined, size: 20, color: ShadTheme.of(context).destructive),
+    SizedBox(width: 8),
+    Expanded(
+    child: Text(l10n.privacyClearCache, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+    ),
+    ],
+    ),
+    SizedBox(height: 6),
+    Text(l10n.privacyClearCacheDesc, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+    SizedBox(height: 12),
+    OutlinedButton.icon(
+    onPressed: () => _confirmClearCache(mgr),
+    icon: Icon(Icons.delete_outline, size: 16),
+    label: Text(l10n.privacyClearCacheButton),
+    style: OutlinedButton.styleFrom(
+    foregroundColor: ShadTheme.of(context).destructive,
+    side: BorderSide(color: ShadTheme.of(context).destructive),
+    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    ),
+    ),
+    ],
+    ),
+    ),
+    ],
+    ),
+    );
+    }
+
+    void _confirmClearCache(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+    backgroundColor: ShadTheme.of(context).card,
+    title: Text(l10n.privacyClearCache, style: TextStyle(color: ShadTheme.of(context).foreground)),
+    content: Text(l10n.privacyClearCacheConfirm, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+    actions: [
+    TextButton(
+    onPressed: () => Navigator.pop(ctx),
+    child: Text(l10n.cancel, style: TextStyle(color: ShadTheme.of(context).mutedForeground)),
+    ),
+    ElevatedButton(
+    onPressed: () async {
+    await mgr.clearAllCache();
+    Navigator.pop(ctx);
+    if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+    content: Text(l10n.privacyCacheCleared),
+    backgroundColor: ShadTheme.of(context).card,
+    ),
+    );
+    }
+    },
+    style: ElevatedButton.styleFrom(
+    backgroundColor: ShadTheme.of(context).destructive,
+    ),
+    child: Text(l10n.privacyClearCacheButton, style: TextStyle(color: Colors.white)),
+    ),
+    ],
+    ),
     );
     }
 
