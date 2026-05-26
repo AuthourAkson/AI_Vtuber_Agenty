@@ -3629,6 +3629,8 @@ class _SmoothCursorField extends StatefulWidget {
 class _SmoothCursorFieldState extends State<_SmoothCursorField> {
   final GlobalKey _textKey = GlobalKey();
   double _cursorX = 0;
+  double _cursorY = 0;
+  double _cursorH = 18;
   int _lastOffset = -1;
 
   @override
@@ -3649,7 +3651,6 @@ class _SmoothCursorFieldState extends State<_SmoothCursorField> {
     final offset = sel.baseOffset;
     if (offset == _lastOffset) return;
     _lastOffset = offset;
-    // Defer to post-frame so layout is complete before querying RenderEditable
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _updatePos(offset);
@@ -3665,12 +3666,16 @@ class _SmoothCursorFieldState extends State<_SmoothCursorField> {
           final caretRect = editable.getLocalRectForCaret(
             TextPosition(offset: offset),
           );
-          setState(() => _cursorX = caretRect.right + 5);
+          setState(() {
+            _cursorX = caretRect.right + 5;
+            _cursorY = caretRect.top;
+            _cursorH = caretRect.height;
+          });
           return;
         }
       }
     } catch (_) {}
-    // Fallback: TextPainter
+    // Fallback: TextPainter (single-line only)
     final text = widget.controller.text;
     final o = offset.clamp(0, text.length);
     final tp = TextPainter(
@@ -3717,26 +3722,23 @@ class _SmoothCursorFieldState extends State<_SmoothCursorField> {
           child: IgnorePointer(
             child: Padding(
               padding: widget.decoration.contentPadding ?? EdgeInsets.zero,
-              child: SizedBox(
-                height: widget.style.fontSize! * 1.5,
-                child: Stack(
-                  children: [
-                    AnimatedPositioned(
-                      left: _cursorX,
-                      top: 0,
-                      bottom: 0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                      child: Container(
-                        width: 2,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(1),
-                        ),
+              child: Stack(
+                children: [
+                  AnimatedPositioned(
+                    left: _cursorX,
+                    top: _cursorY,
+                    width: 2,
+                    height: _cursorH,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(1),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
