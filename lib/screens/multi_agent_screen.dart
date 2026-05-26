@@ -7,6 +7,7 @@ import 'package:wenzagent/wenzagent.dart';
 import '../app.dart';
 import '../providers/multi_agent_provider.dart';
 import '../providers/appearance_provider.dart';
+import 'package:flutter/services.dart';
 import '../services/wenzagent_service.dart';
 import '../services/log_service.dart';
 import '../l10n/app_localizations.dart';
@@ -28,8 +29,10 @@ final _searchCtrl = TextEditingController();
 
 bool _initialized = false;
 bool _contactsMode = false;
+bool _skillsMode = false;
 bool _showSettings = false;
 String _searchQuery = '';
+String? _selectedSkillId; // Track selected skill for detail view
 int _lastMsgCount = 0; // Track to auto-scroll only on new messages
 
 @override
@@ -97,9 +100,9 @@ children: [
 // ── Top bar: status + mode switch ──
 _buildSidebarHeader(mgr),
 Divider(height: 1, color: ShadTheme.of(context).border),
-// ── Search (Chat mode only) ──
-if (!_contactsMode)
-Padding(
+    // ── Search (Chat mode + Skills mode) ──
+    if (!_contactsMode)
+      Padding(
 padding: EdgeInsets.all(10),
 child: TextField(
 controller: _searchCtrl,
@@ -119,12 +122,14 @@ style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
 ),
 ),
 Divider(height: 1, color: ShadTheme.of(context).border),
-// ── Content (Chat list or Contacts list) ──
+// ── Content (Chat list / Skills list / Contacts list) ──
 Expanded(
-child: _contactsMode ? _buildContactsList(mgr) : _buildChatList(mgr),
+child: _skillsMode
+    ? _buildSkillsList(mgr)
+    : _contactsMode ? _buildContactsList(mgr) : _buildChatList(mgr),
 ),
-// ── "+ Create Employee" button (Contacts mode only) ──
-if (_contactsMode) _buildCreateButton(),
+// ── "+ Create" button (Contacts mode or Skills mode) ──
+if (_contactsMode || _skillsMode) _buildCreateButton(),
 ],
 );
 }
@@ -167,9 +172,11 @@ child: Icon(Icons.settings, size: 18,
 ),
 SizedBox(width: 4),
 // Mode toggle buttons
-_modeButton(Icons.chat_bubble_outline, 'Chat', !_contactsMode, () => setState(() => _contactsMode = false)),
+_modeButton(Icons.chat_bubble_outline, 'Chat', !_contactsMode && !_skillsMode, () => setState(() { _contactsMode = false; _skillsMode = false; })),
 SizedBox(width: 4),
-_modeButton(Icons.contacts_outlined, 'Contacts', _contactsMode, () => setState(() => _contactsMode = true)),
+_modeButton(Icons.contacts_outlined, 'Contacts', _contactsMode, () => setState(() { _contactsMode = true; _skillsMode = false; })),
+SizedBox(width: 4),
+_modeButton(Icons.extension_outlined, 'Skills', _skillsMode, () => setState(() { _contactsMode = false; _skillsMode = true; })),
 ],
 ),
 );
@@ -532,6 +539,7 @@ child: Text(AppLocalizations.of(context).delete, style: TextStyle(color: ShadThe
 }
 
 Widget _buildCreateButton() {
+final isSkills = _skillsMode;
 return Container(
 padding: EdgeInsets.all(10),
 decoration: BoxDecoration(
@@ -540,9 +548,9 @@ border: Border(top: BorderSide(color: ShadTheme.of(context).border)),
 child: SizedBox(
 width: double.infinity,
 child: OutlinedButton.icon(
-onPressed: () => _showCreateEmployeeDialog(),
+onPressed: () => isSkills ? _showAddSkillDialog() : _showCreateEmployeeDialog(),
 icon: Icon(Icons.add, size: 18),
-label: Text(AppLocalizations.of(context).waCreateEmployee),
+label: Text(isSkills ? AppLocalizations.of(context).skillAdd : AppLocalizations.of(context).waCreateEmployee),
 style: OutlinedButton.styleFrom(
 foregroundColor: Theme.of(context).colorScheme.primary,
 side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -2419,6 +2427,12 @@ Widget _buildContentArea(AgentManager mgr) {
 if (_showSettings) {
 return _buildSettingsPage(mgr);
 }
+if (_selectedSkillId != null && _skillsMode) {
+return _buildSkillDetailView(mgr);
+}
+if (_showEmployeeDetail && mgr.activeEmployeeId != null) {
+return _buildEmployeeDetailView(mgr);
+}
 if (mgr.activeEmployeeId == null) {
 return _buildEmptyState();
 }
@@ -2560,7 +2574,15 @@ border: Border.all(color: statusColor.withAlpha(80)),
 child: Text(mgr.activeAgentStatus.toUpperCase(),
 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statusColor)),
 ),
-SizedBox(width: 8),
+SizedBox(width: 4),
+GestureDetector(
+onTap: () {
+  mgr.refreshEmployeeSkills();
+  setState(() => _showEmployeeDetail = true);
+},
+child: Icon(Icons.more_vert, size: 20, color: ShadTheme.of(context).mutedForeground),
+),
+SizedBox(width: 4),
 GestureDetector(
 onTap: mgr.interruptAgent,
 child: Icon(Icons.stop, size: 18, color: ShadTheme.of(context).mutedForeground),
@@ -2657,45 +2679,52 @@ final hasToolName = toolName != null && toolName.isNotEmpty;
 final hasToolResult = toolResult != null && toolResult.isNotEmpty;
 final isToolMessage = type == 'functionCall' || type == 'functionResult';
 
-return Align(
-alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-child: Container(
-margin: EdgeInsets.only(bottom: 8),
-padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-constraints: BoxConstraints(maxWidth: 560),
-decoration: BoxDecoration(
-color: isUser
-? Theme.of(context).colorScheme.primary.withAlpha(25)
-: isToolMessage
-? Theme.of(context).colorScheme.primary.withAlpha(8)
-: ShadTheme.of(context).secondary,
-borderRadius: BorderRadius.circular(12),
-border: isToolMessage
-? Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(40))
-: null,
-),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-mainAxisSize: MainAxisSize.min,
-children: [
-// ── Tool call header ──
-if (isToolMessage && hasToolName)
-  _buildToolCallHeader(toolName!, hasToolResult),
-// ── Tool calls list ──
-if (hasToolCalls)
-  ...toolCalls!.map((tc) => _buildToolCallItem(tc as Map<String, dynamic>)),
-// ── Content (markdown if assistant, plain text if user) ──
-if (content.isNotEmpty)
-  isUser
-  ? Text(content, style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground, height: 1.5))
-  : _buildAssistantContent(content),
-// ── Tool result (collapsible) ──
-if (hasToolResult)
-  _buildToolResultSection(toolResult!),
-],
-),
-),
-);
+  return Align(
+    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+    child: Column(
+      crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          margin: EdgeInsets.only(bottom: 2),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          constraints: BoxConstraints(maxWidth: 560),
+          decoration: BoxDecoration(
+            color: isUser
+                ? Theme.of(context).colorScheme.primary.withAlpha(25)
+                : isToolMessage
+                    ? Theme.of(context).colorScheme.primary.withAlpha(8)
+                    : ShadTheme.of(context).secondary,
+            borderRadius: BorderRadius.circular(12),
+            border: isToolMessage
+                ? Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(40))
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Tool call header ──
+              if (isToolMessage && hasToolName)
+                _buildToolCallHeader(toolName!, hasToolResult),
+              // ── Tool calls list ──
+              if (hasToolCalls)
+                ...toolCalls!.map((tc) => _buildToolCallItem(tc as Map<String, dynamic>)),
+              // ── Content (markdown if assistant, plain text if user) ──
+              if (content.isNotEmpty)
+                isUser
+                    ? Text(content, style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground, height: 1.5))
+                    : _buildAssistantContent(content),
+              // ── Tool result (collapsible) ──
+              if (hasToolResult)
+                _buildToolResultSection(toolResult!),
+            ],
+          ),
+        ),
+        _CopyButton(content: content),
+      ],
+    ),
+  );
 }
 
 /// Collapsible tool result section.
@@ -2920,6 +2949,723 @@ mgr.openAgentWithProfile(agent.uuid, agent.name, i);
 ),
 );
 }
+
+  // ══════════════════════════════════════════════════════════
+  // Skills List
+  // ══════════════════════════════════════════════════════════
+
+  Widget _buildSkillsList(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    final skills = mgr.skills;
+    if (skills.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(l10n.skillNoSkills,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+        ),
+      );
+    }
+    final filtered = _searchQuery.isEmpty
+        ? skills
+        : skills.where((s) =>
+            s.name.toLowerCase().contains(_searchQuery) ||
+            (s.description ?? '').toLowerCase().contains(_searchQuery)).toList();
+    return ListView(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(12, 8, 8, 4),
+          child: Text('SKILLS (${filtered.length})',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+              color: ShadTheme.of(context).mutedForeground, letterSpacing: 1.2)),
+        ),
+        if (filtered.isEmpty)
+          Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(l10n.waNoMatching,
+              style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+          )
+        else
+          ...filtered.map((s) => _skillTile(s, mgr)),
+      ],
+    );
+  }
+
+  Widget _skillTile(GlobalSkillEntity skill, AgentManager mgr) {
+    final isSelected = _selectedSkillId == skill.uuid;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedSkillId = skill.uuid),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? ShadTheme.of(context).sidebarAccent : ShadTheme.of(context).secondary,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                skill.skillType == 'folder' ? Icons.folder_outlined : Icons.settings,
+                size: 16,
+                color: skill.enabled == 1 ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(skill.name,
+                      style: TextStyle(fontSize: 13,
+                        color: isSelected ? Theme.of(context).colorScheme.onPrimary : ShadTheme.of(context).foreground),
+                      overflow: TextOverflow.ellipsis),
+                    if (skill.description != null && skill.description!.isNotEmpty)
+                      Text(skill.description!,
+                        style: TextStyle(fontSize: 10, color: ShadTheme.of(context).mutedForeground),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              if (skill.enabled == 1)
+                Container(
+                  width: 6, height: 6,
+                  margin: EdgeInsets.only(left: 4),
+                  decoration: BoxDecoration(color: Color(0xFF4CAF50), shape: BoxShape.circle),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Add Skill Dialog
+  // ══════════════════════════════════════════════════════════
+
+  void _showAddSkillDialog() {
+    final l10n = AppLocalizations.of(context);
+    final nameCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    String folderPath = '';
+
+    bool isMcp = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: ShadTheme.of(context).card,
+          title: Text(l10n.skillAddTitle, style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 16)),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Type selector
+                  Row(children: [
+                    _typeChip('Folder', Icons.folder_outlined, !isMcp,
+                      () => setDialogState(() => isMcp = false)),
+                    SizedBox(width: 8),
+                    _typeChip('MCP', Icons.settings_ethernet, isMcp,
+                      () => setDialogState(() => isMcp = true)),
+                  ]),
+                  SizedBox(height: 12),
+                  SizedBox(width: 460,
+                    child: TextField(controller: nameCtrl,
+                      decoration: InputDecoration(labelText: l10n.skillName, hintText: l10n.skillNameHint,
+                        filled: true, fillColor: ShadTheme.of(context).secondary,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), isDense: true))),
+                  SizedBox(height: 12),
+                  SizedBox(width: 460,
+                    child: TextField(controller: descCtrl, maxLines: 2,
+                      decoration: InputDecoration(labelText: l10n.skillDesc, hintText: l10n.skillDescHint,
+                        filled: true, fillColor: ShadTheme.of(context).secondary,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), isDense: true))),
+                  SizedBox(height: 16),
+                  if (!isMcp) ...[
+                    Text(l10n.skillFolderPath, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+                    SizedBox(height: 4),
+                    Text(l10n.skillFolderHint, style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+                    SizedBox(height: 6),
+                    Row(children: [
+                      Expanded(child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        decoration: BoxDecoration(color: ShadTheme.of(context).secondary, borderRadius: BorderRadius.circular(8)),
+                        child: Text(folderPath.isEmpty ? l10n.skillFolderHint : folderPath,
+                          style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground),
+                          maxLines: 1, overflow: TextOverflow.ellipsis))),
+                      SizedBox(width: 8),
+                      OutlinedButton(onPressed: () async {
+                        final picked = await _showFolderBrowserDialog();
+                        if (picked != null) setDialogState(() => folderPath = picked);
+                      }, child: Text(l10n.skillBrowse)),
+                    ]),
+                  ] else ...[
+                    Text('Uses MCP servers configured in Settings → MCP Config',
+                      style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+            TextButton(
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                if (name.isEmpty) return;
+                final mgr = context.read<AgentManager>();
+                if (isMcp) {
+                  await mgr.createMcpSkill(name: name,
+                    description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                    serverConfig: McpServerConfig(name: name, transportType: 'http', url: ''));
+                } else {
+                  if (folderPath.isEmpty) return;
+                  await mgr.createSkill(name: name,
+                    description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(), folderPath: folderPath);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+                setState(() {});
+              },
+              child: Text(l10n.create),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _typeChip(String label, IconData? icon, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Theme.of(context).colorScheme.primary.withAlpha(25) : ShadTheme.of(context).secondary,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: selected ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).border),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[Icon(icon, size: 14, color: selected ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).mutedForeground), SizedBox(width: 4)],
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            color: selected ? Theme.of(context).colorScheme.primary : ShadTheme.of(context).mutedForeground)),
+        ]),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Folder Browser Dialog
+  // ══════════════════════════════════════════════════════════
+
+  Future<String?> _showFolderBrowserDialog() async {
+    final l10n = AppLocalizations.of(context);
+    String currentPath = '';
+    List<String> drives = [];
+    try {
+      if (Platform.isWindows) {
+        for (var letter in ['C', 'D', 'E', 'F', 'G']) {
+          final drive = '$letter:\\';
+          if (await Directory(drive).exists()) drives.add(drive);
+        }
+      }
+    } catch (_) {
+      drives = ['C:\\', 'D:\\'];
+    }
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String folderSearchFilter = '';
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            backgroundColor: ShadTheme.of(context).card,
+            title: Text(l10n.skillSelectFolder, style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 16)),
+            content: SizedBox(
+              width: 550, height: 450,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(children: [
+                    _browseModeButton(l10n.skillSelectFolder, true),
+                    SizedBox(width: 8),
+                    _browseModeButton(l10n.skillSelectZip, false, compact: true, onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(l10n.comingSoon), duration: Duration(seconds: 2)));
+                    }),
+                  ]),
+                  SizedBox(height: 8),
+                  Divider(color: ShadTheme.of(context).border),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: l10n.skillSearchFolder,
+                      prefixIcon: Icon(Icons.search, size: 18, color: ShadTheme.of(context).mutedForeground),
+                      filled: true, fillColor: ShadTheme.of(context).secondary,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    style: TextStyle(fontSize: 13),
+                    onChanged: (v) => setDialogState(() => folderSearchFilter = v),
+                  ),
+                  SizedBox(height: 8),
+                  if (currentPath.isEmpty)                     // <-- fixed: empty = show drives
+                    Expanded(
+                      child: ListView(
+                        children: drives.map((d) => ListTile(
+                          dense: true,
+                          leading: Icon(Icons.storage, size: 18, color: ShadTheme.of(context).mutedForeground),
+                          title: Text(d, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+                          trailing: Icon(Icons.chevron_right, size: 16),
+                          onTap: () => setDialogState(() => currentPath = d),
+                        )).toList(),
+                      ),
+                    )
+                  else                                        // <-- fixed: non-empty = browse folders
+                    Expanded(
+                      child: _buildFolderContents(currentPath, (String newPath) {
+                        if (newPath == '..') {
+                          final parent = Directory(currentPath).parent.path;
+                          // If parent is same as current (drive root), go back to drive selection
+                          if (parent == currentPath || parent.length <= 3) {
+                            setDialogState(() { currentPath = ''; folderSearchFilter = ''; });
+                          } else {
+                            setDialogState(() { currentPath = parent; folderSearchFilter = ''; });
+                          }
+                        } else {
+                          setDialogState(() { currentPath = newPath; folderSearchFilter = ''; });
+                        }
+                      }, filter: folderSearchFilter),
+                    ),
+                  SizedBox(height: 8),
+                  if (currentPath.isNotEmpty)
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: ShadTheme.of(context).secondary, borderRadius: BorderRadius.circular(6)),
+                      child: Row(children: [
+                        Expanded(child: Text(currentPath,
+                          style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground),
+                          maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ]),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+              if (currentPath.isNotEmpty)
+                TextButton(onPressed: () => Navigator.pop(ctx, currentPath), child: Text(l10n.skillConfirm)),
+            ],
+          ),
+        );
+      },
+    );
+    return result;
+  }
+
+  Widget _browseModeButton(String label, bool isFolder, {bool compact = false, VoidCallback? onPressed}) {
+    return OutlinedButton(
+      onPressed: onPressed ?? () {},
+      style: OutlinedButton.styleFrom(
+        padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 6),
+        minimumSize: Size(0, 32),
+      ),
+      child: Text(label, style: TextStyle(fontSize: compact ? 11 : 12)),
+    );
+  }
+
+  Widget _buildFolderContents(String path, Function(String) onNavigate, {String filter = ''}) {
+    final dir = Directory(path);
+    List<FileSystemEntity> allEntries = [];
+    try {
+      allEntries = dir.listSync().toList();
+      allEntries.sort((a, b) {
+        final aIsDir = a is Directory;
+        final bIsDir = b is Directory;
+        if (aIsDir && !bIsDir) return -1;
+        if (!aIsDir && bIsDir) return 1;
+        return a.path.compareTo(b.path);
+      });
+    } catch (_) {}
+
+    final filtered = filter.isEmpty ? allEntries : allEntries.where((e) {
+      final name = e.path.split(Platform.pathSeparator).last.toLowerCase();
+      return name.contains(filter.toLowerCase());
+    }).toList();
+
+    final dirs = filtered.whereType<Directory>().toList();
+    final files = filtered.whereType<File>().toList();
+
+    return Column(children: [
+      ListTile(
+        dense: true,
+        leading: Icon(Icons.arrow_upward, size: 18, color: ShadTheme.of(context).mutedForeground),
+        title: Text('..', style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+        onTap: () => onNavigate('..'),
+      ),
+      Expanded(
+        child: filtered.isEmpty
+            ? Center(child: Text('No matching items',
+                style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)))
+            : ListView(
+                children: [
+                  ...dirs.map((e) {
+                    final name = e.path.split(Platform.pathSeparator).last;
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.folder, size: 18, color: Color(0xFFF4B400)),
+                      title: Text(name, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+                      trailing: Icon(Icons.chevron_right, size: 16),
+                      onTap: () => onNavigate(e.path),
+                    );
+                  }),
+                  ...files.map((f) {
+                    final name = f.path.split(Platform.pathSeparator).last;
+                    final ext = name.split('.').last.toLowerCase();
+                    final icon = _fileIcon(ext);
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(icon, size: 16, color: ShadTheme.of(context).mutedForeground),
+                      title: Text(name, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+                    );
+                  }),
+                ],
+              ),
+      ),
+    ]);
+  }
+
+  IconData _fileIcon(String ext) {
+    switch (ext) {
+      case 'md': return Icons.description_outlined;
+      case 'yaml':
+      case 'yml': return Icons.settings_outlined;
+      case 'dart': return Icons.code;
+      case 'py': return Icons.code;
+      case 'json': return Icons.data_object;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+      case 'webp': return Icons.image_outlined;
+      case 'zip':
+      case 'tar':
+      case 'gz':
+      case '7z': return Icons.folder_zip_outlined;
+      default: return Icons.insert_drive_file_outlined;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Skill Detail View (Right Panel) — Global Skill
+  // ══════════════════════════════════════════════════════════
+
+  Widget _buildSkillDetailView(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    final skill = mgr.skills.firstWhere(
+      (s) => s.uuid == _selectedSkillId,
+      orElse: () => throw Exception('Skill not found'),
+    );
+    final enabled = skill.enabled == 1;
+    final typeLabel = skill.skillType == 'folder' ? 'Folder' : (skill.skillType == 'mcp' ? 'MCP' : 'Config');
+
+    return Column(children: [
+      Container(
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: ShadTheme.of(context).card,
+          border: Border(bottom: BorderSide(color: ShadTheme.of(context).border)),
+        ),
+        child: Row(children: [
+          GestureDetector(
+            onTap: () => setState(() => _selectedSkillId = null),
+            child: Icon(Icons.arrow_back, size: 20, color: ShadTheme.of(context).mutedForeground),
+          ),
+          SizedBox(width: 12),
+          Icon(Icons.extension, size: 22, color: enabled ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground),
+          SizedBox(width: 10),
+          Expanded(child: Text(skill.name,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground))),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(enabled ? 'Global' : 'Local',
+              style: TextStyle(fontSize: 11, color: enabled ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground)),
+            SizedBox(width: 6),
+            Switch(value: enabled, onChanged: (_) async {
+              await mgr.toggleSkillEnabled(skill.uuid);
+              setState(() {});
+            }, activeColor: Color(0xFF4CAF50)),
+          ]),
+          SizedBox(width: 8),
+          IconButton(icon: Icon(Icons.delete_outline, size: 20, color: ShadTheme.of(context).mutedForeground),
+            onPressed: () => _confirmDeleteSkill(mgr, skill), tooltip: l10n.skillDelete),
+        ]),
+      ),
+      Expanded(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _buildDetailSection(l10n.skillConfig, [
+              _buildDetailRow(l10n.skillFolderPath, skill.config ?? '-'),
+            ]),
+            SizedBox(height: 16),
+            _buildDetailSection(l10n.skillInfo, [
+              _buildDetailRow(l10n.skillId, skill.uuid),
+              _buildDetailRow(l10n.skillType, typeLabel),
+              _buildDetailRow(l10n.skillCreatedAt, _formatDateTime(skill.createTime)),
+              _buildDetailRow(l10n.skillUpdatedAt, _formatDateTime(skill.updateTime)),
+            ]),
+            if (skill.description != null && skill.description!.isNotEmpty) ...[
+              SizedBox(height: 16),
+              _buildDetailSection(l10n.skillDesc, [
+                Padding(padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(skill.description!, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground))),
+              ]),
+            ],
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  void _confirmDeleteSkill(AgentManager mgr, GlobalSkillEntity skill) {
+    final l10n = AppLocalizations.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ShadTheme.of(context).card,
+        title: Text(l10n.skillDelete, style: TextStyle(color: ShadTheme.of(context).foreground)),
+        content: Text(l10n.skillDeleteConfirm.replaceAll(r'${name}', skill.name),
+          style: TextStyle(color: ShadTheme.of(context).foreground)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+          TextButton(onPressed: () async {
+            await mgr.deleteSkill(skill.uuid);
+            setState(() => _selectedSkillId = null);
+            if (ctx.mounted) Navigator.pop(ctx);
+          }, child: Text(l10n.delete, style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Employee Detail Page (from ⋮ in chat header)
+  // ══════════════════════════════════════════════════════════
+
+  bool _showEmployeeDetail = false;
+
+  Widget _buildEmployeeDetailView(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    final emp = mgr.employees.firstWhere(
+      (e) => e.uuid == mgr.activeEmployeeId,
+      orElse: () => throw Exception('Employee not found'));
+    final empSkills = mgr.employeeSkills;
+    final globalSkills = mgr.skills;
+    // Which global skills are already added to this employee
+    final addedIds = empSkills.map((s) => s.globalSkillId).whereType<String>().toSet();
+
+    return Column(children: [
+      // Header
+      Container(
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: ShadTheme.of(context).card,
+          border: Border(bottom: BorderSide(color: ShadTheme.of(context).border)),
+        ),
+        child: Row(children: [
+          GestureDetector(
+            onTap: () => setState(() => _showEmployeeDetail = false),
+            child: Icon(Icons.arrow_back, size: 20, color: ShadTheme.of(context).mutedForeground),
+          ),
+          SizedBox(width: 12),
+          Icon(Icons.person_outline, size: 22, color: ShadTheme.of(context).mutedForeground),
+          SizedBox(width: 10),
+          Expanded(child: Text(emp.name,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground))),
+        ]),
+      ),
+      Expanded(
+        child: SingleChildScrollView(padding: EdgeInsets.all(24), child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Basic Info
+          _buildDetailSection('Basic Info', [
+            _buildDetailRow(l10n.skillName, emp.name),
+            if (emp.description != null && emp.description!.isNotEmpty)
+              _buildDetailRow(l10n.skillDesc, emp.description!),
+          ]),
+          SizedBox(height: 16),
+          // Model Config
+          _buildDetailSection('Model Config', [
+            _buildDetailRow('Provider', emp.provider ?? '-'),
+            _buildDetailRow('Model', emp.model ?? '-'),
+          ]),
+          SizedBox(height: 16),
+          // Skills
+          _buildDetailSection('Skills (${empSkills.length})', [
+            if (empSkills.isEmpty)
+              Padding(padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text('No skills assigned', style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)))
+            else
+              ...empSkills.map((es) => Container(
+                margin: EdgeInsets.only(bottom: 6),
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: ShadTheme.of(context).secondary,
+                  borderRadius: BorderRadius.circular(6)),
+                child: Row(children: [
+                  Icon(Icons.extension, size: 14, color: Color(0xFF4CAF50)),
+                  SizedBox(width: 8),
+                  Expanded(child: Text(es.name, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground))),
+                  GestureDetector(
+                    onTap: () => mgr.removeSkillFromEmployee(es.globalSkillId ?? es.uuid),
+                    child: Icon(Icons.close, size: 16, color: ShadTheme.of(context).mutedForeground)),
+                ]))),
+            SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _showGlobalSkillPicker(mgr, addedIds),
+              icon: Icon(Icons.add, size: 16),
+              label: Text('Add from Global Library'),
+              style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.primary),
+            ),
+          ]),
+        ])),
+      ),
+    ]);
+  }
+
+  void _showGlobalSkillPicker(AgentManager mgr, Set<String> addedIds) {
+    final l10n = AppLocalizations.of(context);
+    final available = mgr.skills.where((s) => !addedIds.contains(s.uuid) && s.enabled == 1).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ShadTheme.of(context).card,
+        title: Text('Global Skill Library', style: TextStyle(color: ShadTheme.of(context).foreground, fontSize: 16)),
+        content: SizedBox(
+          width: 400, height: 350,
+          child: available.isEmpty
+              ? Center(child: Text('No available skills',
+                  style: TextStyle(color: ShadTheme.of(context).mutedForeground)))
+              : ListView(
+                  children: available.map((s) => ListTile(
+                    leading: Icon(Icons.extension, size: 18, color: Color(0xFF4CAF50)),
+                    title: Text(s.name, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+                    subtitle: s.description != null && s.description!.isNotEmpty
+                        ? Text(s.description!, style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground))
+                        : null,
+                    onTap: () async {
+                      await mgr.addSkillToEmployee(s.uuid);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      setState(() {});
+                    },
+                  )).toList(),
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.close)),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // Chat Header ⋮ button
+  // ══════════════════════════════════════════════════════════
+
+  // The ⋮ button is rendered in _buildChatPanel which doesn't exist here yet.
+  // We handle this via the _showEmployeeDetail flag in _buildContentArea.
+
+  Widget _buildDetailSection(String title, List<Widget> children) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+        color: ShadTheme.of(context).mutedForeground, letterSpacing: 0.8)),
+      SizedBox(height: 8),
+      Container(
+        width: double.infinity, padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(color: ShadTheme.of(context).secondary, borderRadius: BorderRadius.circular(8)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      ),
+    ]);
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(padding: EdgeInsets.symmetric(vertical: 4), child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 100, child: Text(label, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground))),
+        Expanded(child: Text(value, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).foreground))),
+      ],
+    ));
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+/// One-click copy button below each message bubble.
+/// Shows hover highlight and brief "已复制" checkmark feedback on tap.
+class _CopyButton extends StatefulWidget {
+  final String content;
+  const _CopyButton({required this.content});
+
+  @override
+  State<_CopyButton> createState() => _CopyButtonState();
+}
+
+class _CopyButtonState extends State<_CopyButton> {
+  bool _copied = false;
+  bool _hovering = false;
+
+  void _onTap() {
+    Clipboard.setData(ClipboardData(text: widget.content));
+    setState(() => _copied = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = ShadTheme.of(context).mutedForeground;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: GestureDetector(
+          onTap: _onTap,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _copied
+                ? Row(
+                    key: const ValueKey('copied'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check, size: 16, color: Color(0xFF4CAF50)),
+                      const SizedBox(width: 4),
+                      Text('已复制', style: TextStyle(fontSize: 11, color: const Color(0xFF4CAF50))),
+                    ],
+                  )
+                : Row(
+                    key: const ValueKey('copy'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.copy, size: 16, color: _hovering ? fg : fg.withAlpha(80)),
+                      const SizedBox(width: 4),
+                      Text('复制', style: TextStyle(fontSize: 11, color: _hovering ? fg : fg.withAlpha(80))),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Stateful widget for collapsible sections.
