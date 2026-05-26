@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -2846,38 +2847,38 @@ Widget _buildToolCallHeader(String name, bool hasResult) {
 }
 
 Widget _buildChatInput(AgentManager mgr) {
-return Container(
-padding: EdgeInsets.all(12),
-color: ShadTheme.of(context).card,
-child: Row(
-children: [
-Expanded(
-child: TextField(
-controller: _msgCtrl,
-decoration: InputDecoration(
-hintText: 'Send message to agent...',
-filled: true, fillColor: ShadTheme.of(context).secondary,
-border: OutlineInputBorder(),
-contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-isDense: true,
-),
-style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground),
-maxLines: 3, minLines: 1,
-onSubmitted: (t) => _send(t, mgr),
-),
-),
-SizedBox(width: 8),
-GestureDetector(
-onTap: () => _send(_msgCtrl.text, mgr),
-child: Container(
-width: 40, height: 40,
-decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+  return Container(
+    padding: EdgeInsets.all(12),
+    color: ShadTheme.of(context).card,
+    child: Row(
+      children: [
+        Expanded(
+          child: _SmoothCursorField(
+            controller: _msgCtrl,
+            decoration: InputDecoration(
+              hintText: 'Send message to agent...',
+              filled: true, fillColor: ShadTheme.of(context).secondary,
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              isDense: true,
+            ),
+            style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground),
+            maxLines: 3, minLines: 1,
+            onSubmitted: (t) => _send(t, mgr),
+          ),
+        ),
+        SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => _send(_msgCtrl.text, mgr),
+          child: Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
             child: Icon(Icons.send, size: 18, color: Theme.of(context).colorScheme.onPrimary),
-),
-),
-],
-),
-);
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 void _send(String text, AgentManager mgr) {
@@ -3605,6 +3606,143 @@ mgr.openAgentWithProfile(agent.uuid, agent.name, i);
   String _formatDateTime(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+/// TextField with smooth cursor animation using AnimatedPositioned.
+class _SmoothCursorField extends StatefulWidget {
+  final TextEditingController controller;
+  final InputDecoration decoration;
+  final TextStyle style;
+  final int maxLines;
+  final int minLines;
+  final void Function(String)? onSubmitted;
+  const _SmoothCursorField({
+    required this.controller, required this.decoration,
+    required this.style, this.maxLines = 1, this.minLines = 1,
+    this.onSubmitted,
+  });
+  @override
+  State<_SmoothCursorField> createState() => _SmoothCursorFieldState();
+}
+
+class _SmoothCursorFieldState extends State<_SmoothCursorField> {
+  final GlobalKey _textKey = GlobalKey();
+  double _cursorX = 0;
+  int _lastOffset = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onChange);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() {
+    final sel = widget.controller.selection;
+    if (!sel.isValid || !sel.isCollapsed) return;
+    final offset = sel.baseOffset;
+    if (offset == _lastOffset) return;
+    _lastOffset = offset;
+    // Defer to post-frame so layout is complete before querying RenderEditable
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _updatePos(offset);
+    });
+  }
+
+  void _updatePos(int offset) {
+    try {
+      final renderObj = _textKey.currentContext?.findRenderObject();
+      if (renderObj is RenderBox) {
+        final editable = _findEditable(renderObj);
+        if (editable != null) {
+          final caretRect = editable.getLocalRectForCaret(
+            TextPosition(offset: offset),
+          );
+          setState(() => _cursorX = caretRect.right + 5);
+          return;
+        }
+      }
+    } catch (_) {}
+    // Fallback: TextPainter
+    final text = widget.controller.text;
+    final o = offset.clamp(0, text.length);
+    final tp = TextPainter(
+      text: TextSpan(text: text.substring(0, o), style: widget.style),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: double.infinity);
+    setState(() => _cursorX = tp.width + 1.5);
+  }
+
+  RenderEditable? _findEditable(RenderObject obj) {
+    if (obj is RenderEditable) return obj;
+    if (obj is RenderBox) {
+      for (final child in _childrenOf(obj)) {
+        final found = _findEditable(child);
+        if (found != null) return found;
+      }
+    }
+    return null;
+  }
+
+  List<RenderObject> _childrenOf(RenderBox box) {
+    final result = <RenderObject>[];
+    box.visitChildren((child) => result.add(child));
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        TextField(
+          key: _textKey,
+          controller: widget.controller,
+          decoration: widget.decoration,
+          style: widget.style,
+          maxLines: widget.maxLines,
+          minLines: widget.minLines,
+          onSubmitted: widget.onSubmitted,
+          cursorColor: Colors.transparent,
+          cursorWidth: 0,
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Padding(
+              padding: widget.decoration.contentPadding ?? EdgeInsets.zero,
+              child: SizedBox(
+                height: widget.style.fontSize! * 1.5,
+                child: Stack(
+                  children: [
+                    AnimatedPositioned(
+                      left: _cursorX,
+                      top: 0,
+                      bottom: 0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        width: 2,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
