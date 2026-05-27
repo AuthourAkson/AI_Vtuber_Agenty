@@ -247,6 +247,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
         positionX: s.live2DXPosition,
         positionY: s.live2DYPosition,
         scale: s.live2DScale,
+        backgroundColor: shad.background,
         interactive: false,
         onEvent: (event) { if (event.type == 'modelError') debugPrint('Live2D error: ${event.data}'); },
       ));
