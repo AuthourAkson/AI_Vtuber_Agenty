@@ -144,44 +144,57 @@ class _CharacterScreenState extends State<CharacterScreen> {
           // ── Full-screen character preview ──
           Positioned.fill(child: _buildPreview(s, modelJsonPath, shad)),
 
-          // ── Settings panel (slides in/out from right) ──
+          // ── Settings panel + toggle button (slide together as one unit) ──
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
             right: _panelOpen ? 0 : -400,
             top: 0,
             bottom: 0,
-            child: Container(
-              width: 400,
-              color: shad.sidebar,
-              child: _buildPanelContent(sp, s, modelJsonPath),
-            ),
-          ),
-
-          // ── Toggle button (always in hit-test bounds, sticks to left of panel) ──
-          Positioned(
-            right: _panelOpen ? 400 : 0,
-            top: 20,
-            child: GestureDetector(
-              onTap: () => setState(() => _panelOpen = !_panelOpen),
-              child: Container(
-                width: 22,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: shad.background,
-                  border: Border.all(color: shad.input),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(4),
-                    bottomLeft: Radius.circular(4),
+            child: SizedBox(
+              width: 422, // 400 panel + 22 toggle
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Toggle button — always at the left edge of this container
+                  Positioned(
+                    left: 0,
+                    top: 20,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _panelOpen = !_panelOpen),
+                      child: Container(
+                        width: 22,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: shad.background,
+                          border: Border.all(color: shad.input),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(4),
+                            bottomLeft: Radius.circular(4),
+                          ),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            _panelOpen ? Icons.chevron_right : Icons.chevron_left,
+                            size: 14,
+                            color: shad.mutedForeground,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                child: Center(
-                  child: Icon(
-                    _panelOpen ? Icons.chevron_right : Icons.chevron_left,
-                    size: 14,
-                    color: shad.mutedForeground,
+                  // Panel content — right-aligned within this container
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 400,
+                      color: shad.sidebar,
+                      child: _buildPanelContent(sp, s, modelJsonPath),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
