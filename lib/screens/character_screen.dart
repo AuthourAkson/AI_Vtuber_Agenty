@@ -141,9 +141,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
       return Stack(
         clipBehavior: Clip.none,
         children: [
-          // ── Page background (theme-aware, the real background layer) ──
-          Positioned.fill(child: Container(color: shad.background)),
-
           // ── Full-screen character preview ──
           Positioned.fill(child: _buildPreview(s, modelJsonPath, shad)),
 
@@ -244,7 +241,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     // Live2D mode — render full-screen, transparent overlay lets page bg through
     if (modelJsonPath != null) {
       return Container(
-        color: Colors.transparent,
+        color: shad.background,
         child: Live2DView(
         modelPath: modelJsonPath,
         positionX: s.live2DXPosition,
