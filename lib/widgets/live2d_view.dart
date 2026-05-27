@@ -28,7 +28,6 @@ class Live2DView extends StatefulWidget {
   final double scale;
   final void Function(Live2DEvent)? onEvent;
   final bool interactive;
-  final Color? backgroundColor; // theme-synced body bg for WebView
 
   const Live2DView({
     super.key,
@@ -38,7 +37,6 @@ class Live2DView extends StatefulWidget {
     this.scale = 0.16,
     this.onEvent,
     this.interactive = true,
-    this.backgroundColor,
   });
 
   @override
@@ -71,10 +69,6 @@ class Live2DViewState extends State<Live2DView> {
     if (widget.modelPath != oldWidget.modelPath && _ready) {
       _loadModel();
     }
-    // Sync WebView background with theme color change
-    if (widget.backgroundColor != oldWidget.backgroundColor && _ready && _controller != null) {
-      _syncBackground();
-    }
     // Position/scale: only update if already loaded
     if (_loadedModelPath != null &&
         (widget.positionX != oldWidget.positionX ||
@@ -84,15 +78,6 @@ class Live2DViewState extends State<Live2DView> {
     if (_loadedModelPath != null && widget.scale != oldWidget.scale) {
       _updateScale();
     }
-  }
-
-  void _syncBackground() {
-    if (_controller == null || !_ready) return;
-    final bg = widget.backgroundColor ?? Colors.transparent;
-    final hex = '#${bg.red.toRadixString(16).padLeft(2, '0')}${bg.green.toRadixString(16).padLeft(2, '0')}${bg.blue.toRadixString(16).padLeft(2, '0')}';
-    _controller!.evaluateJavascript(source:
-      "document.body.style.backgroundColor = '$hex';"
-      "document.documentElement.style.backgroundColor = '$hex';");
   }
 
   Future<void> _loadModel() async {
@@ -207,7 +192,6 @@ class Live2DViewState extends State<Live2DView> {
             onLoadStop: (controller, url) async {
               _ready = true;
               setState(() => _loading = false);
-              _syncBackground(); // match WebView bg to theme
               if (widget.modelPath != null && widget.modelPath!.isNotEmpty) {
                 await Future.delayed(const Duration(milliseconds: 800));
                 _loadModel();
