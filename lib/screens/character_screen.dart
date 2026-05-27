@@ -152,7 +152,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
             child: AnimatedSlide(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
-              offset: _panelOpen ? Offset.zero : const Offset(1.0, 0.0),
+              offset: _panelOpen ? Offset.zero : const Offset(400 / 422, 0.0),
               child: SizedBox(
                 width: 422, // 400 panel + 22 toggle
                 child: Stack(
