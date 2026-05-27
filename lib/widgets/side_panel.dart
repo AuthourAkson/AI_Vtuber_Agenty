@@ -107,7 +107,7 @@ return RotatedBox(
 quarterTurns: 1,
 child: Text(
 label,
-style: const TextStyle(
+style: TextStyle(
 fontSize: 10,
 color: ShadTheme.of(context).mutedForeground,
 letterSpacing: 1,

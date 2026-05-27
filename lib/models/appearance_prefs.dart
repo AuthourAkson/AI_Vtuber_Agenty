@@ -74,6 +74,7 @@ class AppearancePrefs {
     (label: 'Indigo',   color: 0xFF6366F1),
     (label: 'Rose',     color: 0xFFF43F5E),
     (label: 'Slate',    color: 0xFF64748B),
+    (label: 'Ghost',    color: 0xFFEBEBEB),
   ];
 
   /// The currently selected theme color.

@@ -235,6 +235,16 @@ class ThemePreset {
       lightSecondary: 0xFFF0F0F2, lightMutedFg: 0xFF686870,
       lightBorder: 0xFFE0E0E4, lightInput: 0xFFD4D4D8, lightSidebar: 0xFFF0F0F2,
     ),
+    // 16: Ghost — matches LocalAIVtuber2's shadcn/ui dark aesthetic
+    ThemePreset(
+      label: 'Ghost', accentColor: 0xFFEBEBEB,
+      darkBg: 0xFF1C1C1C, darkFg: 0xFFFBFBFB, darkCard: 0xFF2D2D2D,
+      darkSecondary: 0xFF3D3D3D, darkMutedFg: 0xFFAFAFAF,
+      darkBorder: 0x1AFFFFFF, darkInput: 0x26FFFFFF, darkSidebar: 0xFF151515,
+      lightBg: 0xFFFFFFFF, lightFg: 0xFF1C1C1C, lightCard: 0xFFFFFFFF,
+      lightSecondary: 0xFFF7F7F7, lightMutedFg: 0xFF8E8E8E,
+      lightBorder: 0xFFEBEBEB, lightInput: 0xFFEBEBEB, lightSidebar: 0xFFFBFBFB,
+    ),
   ];
 
   /// Neutral fallback — no accent color, pure grayscale. Used when Theme Color is disabled.

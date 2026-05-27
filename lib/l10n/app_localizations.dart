@@ -163,6 +163,15 @@ class AppLocalizations {
   String get charPetOpened => _t('charPetOpened');
   String get charPetFailed => _t('charPetFailed');
   String get charImporting => _t('charImporting');
+  String get charDisplaySection => _t('charDisplaySection');
+  String get charModelSection => _t('charModelSection');
+  String get charManageSection => _t('charManageSection');
+  String get charPetSection => _t('charPetSection');
+  String get charSelectModel => _t('charSelectModel');
+  String get charSelectModelHint => _t('charSelectModelHint');
+  String get charXPosition => _t('charXPosition');
+  String get charYPosition => _t('charYPosition');
+  String get charClickThroughOn => _t('charClickThroughOn');
   String get ttsTitle => _t('ttsTitle');
   String get ttsSubtitle => _t('ttsSubtitle');
   String get ttsProvider => _t('ttsProvider');
@@ -267,6 +276,32 @@ class AppLocalizations {
   String get privacy => _t('privacy');
   String get privacyTitle => _t('privacyTitle');
   String get privacySubtitle => _t('privacySubtitle');
+  String get skills => _t('skills');
+  String get skillAdd => _t('skillAdd');
+  String get skillAddTitle => _t('skillAddTitle');
+  String get skillName => _t('skillName');
+  String get skillNameHint => _t('skillNameHint');
+  String get skillDesc => _t('skillDesc');
+  String get skillDescHint => _t('skillDescHint');
+  String get skillFolderPath => _t('skillFolderPath');
+  String get skillFolderHint => _t('skillFolderHint');
+  String get skillBrowse => _t('skillBrowse');
+  String get skillSelectFolder => _t('skillSelectFolder');
+  String get skillSelectZip => _t('skillSelectZip');
+  String get skillSearchFolder => _t('skillSearchFolder');
+  String get skillEnabled => _t('skillEnabled');
+  String get skillDisabled => _t('skillDisabled');
+  String get skillDelete => _t('skillDelete');
+  String get skillDeleteConfirm => _t('skillDeleteConfirm');
+  String get skillModify => _t('skillModify');
+  String get skillConfig => _t('skillConfig');
+  String get skillInfo => _t('skillInfo');
+  String get skillId => _t('skillId');
+  String get skillType => _t('skillType');
+  String get skillCreatedAt => _t('skillCreatedAt');
+  String get skillUpdatedAt => _t('skillUpdatedAt');
+  String get skillNoSkills => _t('skillNoSkills');
+  String get skillConfirm => _t('skillConfirm');
   String get privacyClearCache => _t('privacyClearCache');
   String get privacyClearCacheDesc => _t('privacyClearCacheDesc');
   String get privacyClearCacheConfirm => _t('privacyClearCacheConfirm');
@@ -507,6 +542,15 @@ class AppLocalizations {
     'charPetOpened':        {'en': 'Desktop pet opened.',     'zh': '桌宠已打开。'},
     'charPetFailed':        {'en': 'Failed to extract pet script.', 'zh': '提取桌宠脚本失败。'},
     'charImporting':        {'en': 'Importing...',            'zh': '导入中...'},
+    'charDisplaySection':   {'en': 'Display',                 'zh': '显示'},
+    'charModelSection':     {'en': 'Model Configuration',     'zh': '模型配置'},
+    'charManageSection':    {'en': 'Model Management',        'zh': '模型管理'},
+    'charPetSection':       {'en': 'Desktop Pet',             'zh': '桌面宠物'},
+    'charSelectModel':      {'en': 'Select Model',            'zh': '选择模型'},
+    'charSelectModelHint':  {'en': 'Choose a Live2D model...','zh': '选择 Live2D 模型...'},
+    'charXPosition':        {'en': 'X Position',              'zh': '水平位置'},
+    'charYPosition':        {'en': 'Y Position',              'zh': '垂直位置'},
+    'charClickThroughOn':   {'en': 'Click-through ON',        'zh': '鼠标穿透：开'},
     'ttsTitle':       {'en': 'TTS Settings',                      'zh': 'TTS 设置'},
     'ttsSubtitle':    {'en': 'Configure text-to-speech engine and voice settings', 'zh': '配置文字转语音引擎和语音设置'},
     'ttsProvider':    {'en': 'TTS Provider Selection',            'zh': 'TTS 提供商选择'},
@@ -700,6 +744,32 @@ class AppLocalizations {
     'dataStorageFiles': {'en': 'Associated Files',                   'zh': '关联文件数'},
     'dataStorageManage':{'en': 'Manage Files',                       'zh': '管理文件'},
     'dataStorageOpen':  {'en': 'Open Storage Folder',                'zh': '打开存储目录'},
+    'skills':           {'en': 'Skills',                             'zh': '技能'},
+    'skillAdd':         {'en': 'Add Skill',                          'zh': '添加技能'},
+    'skillAddTitle':    {'en': 'Add Skill',                          'zh': '添加技能'},
+    'skillName':        {'en': 'Skill Name',                         'zh': '技能名称'},
+    'skillNameHint':    {'en': 'Enter skill name',                   'zh': '输入技能名称'},
+    'skillDesc':        {'en': 'Description',                        'zh': '描述'},
+    'skillDescHint':    {'en': 'Brief description of the skill',     'zh': '技能的简要描述'},
+    'skillFolderPath':  {'en': 'Skill Folder Path',                 'zh': '技能文件夹路径'},
+    'skillFolderHint':  {'en': 'Folder must contain SKILL.md',      'zh': '文件夹中需包含 SKILL.md'},
+    'skillBrowse':      {'en': 'Browse',                             'zh': '浏览'},
+    'skillSelectFolder':{'en': 'Select Folder',                      'zh': '选择文件夹'},
+    'skillSelectZip':   {'en': 'From ZIP Archive',                   'zh': '从压缩包导入'},
+    'skillSearchFolder':{'en': 'Search folders...',                  'zh': '搜索文件夹...'},
+    'skillEnabled':     {'en': 'Enabled',                            'zh': '已启用'},
+    'skillDisabled':    {'en': 'Disabled',                           'zh': '已禁用'},
+    'skillDelete':      {'en': 'Delete Skill',                       'zh': '删除技能'},
+    'skillDeleteConfirm':{'en': r'Delete skill "${name}"? This cannot be undone.', 'zh': r'删除技能"${name}"？此操作不可撤销。'},
+    'skillModify':      {'en': 'Modify',                             'zh': '修改'},
+    'skillConfig':      {'en': 'Configuration',                      'zh': '配置'},
+    'skillInfo':        {'en': 'Information',                        'zh': '信息'},
+    'skillId':          {'en': 'Skill ID',                           'zh': '技能 ID'},
+    'skillType':        {'en': 'Type',                               'zh': '类型'},
+    'skillCreatedAt':   {'en': 'Created',                            'zh': '创建时间'},
+    'skillUpdatedAt':   {'en': 'Updated',                            'zh': '更新时间'},
+    'skillNoSkills':    {'en': 'No skills yet.\\nClick + to add a skill.', 'zh': '暂无技能。\\n点击 + 添加技能。'},
+    'skillConfirm':     {'en': 'Confirm',                            'zh': '确认'},
   };
 }
 
