@@ -238,16 +238,18 @@ class _CharacterScreenState extends State<CharacterScreen> {
       );
     }
 
-    // Live2D mode — render the selected model full-screen
+    // Live2D mode — render the selected model full-screen on theme-colored background
     if (modelJsonPath != null) {
-      return Live2DView(
+      return Container(
+        color: shad.background,
+        child: Live2DView(
         modelPath: modelJsonPath,
         positionX: s.live2DXPosition,
         positionY: s.live2DYPosition,
         scale: s.live2DScale,
         interactive: false,
         onEvent: (event) { if (event.type == 'modelError') debugPrint('Live2D error: ${event.data}'); },
-      );
+      ));
     }
 
     // No model selected

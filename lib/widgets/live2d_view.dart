@@ -220,7 +220,7 @@ class Live2DViewState extends State<Live2DView> {
               ),
             ),
         ],
-      ),
+      );
   }
 
   void _handleEvent(Live2DEvent event) {

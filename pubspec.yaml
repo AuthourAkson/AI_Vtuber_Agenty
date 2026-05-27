@@ -38,7 +38,7 @@ dependencies:
   window_manager: ^0.5.1
   # WenzAgent multi-agent SDK
   wenzagent:
-    path: D:/wenzagent-1.0.0
+    path: D:/wenzagent-1.0.2
 
 dev_dependencies:
   flutter_test:

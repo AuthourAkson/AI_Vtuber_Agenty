@@ -81,6 +81,12 @@ class AgentManager extends ChangeNotifier {
   List<AgentModel> _agentSummaries = [];
   List<LanDeviceInfo> _onlineDevices = [];
 
+  /// Skill entities for the skills panel (global skills).
+  List<GlobalSkillEntity> _skills = [];
+
+  /// Employee's currently loaded skills (for the active agent).
+  List<AiEmployeeSkillEntity> _employeeSkills = [];
+
   /// Employee IDs of sessions the user has deleted (SDK doesn't clear summaries
   /// on session delete, so we filter them out ourselves). Persisted to profiles JSON.
   final Set<String> _hiddenSessionIds = {};
@@ -111,6 +117,8 @@ class AgentManager extends ChangeNotifier {
   List<AgentModel> get employees => _employees;
   List<AgentModel> get agentSummaries => _agentSummaries;
   List<LanDeviceInfo> get onlineDevices => _onlineDevices;
+  List<GlobalSkillEntity> get skills => _skills;
+  List<AiEmployeeSkillEntity> get employeeSkills => _employeeSkills;
   List<ProviderProfile> get providerProfiles => _providerProfiles;
 
   String? get activeEmployeeId => _activeEmployeeId;
@@ -449,6 +457,99 @@ class AgentManager extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // ─── Global Skill CRUD ────────────────────────
+
+  /// Refresh global skills list.
+  Future<void> refreshGlobalSkills() async {
+    try {
+      _skills = await wenzagent.getGlobalSkills();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Refresh employee skills for active agent.
+  Future<void> refreshEmployeeSkills() async {
+    if (_activeEmployeeId == null) { _employeeSkills = []; notifyListeners(); return; }
+    try {
+      _employeeSkills = await wenzagent.getEmployeeSkills(_activeEmployeeId!);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Create a global folder skill.
+  Future<GlobalSkillEntity?> createSkill({
+    required String name,
+    String? description,
+    required String folderPath,
+  }) async {
+    try {
+      final entity = await wenzagent.createGlobalFolderSkill(
+        name: name, description: description, folderPath: folderPath);
+      if (entity != null) await refreshGlobalSkills();
+      return entity;
+    } catch (e) {
+      print('[AgentManager] createSkill failed: $e');
+      return null;
+    }
+  }
+
+  /// Create a global MCP skill.
+  Future<GlobalSkillEntity?> createMcpSkill({
+    required String name,
+    String? description,
+    required McpServerConfig serverConfig,
+  }) async {
+    try {
+      final entity = await wenzagent.createGlobalMcpSkill(
+        name: name, description: description, serverConfig: serverConfig);
+      if (entity != null) await refreshGlobalSkills();
+      return entity;
+    } catch (e) {
+      print('[AgentManager] createMcpSkill failed: $e');
+      return null;
+    }
+  }
+
+  /// Delete a global skill.
+  Future<void> deleteSkill(String uuid) async {
+    try {
+      await wenzagent.deleteGlobalSkill(uuid);
+      await refreshGlobalSkills();
+    } catch (_) {}
+  }
+
+  /// Toggle global skill enabled.
+  Future<void> toggleSkillEnabled(String uuid) async {
+    try {
+      final skill = _skills.firstWhere((s) => s.uuid == uuid);
+      final newEnabled = skill.enabled != 1;
+      await wenzagent.setGlobalSkillEnabled(uuid, newEnabled);
+      await refreshGlobalSkills();
+    } catch (_) {}
+  }
+
+  /// Add global skill to active employee.
+  Future<void> addSkillToEmployee(String globalSkillUuid) async {
+    if (_activeEmployeeId == null) return;
+    try {
+      final gs = _skills.firstWhere((s) => s.uuid == globalSkillUuid);
+      await wenzagent.addGlobalSkillToEmployee(
+        employeeId: _activeEmployeeId!,
+        globalSkill: gs,
+      );
+      await refreshEmployeeSkills();
+    } catch (_) {}
+  }
+
+  /// Remove global skill from active employee.
+  Future<void> removeSkillFromEmployee(String globalSkillUuid) async {
+    if (_activeEmployeeId == null) return;
+    try {
+      await wenzagent.removeGlobalSkillFromEmployee(_activeEmployeeId!, globalSkillUuid);
+      await refreshEmployeeSkills();
+    } catch (_) {}
+  }
+
   /// Clear ALL MultiAgent cache: delete all employee sessions, messages,
   /// and employees. Full reset requiring re-setup afterwards.
   Future<void> clearAllCache() async {
@@ -550,6 +651,9 @@ class AgentManager extends ChangeNotifier {
       notifyListeners();
       // Refresh summaries so the new agent appears in AGENTS sidebar
       await refreshSummaries();
+      // Load global skills + employee skills
+      await refreshGlobalSkills();
+      await refreshEmployeeSkills();
     } else {
       // Employee not found (likely deleted) — clean up orphaned session state
       print('[AgentManager] Employee not found: $employeeId, auto-cleaning');

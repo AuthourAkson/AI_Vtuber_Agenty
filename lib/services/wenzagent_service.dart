@@ -370,6 +370,161 @@ class WenzAgentService {
     return getSessionSummaries();
   }
 
+  // ─── Global Skill Management ──────────────────
+
+  /// Get all global skills.
+  Future<List<GlobalSkillEntity>> getGlobalSkills() async {
+    try {
+      final gsm = GlobalSkillManager.getInstance(_deviceId);
+      return await gsm.getAllSkills();
+    } catch (e) {
+      print('[WenzAgentService] getGlobalSkills failed: $e');
+      return [];
+    }
+  }
+
+  /// Create a global folder skill.
+  Future<GlobalSkillEntity?> createGlobalFolderSkill({
+    required String name,
+    String? description,
+    required String folderPath,
+  }) async {
+    try {
+      final gsm = GlobalSkillManager.getInstance(_deviceId);
+      final entity = GlobalSkillEntity(
+        uuid: 'gskill-${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        description: description,
+        skillType: 'folder',
+        config: folderPath,
+        enabled: 1,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+      );
+      await gsm.createSkill(entity);
+      return entity;
+    } catch (e) {
+      print('[WenzAgentService] createGlobalFolderSkill failed: $e');
+      return null;
+    }
+  }
+
+  /// Create a global MCP skill.
+  Future<GlobalSkillEntity?> createGlobalMcpSkill({
+    required String name,
+    String? description,
+    required McpServerConfig serverConfig,
+  }) async {
+    try {
+      final gsm = GlobalSkillManager.getInstance(_deviceId);
+      final configJson = McpServerConfig.toJsonString([serverConfig]);
+      final entity = GlobalSkillEntity(
+        uuid: 'gskill-mcp-${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        description: description,
+        skillType: 'mcp',
+        config: configJson,
+        enabled: 1,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+      );
+      await gsm.createSkill(entity);
+      return entity;
+    } catch (e) {
+      print('[WenzAgentService] createGlobalMcpSkill failed: $e');
+      return null;
+    }
+  }
+
+  /// Test MCP server connection.
+  Future<void> deleteGlobalSkill(String uuid) async {
+    try {
+      final gsm = GlobalSkillManager.getInstance(_deviceId);
+      await gsm.deleteSkill(uuid);
+    } catch (e) {
+      print('[WenzAgentService] deleteGlobalSkill failed: $e');
+    }
+  }
+
+  /// Toggle global skill enabled.
+  Future<void> setGlobalSkillEnabled(String uuid, bool enabled) async {
+    try {
+      final gsm = GlobalSkillManager.getInstance(_deviceId);
+      await gsm.setSkillEnabled(uuid, enabled);
+    } catch (e) {
+      print('[WenzAgentService] setGlobalSkillEnabled failed: $e');
+    }
+  }
+
+  /// Add a global skill to an employee (creates AiEmployeeSkillEntity with globalSkillId).
+  Future<AiEmployeeSkillEntity?> addGlobalSkillToEmployee({
+    required String employeeId,
+    required GlobalSkillEntity globalSkill,
+  }) async {
+    try {
+      final skillMgr = SkillManager.getInstance(_deviceId);
+      // Check if already exists
+      final existing = await skillMgr.getSkills(employeeId);
+      final already = existing.any((s) => s.globalSkillId == globalSkill.uuid);
+      if (already) return null;
+
+      final entity = AiEmployeeSkillEntity(
+        uuid: 'eskill-${DateTime.now().millisecondsSinceEpoch}',
+        employeeId: employeeId,
+        name: globalSkill.name,
+        description: globalSkill.description,
+        skillType: globalSkill.skillType,
+        config: globalSkill.config,
+        globalSkillId: globalSkill.uuid,
+        enabled: 1,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+      );
+      await skillMgr.createSkill(entity);
+
+      // Push to agent runtime
+      final proxy = await _client!.getOrCreateAgentProxy(employeeId: employeeId);
+      await proxy.initialize();
+      final skills = await skillMgr.getSkills(employeeId);
+      await proxy.setSkills(skills.map((e) => e.toMap()).toList());
+
+      return entity;
+    } catch (e) {
+      print('[WenzAgentService] addGlobalSkillToEmployee failed: $e');
+      return null;
+    }
+  }
+
+  /// Remove a global skill from an employee.
+  Future<void> removeGlobalSkillFromEmployee(String employeeId, String globalSkillId) async {
+    try {
+      final skillMgr = SkillManager.getInstance(_deviceId);
+      final skills = await skillMgr.getSkills(employeeId);
+      for (final s in skills) {
+        if (s.globalSkillId == globalSkillId) {
+          await skillMgr.deleteSkill(s.uuid);
+        }
+      }
+      // Push to agent runtime
+      final proxy = await _client!.getOrCreateAgentProxy(employeeId: employeeId);
+      await proxy.initialize();
+      final updated = await skillMgr.getSkills(employeeId);
+      await proxy.setSkills(updated.map((e) => e.toMap()).toList());
+    } catch (e) {
+      print('[WenzAgentService] removeGlobalSkillFromEmployee failed: $e');
+    }
+  }
+
+  /// Get skills for an employee.
+  Future<List<AiEmployeeSkillEntity>> getEmployeeSkills(String employeeId) async {
+    try {
+      final skillMgr = SkillManager.getInstance(_deviceId);
+      return await skillMgr.getSkills(employeeId);
+    } catch (e) {
+      return [];
+    }
+  }
+
   // ─── Internal ─────────────────────────────────────────────
 
   Map<String, dynamic> _msgToMap(AgentMessage msg) {
