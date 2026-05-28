@@ -401,20 +401,34 @@ class _CharacterScreenState extends State<CharacterScreen> {
         // ── Section: Model Management ──
         _panelSectionLabel(context, l10n.charManageSection, Icons.folder_open),
         const SizedBox(height: 12),
-        // Upload buttons
-        _uploadButton(context, l10n.charUploadLive2D, Icons.upload_file,
-          _importingModel != null ? null : _uploadLive2DModel, _importingModel != null),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _importingModel != null ? null : _uploadVRMModel,
-          icon: const Icon(Icons.upload_file, size: 18),
-          label: Text(l10n.charUploadVRM),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: shad.mutedForeground,
-            side: BorderSide(color: shad.border),
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        // Upload buttons — Live2D left, VRM right (always same order)
+        Row(children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _importingModel != null ? null : _uploadLive2DModel,
+              icon: const Icon(Icons.person_outline, size: 16),
+              label: Text(l10n.charUploadLive2D, style: const TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: shad.primary,
+                side: BorderSide(color: shad.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _importingModel != null ? null : _uploadVRMModel,
+              icon: const Icon(Icons.view_in_ar, size: 16),
+              label: Text(l10n.charUploadVRM, style: const TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: shad.mutedForeground,
+                side: BorderSide(color: shad.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ]),
         const SizedBox(height: 4),
         Text(l10n.charUploadGuide, style: TextStyle(fontSize: 11, color: shad.mutedForeground)),
         const SizedBox(height: 12),
