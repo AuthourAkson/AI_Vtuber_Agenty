@@ -29,6 +29,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
   List<Map<String, String>> _models = [];
   List<Map<String, String>> _vrmModels = [];
   String? _importingModel;
+  String _uploadStatus = 'idle'; // 'idle' | 'uploading' | 'success' | 'error'
   int _petPort = 48889;
   bool _clickThrough = true;
   bool _panelOpen = true;
@@ -401,35 +402,20 @@ class _CharacterScreenState extends State<CharacterScreen> {
         // ── Section: Model Management ──
         _panelSectionLabel(context, l10n.charManageSection, Icons.folder_open),
         const SizedBox(height: 12),
-        // Upload buttons
-        _uploadButton(context, l10n.charUploadLive2D, Icons.upload_file,
-          _importingModel != null ? null : _uploadLive2DModel, _importingModel != null),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _importingModel != null ? null : _uploadVRMModel,
-          icon: const Icon(Icons.upload_file, size: 18),
-          label: Text(l10n.charUploadVRM),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: shad.mutedForeground,
-            side: BorderSide(color: shad.border),
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        // "Manage Models" button → opens LAV2-style dialog
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showModelManagerDialog(context, sp, s),
+            icon: const Icon(Icons.settings, size: 18),
+            label: Text(l10n.charManageModels),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: shad.primary,
+              side: BorderSide(color: shad.primary),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(l10n.charUploadGuide, style: TextStyle(fontSize: 11, color: shad.mutedForeground)),
-        const SizedBox(height: 12),
-
-        // Installed models list
-        if (isLive2D && _models.isNotEmpty) ...[
-          Text(l10n.charInstalledModels, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: shad.foreground)),
-          const SizedBox(height: 8),
-          ..._models.map((m) => _modelTile(context, m, modelJsonPath, sp, s)),
-        ],
-        if (!isLive2D && _vrmModels.isNotEmpty) ...[
-          Text(l10n.charInstalledModels, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: shad.foreground)),
-          const SizedBox(height: 8),
-          ..._vrmModels.map((m) => _vrmModelTile(context, m, s.selectedVRMModel, sp, s)),
-        ],
 
         const SizedBox(height: 24),
 
@@ -484,6 +470,289 @@ class _CharacterScreenState extends State<CharacterScreen> {
         ]),
 
         const SizedBox(height: 24),
+      ]),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // Model Manager Dialog (LAV2: model-upload-manager.tsx)
+  // ════════════════════════════════════════════════════════════
+
+  Future<void> _showModelManagerDialog(BuildContext context, SettingsProvider sp, AppSettings s) async {
+    final shad = ShadTheme.of(context);
+    final l10n = AppLocalizations.of(context);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final allModels = <_ModelEntry>[
+            ..._models.map((m) => _ModelEntry(
+              name: m['name']!,
+              path: m['path']!,
+              type: 'Live2D',
+              icon: Icons.person_outline,
+            )),
+            ..._vrmModels.map((m) => _ModelEntry(
+              name: m['name']!,
+              path: m['path']!,
+              type: 'VRM',
+              icon: Icons.view_in_ar,
+            )),
+          ];
+
+          return AlertDialog(
+            backgroundColor: shad.card,
+            title: Row(children: [
+              const Icon(Icons.folder_open, size: 20),
+              const SizedBox(width: 8),
+              Text(l10n.charModelManager, style: TextStyle(color: shad.foreground)),
+            ]),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Upload Section ──
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: shad.secondary,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: shad.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l10n.charUploadModels, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: shad.foreground)),
+                          const SizedBox(height: 4),
+                          Text(l10n.charUploadModelsDesc, style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
+                          const SizedBox(height: 14),
+                          Row(children: [
+                            Expanded(
+                              child: _dialogUploadBtn(
+                                ctx, Icons.insert_drive_file, l10n.charUploadVRM,
+                                shad, _uploadStatus == 'uploading',
+                                () => _dialogUploadVRM(ctx, setDialogState),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _dialogUploadBtn(
+                                ctx, Icons.folder, l10n.charUploadLive2DFolder,
+                                shad, _uploadStatus == 'uploading',
+                                () => _dialogUploadLive2D(ctx, setDialogState),
+                              ),
+                            ),
+                          ]),
+                          // Upload status
+                          if (_uploadStatus != 'idle') ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _uploadStatus == 'error' ? Colors.red.withAlpha(30) : shad.muted,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: _uploadStatus == 'error' ? Colors.red : shad.border),
+                              ),
+                              child: Row(children: [
+                                Icon(
+                                  _uploadStatus == 'uploading' ? Icons.hourglass_empty :
+                                  _uploadStatus == 'success' ? Icons.check_circle : Icons.error,
+                                  size: 16,
+                                  color: _uploadStatus == 'error' ? Colors.red :
+                                         _uploadStatus == 'success' ? Colors.green : shad.mutedForeground,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _uploadStatus == 'uploading' ? l10n.charUploading :
+                                  _uploadStatus == 'success' ? l10n.charUploadSuccess : l10n.charUploadFailed,
+                                  style: TextStyle(fontSize: 12, color: shad.mutedForeground),
+                                ),
+                              ]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── Existing Models Section ──
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: shad.secondary,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: shad.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${l10n.charExistingModels} (${allModels.length})',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: shad.foreground),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(l10n.charManageModelsDesc, style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
+                          const SizedBox(height: 12),
+                          if (allModels.isEmpty)
+                            _dialogEmpty(ctx, shad, l10n)
+                          else
+                            ...allModels.map((m) => _dialogModelTile(ctx, shad, m, () async {
+                              if (m.type == 'Live2D') {
+                                await _deleteModel(m.name);
+                              } else {
+                                await _deleteVRMModel(m.path);
+                              }
+                              _refreshModels();
+                              setDialogState(() {});
+                            })),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l10n.close, style: TextStyle(color: shad.mutedForeground)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _dialogUploadVRM(BuildContext ctx, StateSetter setDialogState) async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Select VRM model (.vrm)',
+      type: FileType.custom,
+      allowedExtensions: ['vrm'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    setDialogState(() => _uploadStatus = 'uploading');
+    try {
+      final destPath = await _vrmModelService.importModel(result.files.single.path!);
+      if (destPath != null) {
+        _refreshModels();
+        final sp = context.read<SettingsProvider>();
+        _update(sp, sp.settings, selectedVRMModel: destPath);
+        setDialogState(() => _uploadStatus = 'success');
+      } else {
+        setDialogState(() => _uploadStatus = 'error');
+      }
+    } catch (_) {
+      setDialogState(() => _uploadStatus = 'error');
+    }
+    Future.delayed(const Duration(seconds: 2), () {
+      setDialogState(() => _uploadStatus = 'idle');
+    });
+  }
+
+  Future<void> _dialogUploadLive2D(BuildContext ctx, StateSetter setDialogState) async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Select Live2D model file (.model3.json or .model.json)',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    setDialogState(() => _uploadStatus = 'uploading');
+    try {
+      final filePath = result.files.single.path!;
+      final dir = Directory(filePath).parent;
+      final destPath = await _modelService.importModel(dir.path);
+      if (destPath != null) {
+        _refreshModels();
+        final sp = context.read<SettingsProvider>();
+        final modelName = dir.path.split(Platform.pathSeparator).last;
+        final modelJson = _modelService.getModelJsonPath(modelName);
+        _update(sp, sp.settings, selectedLive2DModel: modelJson);
+        setDialogState(() => _uploadStatus = 'success');
+      } else {
+        setDialogState(() => _uploadStatus = 'error');
+      }
+    } catch (_) {
+      setDialogState(() => _uploadStatus = 'error');
+    }
+    Future.delayed(const Duration(seconds: 2), () {
+      setDialogState(() => _uploadStatus = 'idle');
+    });
+  }
+
+  Widget _dialogUploadBtn(BuildContext ctx, IconData icon, String label, ShadTheme shad, bool disabled, VoidCallback onTap) {
+    return OutlinedButton(
+      onPressed: disabled ? null : onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: shad.mutedForeground,
+        side: BorderSide(color: shad.border),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 16),
+        const SizedBox(width: 6),
+        Flexible(child: Text(label, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+      ]),
+    );
+  }
+
+  Widget _dialogEmpty(BuildContext ctx, ShadTheme shad, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(child: Column(children: [
+        Icon(Icons.inbox, size: 40, color: shad.mutedForeground.withAlpha(100)),
+        const SizedBox(height: 8),
+        Text(l10n.charNoModelsYet, style: TextStyle(color: shad.mutedForeground, fontSize: 13)),
+      ])),
+    );
+  }
+
+  Widget _dialogModelTile(BuildContext ctx, ShadTheme shad, _ModelEntry m, VoidCallback onDelete) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: shad.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: shad.border),
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: shad.primary.withAlpha(25),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(m.icon, size: 18, color: shad.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(m.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: shad.foreground)),
+        ])),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: m.type == 'VRM' ? shad.primary.withAlpha(30) : shad.muted,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(m.type, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: shad.primary)),
+        ),
+        const SizedBox(width: 8),
+        InkWell(
+          onTap: onDelete,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(Icons.delete_outline, size: 16, color: Colors.redAccent.withAlpha(180)),
+          ),
+        ),
       ]),
     );
   }
@@ -813,4 +1082,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
     final path = sp.settings.selectedLive2DModel;
     if (path != null) _openPet(path, sp.settings);
   }
+}
+
+/// Lightweight model entry for the manager dialog.
+class _ModelEntry {
+  final String name;
+  final String path;
+  final String type;
+  final IconData icon;
+  _ModelEntry({required this.name, required this.path, required this.type, required this.icon});
 }
