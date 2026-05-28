@@ -10,6 +10,11 @@ set(BINARY_NAME "ai_vtuber_agent")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# Allow DEPENDS in add_custom_command(TARGET) for legacy plugins (CMP0175)
+if(POLICY CMP0175)
+  cmake_policy(SET CMP0175 OLD)
+endif()
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)

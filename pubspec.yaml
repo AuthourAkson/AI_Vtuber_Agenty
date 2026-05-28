@@ -50,4 +50,11 @@ flutter:
   assets:
     - assets/
     - assets/live2d/
+    - assets/vrm/
+    - assets/vrm/lib/
+    - assets/vrm/lib/loaders/
+    - assets/vrm/lib/controls/
+    - assets/vrm/lib/utils/
+    - assets/vrm/lib/three-vrm/lib/
+    - assets/vrm/lib/three-vrm-animation/lib/
     - assets/python/

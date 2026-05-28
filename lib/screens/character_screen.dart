@@ -9,7 +9,9 @@ import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
 import '../services/live2d_server.dart';
+import '../services/vrm_model_service.dart';
 import '../widgets/live2d_view.dart';
+import '../widgets/vrm_view.dart';
 import '../app.dart';
 import '../l10n/app_localizations.dart';
 
@@ -23,7 +25,9 @@ class CharacterScreen extends StatefulWidget {
 
 class _CharacterScreenState extends State<CharacterScreen> {
   final Live2DModelService _modelService = Live2DModelService();
+  final VrmModelService _vrmModelService = VrmModelService();
   List<Map<String, String>> _models = [];
+  List<Map<String, String>> _vrmModels = [];
   String? _importingModel;
   int _petPort = 48889;
   bool _clickThrough = true;
@@ -34,6 +38,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
   void initState() {
     super.initState();
     _refreshModels();
+    _ensureDefaults();
   }
 
   @override
@@ -44,13 +49,30 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   void _refreshModels() {
-    setState(() => _models = _modelService.listModels());
+    setState(() {
+      _models = _modelService.listModels();
+      _vrmModels = _vrmModelService.listModels();
+    });
+  }
+
+  /// Copy default VRM models from LAV2 on first run.
+  Future<void> _ensureDefaults() async {
+    if (_vrmModels.isEmpty) {
+      try {
+        await _vrmModelService.copyDefaultModels();
+        await _vrmModelService.copyAnimations();
+        _refreshModels();
+      } catch (_) {
+        // LAV2 models directory may not exist, that's fine
+      }
+    }
   }
 
   void _update(SettingsProvider sp, AppSettings s, {
     bool? renderModel, bool? use3D,
     double? live2DXPosition, double? live2DYPosition, double? live2DScale,
     String? selectedLive2DModel,
+    String? selectedVRMModel,
   }) {
     sp.saveSettings(AppSettings(
       renderModel: renderModel ?? s.renderModel,
@@ -59,7 +81,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
       live2DYPosition: live2DYPosition ?? s.live2DYPosition,
       live2DScale: live2DScale ?? s.live2DScale,
       selectedLive2DModel: selectedLive2DModel ?? s.selectedLive2DModel,
-      selectedVRMModel: s.selectedVRMModel,
+      selectedVRMModel: selectedVRMModel ?? s.selectedVRMModel,
       systemPrompt: s.systemPrompt,
       enableMemoryRetrieval: s.enableMemoryRetrieval,
       keepModelLoaded: s.keepModelLoaded,
@@ -123,6 +145,57 @@ class _CharacterScreenState extends State<CharacterScreen> {
       final sp = context.read<SettingsProvider>();
       if ((sp.settings.selectedLive2DModel ?? '').contains(modelName)) {
         _update(sp, sp.settings, selectedLive2DModel: null);
+      }
+    }
+  }
+
+  Future<void> _uploadVRMModel() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Select VRM model file (.vrm)',
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: ['vrm'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    final filePath = result.files.single.path;
+    if (filePath == null) return;
+
+    setState(() => _importingModel = filePath);
+    try {
+      final destPath = await _vrmModelService.importModel(filePath);
+      if (destPath != null && mounted) {
+        _refreshModels();
+        final sp = context.read<SettingsProvider>();
+        _update(sp, sp.settings, selectedVRMModel: destPath);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).charModelImported),
+            backgroundColor: const Color(0xFF4CAF50)));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _importingModel = null);
+    }
+  }
+
+  Future<void> _deleteVRMModel(String modelPath) async {
+    final name = modelPath.split(Platform.pathSeparator).last.replaceAll('.vrm', '');
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) =>
+      AlertDialog(backgroundColor: ShadTheme.of(context).card,
+        title: Text(AppLocalizations.of(context).charDelete),
+        content: Text(AppLocalizations.of(context).charDeleteConfirm),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context).cancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ]));
+    if (confirm == true) {
+      _vrmModelService.deleteModel(name);
+      _refreshModels();
+      final sp = context.read<SettingsProvider>();
+      if (sp.settings.selectedVRMModel == modelPath) {
+        _update(sp, sp.settings, selectedVRMModel: null);
       }
     }
   }
@@ -227,13 +300,28 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
     // VRM mode (3D)
     if (s.use3D) {
+      final vrmPath = s.selectedVRMModel;
+      if (vrmPath != null && vrmPath.isNotEmpty) {
+        return Container(
+          color: shad.background,
+          child: VrmView(
+            modelPath: vrmPath,
+            backgroundColor: shad.background,
+            onEvent: (event) {
+              if (event.type == 'modelError') {
+                debugPrint('[CharacterScreen] VRM error: ${event.data['error']}');
+              }
+            },
+          ),
+        );
+      }
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.view_in_ar, size: 80, color: shad.mutedForeground),
           const SizedBox(height: 16),
-          Text('VRM 3D Preview', style: TextStyle(fontSize: 20, color: shad.mutedForeground)),
+          Text(l10n.charNoVRMModel, style: TextStyle(fontSize: 20, color: shad.mutedForeground)),
           const SizedBox(height: 8),
-          Text('Coming soon', style: TextStyle(fontSize: 14, color: shad.mutedForeground)),
+          Text(l10n.charUploadHint, style: TextStyle(fontSize: 13, color: shad.mutedForeground)),
         ]),
       );
     }
@@ -302,7 +390,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
             _emptyHint(context, l10n.charNoModels),
         ] else ...[
           // VRM model section
-          _emptyHint(context, l10n.charVRMComingToast),
+          if (_vrmModels.isNotEmpty) ...[
+            _vrmModelDropdown(context, s.selectedVRMModel, sp, s),
+          ],
+          if (_vrmModels.isEmpty)
+            _emptyHint(context, l10n.charNoModels),
         ],
         const SizedBox(height: 24),
 
@@ -314,10 +406,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
           _importingModel != null ? null : _uploadLive2DModel, _importingModel != null),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(l10n.charVRMComingToast), backgroundColor: shad.mutedForeground));
-          },
+          onPressed: _importingModel != null ? null : _uploadVRMModel,
           icon: const Icon(Icons.upload_file, size: 18),
           label: Text(l10n.charUploadVRM),
           style: OutlinedButton.styleFrom(
@@ -331,10 +420,15 @@ class _CharacterScreenState extends State<CharacterScreen> {
         const SizedBox(height: 12),
 
         // Installed models list
-        if (_models.isNotEmpty) ...[
+        if (isLive2D && _models.isNotEmpty) ...[
           Text(l10n.charInstalledModels, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: shad.foreground)),
           const SizedBox(height: 8),
           ..._models.map((m) => _modelTile(context, m, modelJsonPath, sp, s)),
+        ],
+        if (!isLive2D && _vrmModels.isNotEmpty) ...[
+          Text(l10n.charInstalledModels, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: shad.foreground)),
+          const SizedBox(height: 8),
+          ..._vrmModels.map((m) => _vrmModelTile(context, m, s.selectedVRMModel, sp, s)),
         ],
 
         const SizedBox(height: 24),
@@ -495,6 +589,40 @@ class _CharacterScreenState extends State<CharacterScreen> {
     ]);
   }
 
+  Widget _vrmModelDropdown(BuildContext context, String? modelPath, SettingsProvider sp, AppSettings s) {
+    final shad = ShadTheme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(l10n.charSelectVRMModel, style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
+      const SizedBox(height: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: shad.secondary,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: shad.border),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: modelPath != null && _vrmModels.any((m) => m['path'] == modelPath)
+              ? modelPath : null,
+            hint: Text(l10n.charSelectModelHint, style: TextStyle(fontSize: 13, color: shad.mutedForeground)),
+            isExpanded: true,
+            dropdownColor: shad.card,
+            style: TextStyle(fontSize: 13, color: shad.foreground),
+            items: _vrmModels.map((m) => DropdownMenuItem<String>(
+              value: m['path'],
+              child: Text(m['name']!, style: const TextStyle(fontSize: 13)),
+            )).toList(),
+            onChanged: (path) {
+              if (path != null) _update(sp, s, selectedVRMModel: path);
+            },
+          ),
+        ),
+      ),
+    ]);
+  }
+
   Widget _sliderControl(BuildContext context, String label, double value, double min, double max, double step, ValueChanged<double> onChanged) {
     final shad = ShadTheme.of(context);
     return Padding(
@@ -586,6 +714,31 @@ class _CharacterScreenState extends State<CharacterScreen> {
           onPressed: () => _deleteModel(m['name']!),
         ),
         onTap: () => _update(sp, s, selectedLive2DModel: m['path']),
+      ),
+    );
+  }
+
+  Widget _vrmModelTile(BuildContext context, Map<String, String> m, String? selectedPath,
+      SettingsProvider sp, AppSettings s) {
+    final shad = ShadTheme.of(context);
+    final isSelected = selectedPath != null && selectedPath == m['path'];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? shad.muted : shad.card,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: isSelected ? shad.primary : shad.border),
+      ),
+      child: ListTile(
+        dense: true,
+        leading: Icon(Icons.view_in_ar, color: shad.primary, size: 18),
+        title: Text(m['name']!, style: const TextStyle(fontSize: 13)),
+        selected: isSelected,
+        trailing: IconButton(
+          icon: Icon(Icons.delete_outline, color: shad.mutedForeground, size: 16),
+          onPressed: () => _deleteVRMModel(m['path']!),
+        ),
+        onTap: () => _update(sp, s, selectedVRMModel: m['path']),
       ),
     );
   }

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRM 3D Renderer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #1C1C1C;
+  }
+  canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  #loading {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #aaa; font-family: 'Segoe UI', sans-serif;
+    font-size: 14px; text-align: center;
+    z-index: 100;
+  }
+  #loading .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid rgba(255,255,255,0.15);
+    border-top-color: #aaa;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #error {
+    display: none;
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #e57373; font-family: 'Segoe UI', sans-serif;
+    font-size: 13px; text-align: center; z-index: 100;
+    max-width: 300px; line-height: 1.5;
+  }
+</style>
+
+<!-- esm.sh import map — ?external=three avoids duplicate Three.js instances -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.175.0",
+    "three/addons/": "https://esm.sh/three@0.175.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://esm.sh/@pixiv/three-vrm@3.3.6?external=three",
+    "@pixiv/three-vrm-animation": "https://esm.sh/@pixiv/three-vrm-animation@3.3.6?external=three"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="vrm-canvas"></canvas>
+<div id="loading">
+  <div class="spinner"></div>
+  <span>Loading VRM engine...</span>
+</div>
+<div id="error"></div>
+
+<script type="module">
+// ─── Adapted from LocalAIVtuber2 vrm-3d-renderer.tsx ───
+//   One-to-one replication of the Three.js + @pixiv/three-vrm scene.
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { createVRMAnimationClip, VRMAnimationLoaderPlugin, VRMLookAtQuaternionProxy } from '@pixiv/three-vrm-animation';
+
+// ─── Adapted from LocalAIVtuber2 vrm-3d-renderer.tsx ───
+//   One-to-one replication of the Three.js + @pixiv/three-vrm scene.
+
+const DEFAULT_MODEL_PATH = 'http://localhost:48888/models/vrm/春日部つむぎハイパー.vrm';
+const IDLE_ANIMATION = 'http://localhost:48888/models/vrm/animations/idle.vrma';
+
+const CAMERA_POS = new THREE.Vector3(0, 1.7, 2.2);
+const CAMERA_LOOKAT = new THREE.Vector3(0, 1.2, 0);
+
+// ─── Global refs ───
+let scene, camera, renderer, controls;
+let ambientLight, directionalLight;
+let mixer, clock, vrm;
+let gltfLoader;
+let mainAnimation = null;
+let speakAnimation = null;
+let blinkAnimation = null;
+let idleAnimFileName = null;
+let isSpeaking = false;
+let currentVolume = 0;
+
+// ─── Init scene ───
+async function initScene() {
+  const canvas = document.getElementById('vrm-canvas');
+  const container = document.body;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color('#1C1C1C');
+
+  camera = new THREE.PerspectiveCamera(
+    30,
+    container.clientWidth / Math.max(container.clientHeight, 1),
+    0.1,
+    1000
+  );
+  camera.position.copy(CAMERA_POS);
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.autoClear = false;
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x99ddff);
+
+  // OrbitControls (allow user to rotate/zoom)
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(CAMERA_LOOKAT.clone());
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.update();
+
+  // ─── Lighting (matching LAV2 exactly) ───
+  ambientLight = new THREE.AmbientLight(0xffffff, 2);
+  scene.add(ambientLight);
+
+  directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+  directionalLight.position.set(0, 5, 3);
+  scene.add(directionalLight);
+
+  // ─── GLTF Loader + VRM plugins ───
+  gltfLoader = new GLTFLoader();
+  gltfLoader.register((parser) => new VRMLoaderPlugin(parser));
+  gltfLoader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+
+  // ─── Resize handler ───
+  window.addEventListener('resize', onResize);
+}
+
+function onResize() {
+  if (!camera || !renderer) return;
+  camera.aspect = document.body.clientWidth / Math.max(document.body.clientHeight, 1);
+  camera.updateProjectionMatrix();
+  renderer.setSize(document.body.clientWidth, document.body.clientHeight);
+}
+
+// ─── Load VRM model ───
+async function loadModel(modelUrl) {
+  if (!gltfLoader) return;
+
+  showLoading('Loading model...');
+  hideError();
+
+  try {
+    // Clean up previous model
+    if (vrm) {
+      scene.remove(vrm.scene);
+      if (mixer) mixer.stopAllAction();
+      mixer = null;
+      vrm = null;
+      mainAnimation = null;
+      speakAnimation = null;
+      blinkAnimation = null;
+    }
+
+    const url = modelUrl || DEFAULT_MODEL_PATH;
+    console.log('[VRM] Loading:', url);
+
+    const gltfVrm = await gltfLoader.loadAsync(url);
+    vrm = gltfVrm.userData.vrm;
+
+    if (!vrm) {
+      showError('No VRM data in model file');
+      return;
+    }
+
+    // ─── VRM setup (matching LAV2 exactly) ───
+    VRMUtils.rotateVRM0(vrm);
+    VRMUtils.removeUnnecessaryVertices(vrm.scene);
+    vrm.scene.traverse((obj) => obj.frustumCulled = false);
+
+    // LookAt setup — gracefully skip if unavailable (some VRM versions differ)
+    if (vrm.lookAt && typeof VRMLookAtQuaternionProxy === 'function') {
+      try {
+        const lookAtQuatProxy = new VRMLookAtQuaternionProxy(vrm.lookAt);
+        lookAtQuatProxy.name = 'lookAtQuaternionProxy';
+        vrm.scene.add(lookAtQuatProxy);
+        const lookAtTarget = new THREE.Object3D();
+        camera.add(lookAtTarget);
+        vrm.lookAt.target = lookAtTarget;
+      } catch (e) {
+        console.warn('[VRM] LookAt setup skipped:', e.message);
+      }
+    }
+
+    scene.add(vrm.scene);
+    mixer = new THREE.AnimationMixer(vrm.scene);
+    clock = new THREE.Clock();
+
+    vrm.scene.position.set(0, 0, 0);
+    if (vrm.springBoneManager) vrm.springBoneManager.reset();
+
+    // ─── Load idle animation ───
+    try {
+      await loadAndPlayAnimation({
+        filename: IDLE_ANIMATION,
+        animationType: 'idle',
+        fadeDuration: 0,
+        override: true
+      });
+    } catch (e) {
+      console.warn('[VRM] No idle animation found:', e);
+    }
+
+    // ─── Setup speak animation (expression track 'aa') ───
+    if (vrm.expressionManager) {
+      const speakTrackName = vrm.expressionManager.getExpressionTrackName('aa');
+      if (speakTrackName) {
+        const speakTrack = new THREE.NumberKeyframeTrack(
+          speakTrackName,
+          [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.9],
+          [0.0, 0.3, 0.0, 0.3, 0.1, 0.1, 0.3, 0.1, 0.1, 0.2]
+        );
+        const clip = new THREE.AnimationClip('SpeakAnim', 1.9, [speakTrack]);
+        speakAnimation = mixer.clipAction(clip);
+      }
+    }
+
+    // ─── Setup blink animation ───
+    if (vrm.expressionManager) {
+      const blinkTrackName = vrm.expressionManager.getExpressionTrackName('blink');
+      if (blinkTrackName) {
+        const blinkInterval = 2;
+        const blinkTrack = new THREE.NumberKeyframeTrack(
+          blinkTrackName,
+          [0.0, 0.05, 0.1, blinkInterval],
+          [0.0, 1.0, 0.0, 0.0]
+        );
+        const clip = new THREE.AnimationClip('BlinkAnim', 0.1 + blinkInterval, [blinkTrack]);
+        blinkAnimation = mixer.clipAction(clip);
+        blinkAnimation.play();
+      }
+    }
+
+    hideLoading();
+    sendEvent('modelLoaded', { path: url });
+    console.log('[VRM] Model loaded successfully');
+  } catch (err) {
+    console.error('[VRM] Load failed:', err);
+    showError('Failed to load model: ' + err.message);
+    sendEvent('modelError', { error: err.message });
+  }
+}
+
+// ─── Animation loading ───
+async function loadAndPlayAnimation({ filename, animationType, fadeDuration = 0.5, override = false }) {
+  if (!mixer || !vrm) return;
+
+  console.log('[VRM] Playing animation:', filename);
+
+  const gltfVrma = await gltfLoader.loadAsync(filename);
+  const vrmAnimation = gltfVrma.userData.vrmAnimations?.[0];
+  if (!vrmAnimation) {
+    console.warn('[VRM] No VRM animation found in', filename);
+    return;
+  }
+
+  const clip = createVRMAnimationClip(vrmAnimation, vrm);
+  const newAction = mixer.clipAction(clip);
+  newAction.clampWhenFinished = true;
+
+  const onFinish = () => {
+    mixer.removeEventListener('finished', onFinish);
+    if (idleAnimFileName) {
+      loadAndPlayAnimation({
+        filename: idleAnimFileName,
+        animationType: 'idle'
+      });
+    }
+  };
+
+  if (animationType === 'idle') {
+    idleAnimFileName = filename;
+    newAction.loop = THREE.LoopRepeat;
+  } else {
+    newAction.loop = THREE.LoopOnce;
+    mixer.addEventListener('finished', onFinish);
+  }
+
+  if (mainAnimation) {
+    newAction.weight = 1;
+    newAction.play();
+    mainAnimation.crossFadeTo(newAction, fadeDuration, true);
+  } else {
+    newAction.play();
+  }
+  mainAnimation = newAction;
+}
+
+// ─── Animation loop ───
+function animate() {
+  requestAnimationFrame(animate);
+
+  const delta = clock ? clock.getDelta() : 0.016;
+  if (delta > 0) {
+    if (mixer) mixer.update(delta);
+    if (vrm) vrm.update(delta);
+  }
+
+  // Speak animation driven by volume
+  if (speakAnimation) {
+    if (currentVolume > 0.1) {
+      if (!speakAnimation.isRunning()) speakAnimation.play();
+    } else {
+      if (speakAnimation.isRunning()) speakAnimation.stop();
+    }
+  }
+
+  if (controls) controls.update();
+  if (renderer && scene && camera) renderer.render(scene, camera);
+}
+
+// ─── UI helpers ───
+function showLoading(msg) {
+  const el = document.getElementById('loading');
+  if (el) { el.style.display = 'block'; el.innerHTML = '<div class="spinner"></div><span>' + msg + '</span>'; }
+}
+function hideLoading() {
+  const el = document.getElementById('loading');
+  if (el) el.style.display = 'none';
+}
+function showError(msg) {
+  const el = document.getElementById('error');
+  if (el) { el.style.display = 'block'; el.textContent = msg; }
+  hideLoading();
+}
+function hideError() {
+  const el = document.getElementById('error');
+  if (el) el.style.display = 'none';
+}
+
+// ─── Dart↔JS bridge ───
+function sendEvent(type, data) {
+  try {
+    if (window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('onVrmEvent', JSON.stringify({ type, data }));
+    }
+    // Also try the standard channel
+    if (window.onVrmEvent) {
+      window.onVrmEvent(JSON.stringify({ type, data }));
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ─── Public API (called from Flutter) ───
+window.__vrmReady = false;
+
+window.vrmLoadModel = function(modelUrl) {
+  loadModel(modelUrl);
+};
+
+window.vrmSetVolume = function(volume) {
+  currentVolume = typeof volume === 'number' ? volume : 0;
+};
+
+window.vrmSetBackground = function(colorHex) {
+  if (scene && scene.background instanceof THREE.Color) {
+    scene.background.set(colorHex);
+  }
+};
+
+window.vrmPlayAnimation = function(filename, type) {
+  loadAndPlayAnimation({
+    filename: filename,
+    animationType: type || 'gesture',
+    fadeDuration: 0.5
+  });
+};
+
+window.vrmResetCamera = function() {
+  if (camera && controls) {
+    camera.position.copy(CAMERA_POS);
+    controls.target.copy(CAMERA_LOOKAT.clone());
+    controls.update();
+  }
+};
+
+// ─── Startup ───
+(async function main() {
+  try {
+    showLoading('Initializing VRM engine...');
+    await initScene();
+    animate();
+    hideLoading();
+    window.__vrmReady = true;
+    sendEvent('rendererReady', {});
+  } catch (err) {
+    console.error('[VRM] Init failed:', err);
+    showError('VRM engine init failed: ' + err.message);
+    window.__vrmReady = true; // mark ready even on error so Flutter stops polling
+    sendEvent('initError', { error: err.message });
+  }
+})();
+</script>
+</body>
+</html>

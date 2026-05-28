@@ -169,6 +169,8 @@ class AppLocalizations {
   String get charPetSection => _t('charPetSection');
   String get charSelectModel => _t('charSelectModel');
   String get charSelectModelHint => _t('charSelectModelHint');
+  String get charNoVRMModel => _t('charNoVRMModel');
+  String get charSelectVRMModel => _t('charSelectVRMModel');
   String get charXPosition => _t('charXPosition');
   String get charYPosition => _t('charYPosition');
   String get charClickThroughOn => _t('charClickThroughOn');
@@ -547,7 +549,9 @@ class AppLocalizations {
     'charManageSection':    {'en': 'Model Management',        'zh': '模型管理'},
     'charPetSection':       {'en': 'Desktop Pet',             'zh': '桌面宠物'},
     'charSelectModel':      {'en': 'Select Model',            'zh': '选择模型'},
-    'charSelectModelHint':  {'en': 'Choose a Live2D model...','zh': '选择 Live2D 模型...'},
+    'charSelectModelHint':  {'en': 'Choose a model...',       'zh': '选择模型...'},
+    'charNoVRMModel':       {'en': 'No VRM Model Selected',   'zh': '未选择 VRM 模型'},
+    'charSelectVRMModel':   {'en': 'Select VRM Model',        'zh': '选择 VRM 模型'},
     'charXPosition':        {'en': 'X Position',              'zh': '水平位置'},
     'charYPosition':        {'en': 'Y Position',              'zh': '垂直位置'},
     'charClickThroughOn':   {'en': 'Click-through ON',        'zh': '鼠标穿透：开'},

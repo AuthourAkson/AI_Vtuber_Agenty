@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 class Live2DServer {
   static const _profileRoot = r'D:\AiVtuber_Agent_profile';
   static const _webDir = r'D:\AiVtuber_Agent_profile\live2d_web';
+  static const _vrmWebDir = r'D:\AiVtuber_Agent_profile\vrm_web';
   static const port = 48888;
 
   static HttpServer? _server;
@@ -46,6 +47,7 @@ class Live2DServer {
   }
 
   static Future<void> _copyAssets() async {
+    // Copy Live2D web assets
     final dir = Directory(_webDir);
     if (!dir.existsSync()) dir.createSync(recursive: true);
 
@@ -65,6 +67,50 @@ class Live2DServer {
         final data = await rootBundle.load(assetPath);
         await File(dest).writeAsBytes(data.buffer.asUint8List());
       } catch (_) {}
+    }
+
+    // Copy VRM web assets
+    final vrmDir = Directory(_vrmWebDir);
+    if (!vrmDir.existsSync()) vrmDir.createSync(recursive: true);
+
+    final vrmAssets = [
+      'assets/vrm/vrm_renderer.html',
+    ];
+
+    for (final assetPath in vrmAssets) {
+      final dest = p.join(_vrmWebDir, p.basename(assetPath));
+      try {
+        final data = await rootBundle.load(assetPath);
+        await File(dest).writeAsBytes(data.buffer.asUint8List());
+      } catch (_) {}
+    }
+
+    // Copy VRM JS libs (preserving subdirectory structure)
+    final libDir = Directory(p.join(_vrmWebDir, 'lib'));
+    if (!libDir.existsSync()) libDir.createSync(recursive: true);
+
+    final libAssets = [
+      'assets/vrm/lib/three.module.min.js',
+      'assets/vrm/lib/loaders/GLTFLoader.js',
+      'assets/vrm/lib/controls/OrbitControls.js',
+      'assets/vrm/lib/utils/BufferGeometryUtils.js',
+      'assets/vrm/lib/three-vrm/lib/three-vrm.module.js',
+      'assets/vrm/lib/three-vrm-animation/lib/three-vrm-animation.module.js',
+    ];
+
+    for (final assetPath in libAssets) {
+      // Convert asset path to relative path under lib/
+      // assets/vrm/lib/loaders/GLTFLoader.js → loaders/GLTFLoader.js
+      final relativePath = assetPath.replaceFirst('assets/vrm/lib/', '');
+      final dest = p.join(_vrmWebDir, 'lib', relativePath);
+      try {
+        final dir = Directory(p.dirname(dest));
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        final data = await rootBundle.load(assetPath);
+        await File(dest).writeAsBytes(data.buffer.asUint8List());
+      } catch (e) {
+        debugPrint('[Live2DServer] Failed to copy $assetPath: $e');
+      }
     }
   }
 
@@ -118,6 +164,8 @@ class Live2DServer {
       case '.json': return ContentType.json;
       case '.png': return ContentType.parse('image/png');
       case '.jpg': case '.jpeg': return ContentType.parse('image/jpeg');
+      case '.vrm': return ContentType.parse('model/vrm');
+      case '.vrma': return ContentType.parse('application/octet-stream');
       default: return ContentType.binary;
     }
   }
