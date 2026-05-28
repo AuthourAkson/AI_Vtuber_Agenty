@@ -171,17 +171,6 @@ class AppLocalizations {
   String get charSelectModelHint => _t('charSelectModelHint');
   String get charNoVRMModel => _t('charNoVRMModel');
   String get charSelectVRMModel => _t('charSelectVRMModel');
-  String get charManageModels => _t('charManageModels');
-  String get charModelManager => _t('charModelManager');
-  String get charUploadModels => _t('charUploadModels');
-  String get charUploadModelsDesc => _t('charUploadModelsDesc');
-  String get charExistingModels => _t('charExistingModels');
-  String get charManageModelsDesc => _t('charManageModelsDesc');
-  String get charUploadLive2DFolder => _t('charUploadLive2DFolder');
-  String get charNoModelsYet => _t('charNoModelsYet');
-  String get charUploading => _t('charUploading');
-  String get charUploadSuccess => _t('charUploadSuccess');
-  String get charUploadFailed => _t('charUploadFailed');
   String get charXPosition => _t('charXPosition');
   String get charYPosition => _t('charYPosition');
   String get charClickThroughOn => _t('charClickThroughOn');
@@ -563,17 +552,6 @@ class AppLocalizations {
     'charSelectModelHint':  {'en': 'Choose a model...',       'zh': '选择模型...'},
     'charNoVRMModel':       {'en': 'No VRM Model Selected',   'zh': '未选择 VRM 模型'},
     'charSelectVRMModel':   {'en': 'Select VRM Model',        'zh': '选择 VRM 模型'},
-    'charManageModels':     {'en': 'Manage Models',           'zh': '管理模型'},
-    'charModelManager':     {'en': 'Model Manager',           'zh': '模型管理器'},
-    'charUploadModels':     {'en': 'Upload Models',           'zh': '上传模型'},
-    'charUploadModelsDesc': {'en': 'Support for .vrm files and Live2D model folders', 'zh': '支持 .vrm 文件和 Live2D 模型文件夹'},
-    'charExistingModels':   {'en': 'Existing Models',         'zh': '已安装模型'},
-    'charManageModelsDesc': {'en': 'Manage your uploaded 3D models', 'zh': '管理已上传的 3D 模型'},
-    'charUploadLive2DFolder': {'en': 'Select Live2D Folder',  'zh': '选择 Live2D 文件夹'},
-    'charNoModelsYet':      {'en': 'No models uploaded yet',  'zh': '尚未上传模型'},
-    'charUploading':        {'en': 'Uploading model...',      'zh': '正在上传模型...'},
-    'charUploadSuccess':    {'en': 'Model uploaded successfully!', 'zh': '模型上传成功！'},
-    'charUploadFailed':     {'en': 'Upload failed. Please try again.', 'zh': '上传失败，请重试。'},
     'charXPosition':        {'en': 'X Position',              'zh': '水平位置'},
     'charYPosition':        {'en': 'Y Position',              'zh': '垂直位置'},
     'charClickThroughOn':   {'en': 'Click-through ON',        'zh': '鼠标穿透：开'},
