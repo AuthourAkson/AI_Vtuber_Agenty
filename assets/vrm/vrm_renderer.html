@@ -370,6 +370,7 @@ window.vrmSetBackground = function(colorHex) {
   if (scene && scene.background instanceof THREE.Color) {
     scene.background.set(colorHex);
   }
+  document.body.style.background = colorHex;
 };
 
 window.vrmPlayAnimation = function(filename, type) {

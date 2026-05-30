@@ -49,6 +49,9 @@ typedef GetOverlaySizeNative = Void Function(
 typedef GetOverlaySizeDart = void Function(
     int windowId, Pointer<Int32> width, Pointer<Int32> height);
 
+typedef OverlayExecuteScriptNative = Void Function(Int32 windowId, Pointer<Utf16> script);
+typedef OverlayExecuteScriptDart = void Function(int windowId, Pointer<Utf16> script);
+
 class Live2DOverlayFfi {
   static final Live2DOverlayFfi instance = Live2DOverlayFfi._();
 
@@ -66,6 +69,7 @@ class Live2DOverlayFfi {
   SetOverlayClickThroughDart? _setClickThrough;
   IsOverlayAliveDart? _isOverlayAlive;
   GetOverlaySizeDart? _getOverlaySize;
+  OverlayExecuteScriptDart? _executeScript;
 
   Live2DOverlayFfi._();
 
@@ -124,6 +128,8 @@ class Live2DOverlayFfi {
           .lookupFunction<IsOverlayAliveNative, IsOverlayAliveDart>('IsOverlayAlive');
       _getOverlaySize = _lib!
           .lookupFunction<GetOverlaySizeNative, GetOverlaySizeDart>('GetOverlaySize');
+      _executeScript = _lib!
+          .lookupFunction<OverlayExecuteScriptNative, OverlayExecuteScriptDart>('OverlayExecuteScript');
 
       _loaded = true;
       return true;
@@ -222,6 +228,17 @@ class Live2DOverlayFfi {
     } finally {
       calloc.free(w);
       calloc.free(h);
+    }
+  }
+
+  /// Execute JavaScript in the overlay's WebView2.
+  void executeScript(int windowId, String script) {
+    if (!isAvailable || _executeScript == null) return;
+    final ptr = script.toNativeUtf16();
+    try {
+      _executeScript!(windowId, ptr);
+    } finally {
+      calloc.free(ptr);
     }
   }
 }

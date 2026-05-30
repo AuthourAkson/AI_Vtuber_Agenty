@@ -28,6 +28,7 @@ class Live2DView extends StatefulWidget {
   final double scale;
   final void Function(Live2DEvent)? onEvent;
   final bool interactive;
+  final Color? backgroundColor;
 
   const Live2DView({
     super.key,
@@ -37,6 +38,7 @@ class Live2DView extends StatefulWidget {
     this.scale = 0.16,
     this.onEvent,
     this.interactive = true,
+    this.backgroundColor,
   });
 
   @override
@@ -77,6 +79,24 @@ class Live2DViewState extends State<Live2DView> {
     }
     if (_loadedModelPath != null && widget.scale != oldWidget.scale) {
       _updateScale();
+    }
+    if (widget.backgroundColor != oldWidget.backgroundColor) {
+      _syncBackground();
+    }
+  }
+
+  Future<void> _syncBackground() async {
+    if (_controller == null || !_ready) return;
+    final color = widget.backgroundColor;
+    if (color != null) {
+      final hex = '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+      await _controller!.evaluateJavascript(
+        source: "setBackground('$hex')"
+      );
+    } else {
+      await _controller!.evaluateJavascript(
+        source: "setBackground('transparent')"
+      );
     }
   }
 
@@ -141,6 +161,14 @@ class Live2DViewState extends State<Live2DView> {
     );
   }
 
+  /// Set background color for chroma key capture (e.g. '#00FF00')
+  Future<void> setChromaBackground(String hexColor) async {
+    if (_controller == null || !_ready) return;
+    await _controller!.evaluateJavascript(
+      source: "setBackground('$hexColor')"
+    );
+  }
+
   Future<void> setExpression(String name) async {
     if (_controller == null || !_ready) return;
     final escaped = name.replaceAll("'", "\\'");
@@ -192,6 +220,7 @@ class Live2DViewState extends State<Live2DView> {
             onLoadStop: (controller, url) async {
               _ready = true;
               setState(() => _loading = false);
+              _syncBackground();
               if (widget.modelPath != null && widget.modelPath!.isNotEmpty) {
                 await Future.delayed(const Duration(milliseconds: 800));
                 _loadModel();
@@ -231,6 +260,7 @@ class Live2DViewState extends State<Live2DView> {
       case 'rendererReady':
         _ready = true;
         setState(() => _loading = false);
+        _syncBackground();
         if (widget.modelPath != null && widget.modelPath!.isNotEmpty) {
           _loadModel();
         }

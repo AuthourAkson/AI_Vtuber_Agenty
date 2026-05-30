@@ -164,7 +164,9 @@ bool Live2DOverlayWindow::Create(const std::wstring& title,
   RegisterOverlayClass(hInst);
   width_ = w; height_ = h;
 
-  DWORD exStyle = WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+  // WS_EX_NOREDIRECTIONBITMAP: per-pixel alpha via DWM (transparent background)
+  // Note: WS_EX_TOPMOST removed — OBS can still capture non-topmost windows
+  DWORD exStyle = WS_EX_NOREDIRECTIONBITMAP;
   DWORD style = WS_POPUP | WS_THICKFRAME | WS_SYSMENU;
   RECT wr = {0, 0, w, h};
   AdjustWindowRectEx(&wr, style, FALSE, exStyle);
@@ -231,6 +233,12 @@ void Live2DOverlayWindow::SetClickThrough(bool enable) {
   click_through_ = enable;
   // The subclass proc checks click_through_ on each WM_NCHITTEST
   // and returns HTTRANSPARENT when true. No window style changes needed.
+}
+
+void Live2DOverlayWindow::ExecuteScript(const std::wstring& script) {
+  if (webview_ && webview_ready_) {
+    webview_->ExecuteScript(script.c_str(), nullptr);
+  }
 }
 
 // ─── Destroy ───
@@ -368,7 +376,7 @@ LRESULT Live2DOverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
   switch (msg) {
     case WM_DESTROY:
       hwnd_ = nullptr;
-      PostQuitMessage(0);
+      // DON'T PostQuitMessage — overlay shares thread with Flutter app
       return 0;
 
     case WM_SIZE:
@@ -385,6 +393,8 @@ LRESULT Live2DOverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_NCHITTEST: {
+      // Click-through: return HTTRANSPARENT so mouse passes through entire window
+      if (click_through_) return HTTRANSPARENT;
       // Only handle resize edges; client area stays HTCLIENT
       POINT pt = {LOWORD(lp), HIWORD(lp)};
       ScreenToClient(hwnd_, &pt);

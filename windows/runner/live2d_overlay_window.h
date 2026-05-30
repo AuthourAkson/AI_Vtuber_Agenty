@@ -60,6 +60,9 @@ class Live2DOverlayWindow {
   // When true, all mouse events pass through to windows below.
   void SetClickThrough(bool enable);
 
+  // Execute JavaScript in the WebView2.
+  void ExecuteScript(const std::wstring& script);
+
   // Get the window size.
   void GetSize(int* width, int* height);
 

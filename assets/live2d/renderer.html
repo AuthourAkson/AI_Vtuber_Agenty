@@ -306,6 +306,11 @@ function closeChatDialog() {
   postToFlutter('chatDialogClosed', {});
 }
 function hideChatDialog() { document.getElementById('chat-dialog').style.display = 'none'; }
+function setBackground(hex) {
+  document.body.style.background = hex;
+  var canvas = document.querySelector('canvas');
+  if (canvas) canvas.style.background = hex;
+}
 function escapeHtml(text) {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;
 }

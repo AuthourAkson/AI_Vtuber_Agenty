@@ -122,4 +122,10 @@ __declspec(dllexport) void* GetOverlayHwnd(int window_id) {
   return g_overlay->GetHandle();
 }
 
+/// Execute JavaScript in the WebView2.
+__declspec(dllexport) void OverlayExecuteScript(int window_id, const wchar_t* script) {
+  if (window_id != g_current_id || !g_overlay || !script) return;
+  g_overlay->ExecuteScript(script);
+}
+
 }  // extern "C"

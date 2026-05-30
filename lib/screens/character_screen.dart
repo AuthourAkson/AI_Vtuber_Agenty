@@ -10,6 +10,7 @@ import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
 import '../services/live2d_server.dart';
 import '../services/vrm_model_service.dart';
+import '../services/overlay_service.dart';
 import '../widgets/live2d_view.dart';
 import '../widgets/vrm_view.dart';
 import '../app.dart';
@@ -31,6 +32,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
   String? _importingModel;
   int _petPort = 48889;
   bool _clickThrough = true;
+  bool _mouseTracking = true;
+  bool _chromaKeyMode = false;
   bool _panelOpen = true;
   final HttpClient _httpClient = HttpClient();
 
@@ -301,12 +304,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
     // VRM mode (3D)
     if (s.use3D) {
       final vrmPath = s.selectedVRMModel;
+      final vrmBgColor = _chromaKeyMode ? const Color(0xFF00FF00) : shad.background;
       if (vrmPath != null && vrmPath.isNotEmpty) {
         return Container(
-          color: shad.background,
+          color: vrmBgColor,
           child: VrmView(
             modelPath: vrmPath,
-            backgroundColor: shad.background,
+            backgroundColor: vrmBgColor,
             onEvent: (event) {
               if (event.type == 'modelError') {
                 debugPrint('[CharacterScreen] VRM error: ${event.data['error']}');
@@ -328,10 +332,12 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
     // Live2D mode — render full-screen, transparent overlay lets page bg through
     if (modelJsonPath != null) {
+      final l2dBgColor = _chromaKeyMode ? const Color(0xFF00FF00) : null;
       return Container(
-        color: shad.background,
+        color: l2dBgColor ?? shad.background,
         child: Live2DView(
         modelPath: modelJsonPath,
+        backgroundColor: l2dBgColor,
         positionX: s.live2DXPosition,
         positionY: s.live2DYPosition,
         scale: s.live2DScale,
@@ -455,17 +461,27 @@ class _CharacterScreenState extends State<CharacterScreen> {
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
           OutlinedButton.icon(
-            onPressed: modelJsonPath != null && !Live2DServer.petRunning
+            onPressed: modelJsonPath != null && !Live2DServer.petRunning && !OverlayService.instance.isRunning
               ? () => _openPet(modelJsonPath, s) : null,
             icon: const Icon(Icons.open_in_new, size: 18),
-            label: Text(Live2DServer.petRunning ? l10n.charPetActive : l10n.charOpenPet),
+            label: Text((Live2DServer.petRunning || OverlayService.instance.isRunning) ? l10n.charPetActive : l10n.charOpenPet),
             style: OutlinedButton.styleFrom(
               foregroundColor: shad.primary,
               side: BorderSide(color: shad.primary),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             ),
           ),
-          if (Live2DServer.petRunning) ...[
+          OutlinedButton.icon(
+            onPressed: _toggleChromaKey,
+            icon: Icon(_chromaKeyMode ? Icons.colorize : Icons.colorize_outlined, size: 18),
+            label: Text(_chromaKeyMode ? 'Chroma Key: 绿' : 'Chroma Key'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _chromaKeyMode ? const Color(0xFF00FF00) : shad.mutedForeground,
+              side: BorderSide(color: _chromaKeyMode ? const Color(0xFF00FF00) : shad.border),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+            ),
+          ),
+          if (Live2DServer.petRunning || OverlayService.instance.isRunning) ...[
             OutlinedButton.icon(
               onPressed: _closePet,
               icon: const Icon(Icons.close, size: 18),
@@ -491,6 +507,16 @@ class _CharacterScreenState extends State<CharacterScreen> {
               label: Text(l10n.charReloadModel),
               style: OutlinedButton.styleFrom(
                 foregroundColor: shad.mutedForeground, side: BorderSide(color: shad.input),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: OverlayService.instance.isRunning ? _toggleMouseTracking : null,
+              icon: Icon(_mouseTracking ? Icons.remove_red_eye : Icons.remove_red_eye_outlined, size: 18),
+              label: Text(_mouseTracking ? '眼部追踪: 开' : '眼部追踪: 关'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _mouseTracking ? shad.primary : shad.mutedForeground,
+                side: BorderSide(color: _mouseTracking ? shad.primary : shad.border),
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
               ),
             ),
@@ -775,7 +801,24 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   Future<void> _openPet(String modelPath, AppSettings s) async {
-    if (Live2DServer.petRunning) return;
+    if (Live2DServer.petRunning || OverlayService.instance.isRunning) return;
+
+    // 优先使用原生C++透明overlay (WS_EX_NOREDIRECTIONBITMAP, 真透明)
+    final overlay = OverlayService.instance;
+    final ok = await overlay.startLive2D(
+      modelPath: modelPath,
+      scale: s.live2DScale,
+      x: (s.live2DXPosition * 10).toInt(),
+      y: (s.live2DYPosition * 10).toInt(),
+      width: 500,
+      height: 600,
+    );
+    if (ok) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    // 回退：Python pet (旧方案)
     final scriptPath = await _ensureScript();
     if (scriptPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -810,14 +853,36 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   void _closePet() {
+    if (OverlayService.instance.isRunning) {
+      OverlayService.instance.stop();
+      if (mounted) setState(() {});
+      return;
+    }
     if (!Live2DServer.petRunning) return;
     Live2DServer.killPet();
     setState(() {});
   }
 
   void _togglePetClickThrough() {
+    if (OverlayService.instance.isRunning) {
+      setState(() => _clickThrough = !_clickThrough);
+      OverlayService.instance.setClickThrough(_clickThrough);
+      return;
+    }
     if (!Live2DServer.petRunning) return;
     setState(() => _clickThrough = !_clickThrough);
+  }
+
+  void _toggleMouseTracking() {
+    if (OverlayService.instance.isRunning) {
+      setState(() => _mouseTracking = !_mouseTracking);
+      OverlayService.instance.setMouseTracking(_mouseTracking);
+    }
+  }
+
+  void _toggleChromaKey() {
+    setState(() => _chromaKeyMode = !_chromaKeyMode);
+    // Live2D + VRM both handle background via didUpdateWidget when _chromaKeyMode changes
   }
 
   void _reloadPetModel() {
