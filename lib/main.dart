@@ -8,6 +8,7 @@ import 'app.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/multi_agent_provider.dart';
+import 'providers/stream_provider.dart';
 import 'services/live2d_server.dart';
 import 'providers/appearance_provider.dart';
 
@@ -29,8 +30,6 @@ void main(List<String> args) async {
   await SharedPreferences.getInstance();
 
   // ─── Process signal handler: kill pet subprocess on app exit ───
-  // When the Flutter desktop app is closed, the runtime sends SIGTERM.
-  // We use this to clean up the Python pet subprocess before exiting.
   ProcessSignal.sigterm.watch().listen((_) {
     Live2DServer.killPet();
   });
@@ -41,6 +40,7 @@ void main(List<String> args) async {
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => AgentManager()),
+        ChangeNotifierProvider(create: (_) => LiveStreamProvider()),
         ChangeNotifierProvider(create: (_) => AppearanceProvider()..load()),
       ],
       child: const MyApp(),
