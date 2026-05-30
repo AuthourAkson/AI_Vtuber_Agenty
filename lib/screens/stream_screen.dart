@@ -70,6 +70,8 @@ class _StreamScreenState extends State<StreamScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 用 context.watch 才能响应 Provider 状态变化
+    _streamProvider = context.watch<LiveStreamProvider>();
     final shad = ShadTheme.of(context);
 
     return Padding(
