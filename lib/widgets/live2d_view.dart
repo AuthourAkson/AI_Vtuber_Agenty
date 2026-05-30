@@ -187,11 +187,9 @@ class Live2DViewState extends State<Live2DView> {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          InAppWebView(
+    return Stack(
+      children: [
+        InAppWebView(
             key: ValueKey('live2d_webview'), // Stable key to prevent rebuild
             initialUrlRequest: URLRequest(url: WebUri(_htmlUrl)),
             initialSettings: InAppWebViewSettings(
@@ -251,7 +249,6 @@ class Live2DViewState extends State<Live2DView> {
               ),
             ),
         ],
-      ),
     );
   }
 

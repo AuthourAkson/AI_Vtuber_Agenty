@@ -133,13 +133,11 @@ class _VrmViewState extends State<VrmView> {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          // Background color Container (WebView2 on Windows can't do true transparency)
-          Container(color: widget.backgroundColor ?? Colors.transparent),
-          InAppWebView(
+    return Stack(
+      children: [
+        // Background color Container (WebView2 on Windows can't do true transparency)
+        Container(color: widget.backgroundColor ?? Colors.transparent),
+        InAppWebView(
             key: const ValueKey('vrm_webview'),
             initialUrlRequest: URLRequest(url: WebUri(_htmlUrl)),
             initialSettings: InAppWebViewSettings(
@@ -208,7 +206,6 @@ class _VrmViewState extends State<VrmView> {
               ),
             ),
         ],
-      ),
     );
   }
 
