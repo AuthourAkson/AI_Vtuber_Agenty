@@ -307,9 +307,9 @@ function closeChatDialog() {
 }
 function hideChatDialog() { document.getElementById('chat-dialog').style.display = 'none'; }
 function setBackground(hex) {
-  document.body.style.background = hex;
+  document.body.style.setProperty('background', hex, 'important');
   var canvas = document.querySelector('canvas');
-  if (canvas) canvas.style.background = hex;
+  if (canvas) canvas.style.setProperty('background', hex, 'important');
 }
 function escapeHtml(text) {
   const div = document.createElement('div'); div.textContent = text; return div.innerHTML;

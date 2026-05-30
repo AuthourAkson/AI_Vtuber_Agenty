@@ -189,6 +189,8 @@ class Live2DViewState extends State<Live2DView> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        // Background color — WebView2 on Windows can't do true transparency
+        Container(color: widget.backgroundColor ?? Colors.transparent),
         InAppWebView(
             key: ValueKey('live2d_webview'), // Stable key to prevent rebuild
             initialUrlRequest: URLRequest(url: WebUri(_htmlUrl)),
