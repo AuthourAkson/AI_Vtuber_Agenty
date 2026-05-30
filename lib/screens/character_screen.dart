@@ -332,9 +332,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
     // Live2D mode — render full-screen, transparent overlay lets page bg through
     if (modelJsonPath != null) {
-      final l2dBgColor = _chromaKeyMode ? const Color(0xFF00FF00) : null;
+      final l2dBgColor = _chromaKeyMode ? const Color(0xFF00FF00) : shad.background;
       return Container(
-        color: l2dBgColor ?? shad.background,
+        color: l2dBgColor,
         child: Live2DView(
         modelPath: modelJsonPath,
         backgroundColor: l2dBgColor,
