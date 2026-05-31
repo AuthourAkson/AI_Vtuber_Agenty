@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
@@ -50,6 +51,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     super.initState();
     _refreshModels();
     _ensureDefaults();
+    _loadChromaColor();
   }
 
   @override
@@ -910,7 +912,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
         Wrap(spacing: 6, runSpacing: 6, children: [
           for (final preset in _chromaPresets)
             GestureDetector(
-              onTap: () => setState(() => _chromaKeyColor = preset.color),
+              onTap: () {
+                setState(() => _chromaKeyColor = preset.color);
+                _saveChromaColor();
+              },
               child: Container(
                 width: 28, height: 28,
                 decoration: BoxDecoration(
@@ -925,83 +930,40 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 ),
               ),
             ),
-          // Custom color picker button
-          GestureDetector(
-            onTap: () => _pickCustomColor(shad),
-            child: Container(
-              width: 28, height: 28,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: shad.border),
-                color: shad.secondary,
-              ),
-              child: const Icon(Icons.add, size: 16, color: Colors.white70),
-            ),
-          ),
         ]),
+        const SizedBox(height: 10),
+        // Inline HSV picker
+        _HsvColorPicker(
+          initialColor: _chromaKeyColor ?? const Color(0xFFFF00FF),
+          onChanged: (c) {
+            setState(() => _chromaKeyColor = c);
+            _saveChromaColor();
+          },
+        ),
       ],
     );
   }
 
-  void _pickCustomColor(ShadTheme shad) {
-    final initialColor = _chromaKeyColor ?? const Color(0xFFFF00FF);
-    Color pickedColor = initialColor;
+  Future<void> _loadChromaColor() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hex = prefs.getString('chroma_key_color');
+      if (hex != null) {
+        final parsed = int.tryParse(hex, radix: 16);
+        if (parsed != null && mounted) {
+          setState(() => _chromaKeyColor = Color(0xFF000000 | parsed));
+        }
+      }
+    } catch (_) {}
+  }
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            title: Text(AppLocalizations.of(context)!.charChromaKeyColor),
-            titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            content: SizedBox(
-              width: 260,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _HsvColorPicker(
-                    initialColor: pickedColor,
-                    onChanged: (c) => setDialogState(() => pickedColor = c),
-                  ),
-                  const SizedBox(height: 12),
-                  // Preview + hex
-                  Row(
-                    children: [
-                      Container(
-                        width: 32, height: 32,
-                        decoration: BoxDecoration(
-                          color: pickedColor,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: shad.border),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '#${(pickedColor.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
-                        style: TextStyle(fontSize: 14, fontFamily: 'monospace', color: shad.foreground),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(AppLocalizations.of(context)!.charClose),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() => _chromaKeyColor = pickedColor);
-                  Navigator.pop(ctx);
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  Future<void> _saveChromaColor() async {
+    try {
+      if (_chromaKeyColor == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      final hex = (_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+      await prefs.setString('chroma_key_color', hex);
+    } catch (_) {}
   }
 
   void _reloadPetModel() {
@@ -1038,9 +1000,9 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
   late double _val;       // 0-1
   late double _alpha;     // stored from initial
 
-  static const double _svSize = 200.0;
-  static const double _hueBarHeight = 20.0;
-  static const double _thumbRadius = 6.0;
+  static const double _svSize = 160.0;
+  static const double _hueBarHeight = 16.0;
+  static const double _thumbRadius = 5.0;
 
   @override
   void initState() {
