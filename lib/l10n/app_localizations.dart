@@ -198,10 +198,32 @@ class AppLocalizations {
   String get streamId => _t('streamId');
   String get streamIdHint => _t('streamIdHint');
   String get streamConnect => _t('streamConnect');
+  String get streamDisconnect => _t('streamDisconnect');
+  String get streamConnected => _t('streamConnected');
+  String get streamCharPreview => _t('streamCharPreview');
+  String get streamControls => _t('streamControls');
+  String get streamManualReply => _t('streamManualReply');
+  String get streamOBSTip => _t('streamOBSTip');
+  String get streamWaiting => _t('streamWaiting');
+  String get streamConnectForDanmaku => _t('streamConnectForDanmaku');
+  String get streamNoVrmModel => _t('streamNoVrmModel');
+  String get streamNoLive2DModel => _t('streamNoLive2DModel');
   String get streamMessages => _t('streamMessages');
   String get streamNotConnected => _t('streamNotConnected');
   String get streamSetlist => _t('streamSetlist');
   String get streamNoItems => _t('streamNoItems');
+  String get streamStatusLive => _t('streamStatusLive');
+  String get streamStatusOff => _t('streamStatusOff');
+  String get streamAutoReply => _t('streamAutoReply');
+  String get streamConnection => _t('streamConnection');
+  String get streamAddNodeHint => _t('streamAddNodeHint');
+  String get streamStopFlow => _t('streamStopFlow');
+  String get streamStartFlow => _t('streamStartFlow');
+  String get streamInProgress => _t('streamInProgress');
+  String get streamNodeSettings => _t('streamNodeSettings');
+  String get streamPreset => _t('streamPreset');
+  String get streamPresetHint => _t('streamPresetHint');
+  String get confirm => _t('confirm');
   String get pipelineTitle => _t('pipelineTitle');
   String get pipelineTasks => _t('pipelineTasks');
   String get pipelineNoTasks => _t('pipelineNoTasks');
@@ -582,10 +604,32 @@ class AppLocalizations {
     'streamId':             {'en': 'Room ID',                 'zh': '直播间号'},
     'streamIdHint':         {'en': 'Enter Bilibili room ID',  'zh': '输入 Bilibili 直播间号'},
     'streamConnect':        {'en': 'Connect to Live Chat',    'zh': '连接直播间'},
+    'streamDisconnect':     {'en': 'Disconnect',              'zh': '断开连接'},
+    'streamConnected':      {'en': 'Connected',               'zh': '已连接'},
+    'streamCharPreview':    {'en': 'Character Preview',       'zh': '角色预览'},
+    'streamControls':       {'en': 'Stream Controls',         'zh': '直播控制'},
+    'streamManualReply':    {'en': 'Manual AI Reply',         'zh': '手动触发AI回复'},
+    'streamOBSTip':         {'en': 'Use OBS/Bilibili Studio window capture to overlay character onto stream', 'zh': 'OBS/Bilibili直播姬 窗口捕获即可将角色画面推流到直播间'},
+    'streamWaiting':        {'en': 'Waiting for danmaku...',  'zh': '等待弹幕中...'},
+    'streamConnectForDanmaku': {'en': 'Connect to see danmaku', 'zh': '连接直播间后显示弹幕'},
+    'streamNoVrmModel':     {'en': 'No VRM Model Selected',   'zh': '未选择VRM模型'},
+    'streamNoLive2DModel':  {'en': 'No Live2D Model Selected', 'zh': '未选择Live2D模型'},
     'streamMessages':       {'en': 'Live Danmaku',            'zh': '直播弹幕'},
     'streamNotConnected':   {'en': 'Not connected to stream', 'zh': '未连接到直播'},
     'streamSetlist':        {'en': 'Stream Setlist',          'zh': '直播流程 Setlist'},
     'streamNoItems':        {'en': 'No nodes in setlist',     'zh': '流程中无节点'},
+    'streamStatusLive':     {'en': r'Live · $pop viewers',    'zh': r'直播中 · $pop人气'},
+    'streamStatusOff':      {'en': 'Disconnected',            'zh': '未连接'},
+    'streamAutoReply':      {'en': 'Auto Reply',              'zh': '自动回复'},
+    'streamConnection':     {'en': 'Connection',              'zh': '直播间连接'},
+    'streamAddNodeHint':    {'en': 'Click + to add a node',   'zh': '点击 + 添加直播节点'},
+    'streamStopFlow':       {'en': 'Stop Flow',               'zh': '停止流程'},
+    'streamStartFlow':      {'en': 'Start Flow',              'zh': '开始流程'},
+    'streamInProgress':     {'en': '\u25c0 Active',           'zh': '\u25c0 进行中'},
+    'streamNodeSettings':   {'en': r'$name Settings',          'zh': r'$name 设置'},
+    'streamPreset':         {'en': 'Preset',                  'zh': '预设'},
+    'streamPresetHint':     {'en': 'Choose preset...',        'zh': '选择预设...'},
+    'confirm':              {'en': 'Confirm',                 'zh': '确定'},
     'pipelineTitle':    {'en': 'Pipeline Monitor',   'zh': '流水线监控'},
     'pipelineTasks':    {'en': 'tasks',              'zh': '个任务'},
     'pipelineNoTasks':  {'en': 'No pipeline tasks',  'zh': '无流水线任务'},

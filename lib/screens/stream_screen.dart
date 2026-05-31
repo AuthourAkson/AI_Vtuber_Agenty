@@ -73,6 +73,7 @@ class _StreamScreenState extends State<StreamScreen> {
     // 用 context.watch 才能响应 Provider 状态变化
     _streamProvider = context.watch<LiveStreamProvider>();
     final shad = ShadTheme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -84,8 +85,7 @@ class _StreamScreenState extends State<StreamScreen> {
             children: [
               Icon(Icons.live_tv, size: 22, color: shad.primary),
               const SizedBox(width: 8),
-              Text(
-                'Bilibili 直播',
+              Text(l10n.streamTitle,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -140,6 +140,7 @@ class _StreamScreenState extends State<StreamScreen> {
   // ── 状态标签 ──
   Widget _buildStatusBadge(ShadTheme shad) {
     final connected = _streamProvider.isConnected;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -167,8 +168,8 @@ class _StreamScreenState extends State<StreamScreen> {
           const SizedBox(width: 6),
           Text(
             connected
-                ? '直播中  ${_streamProvider.popularity}人气'
-                : '未连接',
+                ? l10n.streamStatusLive.replaceAll('\$pop', _streamProvider.popularity.toString())
+                : l10n.streamStatusOff,
             style: TextStyle(
               fontSize: 11,
               color: connected
@@ -185,10 +186,11 @@ class _StreamScreenState extends State<StreamScreen> {
   // ── 自动回复开关 ──
   Widget _buildAutoReplyToggle(ShadTheme shad) {
     final enabled = _streamProvider.autoReply;
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('自动回复',
+        Text(l10n.streamAutoReply,
             style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
         const SizedBox(width: 8),
         GestureDetector(
@@ -253,6 +255,7 @@ class _StreamScreenState extends State<StreamScreen> {
   // ── 连接面板 ──
   Widget _buildConnectionPanel(ShadTheme shad) {
     final connected = _streamProvider.isConnected;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -263,7 +266,7 @@ class _StreamScreenState extends State<StreamScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('直播间连接',
+          Text(l10n.streamConnection,
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -273,13 +276,13 @@ class _StreamScreenState extends State<StreamScreen> {
             controller: _roomIdController,
             enabled: !connected,
             decoration: InputDecoration(
-              hintText: '输入Bilibili直播间号',
+              hintText: l10n.streamIdHint,
               isDense: true,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               prefixIcon:
                   Icon(Icons.room, size: 16, color: shad.mutedForeground),
-              suffixText: connected ? '已连接' : null,
+              suffixText: connected ? l10n.streamConnected : null,
               suffixStyle:
                   TextStyle(color: const Color(0xFF22C55E), fontSize: 12),
             ),
@@ -294,7 +297,7 @@ class _StreamScreenState extends State<StreamScreen> {
                 connected ? Icons.stop_circle : Icons.play_circle,
                 size: 18,
               ),
-              label: Text(connected ? '断开连接' : '连接直播间'),
+              label: Text(connected ? l10n.streamDisconnect : l10n.streamConnect),
               style: ElevatedButton.styleFrom(
                 backgroundColor:
                     connected ? const Color(0xFFEF4444) : shad.primary,
@@ -318,6 +321,7 @@ class _StreamScreenState extends State<StreamScreen> {
 
   // ── 角色预览 ──
   Widget _buildCharacterPreview(ShadTheme shad) {
+    final l10n = AppLocalizations.of(context)!;
     return Expanded(
       child: Container(
         decoration: BoxDecoration(
@@ -331,7 +335,7 @@ class _StreamScreenState extends State<StreamScreen> {
             Padding(
               padding: const EdgeInsets.all(8),
               child: Text(
-                '角色预览',
+                l10n.streamCharPreview,
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -367,7 +371,7 @@ class _StreamScreenState extends State<StreamScreen> {
                   }
                   return Center(
                     child: Text(
-                      use3D ? '未选择VRM模型' : '未选择Live2D模型',
+                      use3D ? l10n.streamNoVrmModel : l10n.streamNoLive2DModel,
                       style: TextStyle(
                           fontSize: 12, color: shad.mutedForeground),
                     ),
@@ -383,6 +387,7 @@ class _StreamScreenState extends State<StreamScreen> {
 
   // ── 控制面板 ──
   Widget _buildControls(ShadTheme shad) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -393,7 +398,7 @@ class _StreamScreenState extends State<StreamScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('直播控制',
+          Text(l10n.streamControls,
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -407,12 +412,12 @@ class _StreamScreenState extends State<StreamScreen> {
                       .triggerReply('请对观众们说点什么吧~')
                   : null,
               icon: const Icon(Icons.chat, size: 16),
-              label: const Text('手动触发AI回复'),
+              label: Text(l10n.streamManualReply),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'OBS/Bilibili直播姬 窗口捕获即可将角色画面推流到直播间',
+            l10n.streamOBSTip,
             style: TextStyle(
                 fontSize: 10, color: shad.mutedForeground, height: 1.4),
           ),
@@ -424,6 +429,7 @@ class _StreamScreenState extends State<StreamScreen> {
   // ── 弹幕消息列表 ──
   Widget _buildChatList(ShadTheme shad) {
     final messages = _streamProvider.messages;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: shad.card,
@@ -438,7 +444,7 @@ class _StreamScreenState extends State<StreamScreen> {
             child: Row(
               children: [
                 Text(
-                  '直播弹幕',
+                  l10n.streamMessages,
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -466,8 +472,8 @@ class _StreamScreenState extends State<StreamScreen> {
                 ? Center(
                     child: Text(
                       _streamProvider.isConnected
-                          ? '等待弹幕中...'
-                          : '连接直播间后显示弹幕',
+                          ? l10n.streamWaiting
+                          : l10n.streamConnectForDanmaku,
                       style: TextStyle(
                           fontSize: 13, color: shad.mutedForeground),
                     ),
@@ -550,6 +556,7 @@ class _StreamScreenState extends State<StreamScreen> {
   Widget _buildSetlistPanel(ShadTheme shad) {
     final setlist = _streamProvider.setlist;
     final isRunning = _streamProvider.isSetlistRunning;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: shad.card,
@@ -564,7 +571,7 @@ class _StreamScreenState extends State<StreamScreen> {
             child: Row(
               children: [
                 Text(
-                  '直播流程 Setlist',
+                  l10n.streamSetlist,
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -586,7 +593,7 @@ class _StreamScreenState extends State<StreamScreen> {
                             size: 36,
                             color: shad.mutedForeground.withAlpha(100)),
                         const SizedBox(height: 8),
-                        Text('点击 + 添加直播节点',
+                        Text(l10n.streamAddNodeHint,
                             style: TextStyle(
                                 fontSize: 12,
                                 color: shad.mutedForeground)),
@@ -618,7 +625,7 @@ class _StreamScreenState extends State<StreamScreen> {
                   icon: Icon(
                       isRunning ? Icons.stop : Icons.play_arrow,
                       size: 18),
-                  label: Text(isRunning ? '停止流程' : '开始流程'),
+                  label: Text(isRunning ? l10n.streamStopFlow : l10n.streamStartFlow),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isRunning
                         ? const Color(0xFFEF4444)
@@ -658,6 +665,7 @@ class _StreamScreenState extends State<StreamScreen> {
       bool isCurrent, ShadTheme shad) {
     final def = item.nodeDef;
     final name = def?.name ?? item.nodeType.name;
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
@@ -680,7 +688,7 @@ class _StreamScreenState extends State<StreamScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '$name ${isCurrent ? "◀ 进行中" : ""}',
+                  '$name ${isCurrent ? l10n.streamInProgress : ""}',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight:
@@ -728,6 +736,7 @@ class _StreamScreenState extends State<StreamScreen> {
       StreamSetlistItem item, int index, ShadTheme shad) {
     final def = item.nodeDef;
     if (def == null) return;
+    final l10n = AppLocalizations.of(context)!;
 
     showDialog(
       context: context,
@@ -736,7 +745,7 @@ class _StreamScreenState extends State<StreamScreen> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              title: Text('${def.name} 设置',
+              title: Text(l10n.streamNodeSettings.replaceAll('\$name', def.name),
                   style: TextStyle(color: shad.foreground)),
               content: SizedBox(
                 width: 300,
@@ -746,14 +755,14 @@ class _StreamScreenState extends State<StreamScreen> {
                     if (def.presets.isNotEmpty) ...[
                       DropdownButtonFormField<String>(
                         decoration: InputDecoration(
-                          labelText: '预设',
+                          labelText: l10n.streamPreset,
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 8),
                         ),
                         value: null,
-                        hint: const Text('选择预设...',
-                            style: TextStyle(fontSize: 13)),
+                        hint: Text(l10n.streamPresetHint,
+                            style: const TextStyle(fontSize: 13)),
                         items: def.presets.keys.map((key) {
                           return DropdownMenuItem(
                               value: key, child: Text(key));
@@ -824,7 +833,7 @@ class _StreamScreenState extends State<StreamScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消'),
+                  child: Text(l10n.cancel),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -836,7 +845,7 @@ class _StreamScreenState extends State<StreamScreen> {
                     );
                     Navigator.pop(ctx);
                   },
-                  child: const Text('确定'),
+                  child: Text(l10n.confirm),
                 ),
               ],
             );
