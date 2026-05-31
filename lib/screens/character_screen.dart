@@ -944,44 +944,62 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   void _pickCustomColor(ShadTheme shad) {
-    final controller = TextEditingController(
-      text: _chromaKeyColor != null 
-        ? '#${(_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}'
-        : '#FF00FF',
-    );
+    final initialColor = _chromaKeyColor ?? const Color(0xFFFF00FF);
+    Color pickedColor = initialColor;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.charChromaKeyColor),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: '#FF00FF',
-            prefixIcon: Container(
-              margin: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: _chromaKeyColor,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: shad.border),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: Text(AppLocalizations.of(context)!.charChromaKeyColor),
+            titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            content: SizedBox(
+              width: 260,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _HsvColorPicker(
+                    initialColor: pickedColor,
+                    onChanged: (c) => setDialogState(() => pickedColor = c),
+                  ),
+                  const SizedBox(height: 12),
+                  // Preview + hex
+                  Row(
+                    children: [
+                      Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: pickedColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: shad.border),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '#${(pickedColor.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+                        style: TextStyle(fontSize: 14, fontFamily: 'monospace', color: shad.foreground),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              width: 24,
             ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.charClose)),
-          TextButton(
-            onPressed: () {
-              final hex = controller.text.trim().replaceAll('#', '');
-              final parsed = int.tryParse(hex, radix: 16);
-              if (parsed != null) {
-                setState(() => _chromaKeyColor = Color(0xFF000000 | parsed));
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('OK'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(AppLocalizations.of(context)!.charClose),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() => _chromaKeyColor = pickedColor);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -999,4 +1017,197 @@ class _ChromaKeyPreset {
   final String name;
   final Color color;
   const _ChromaKeyPreset(this.name, this.color);
+}
+
+// ════════════════════════════════════════════════════════════
+// HSV Color Picker widget (zero external deps)
+// ════════════════════════════════════════════════════════════
+class _HsvColorPicker extends StatefulWidget {
+  final Color initialColor;
+  final ValueChanged<Color> onChanged;
+
+  const _HsvColorPicker({required this.initialColor, required this.onChanged});
+
+  @override
+  State<_HsvColorPicker> createState() => _HsvColorPickerState();
+}
+
+class _HsvColorPickerState extends State<_HsvColorPicker> {
+  late double _hue;       // 0-360
+  late double _sat;       // 0-1
+  late double _val;       // 0-1
+  late double _alpha;     // stored from initial
+
+  static const double _svSize = 200.0;
+  static const double _hueBarHeight = 20.0;
+  static const double _thumbRadius = 6.0;
+
+  @override
+  void initState() {
+    super.initState();
+    final hsv = _colorToHsv(widget.initialColor);
+    _hue = hsv[0];
+    _sat = hsv[1];
+    _val = hsv[2];
+    _alpha = widget.initialColor.alpha / 255.0;
+  }
+
+  Color get _currentColor => _hsvToColor(_hue, _sat, _val, _alpha);
+
+  void _onSvChange(Offset local, Size size) {
+    setState(() {
+      _sat = (local.dx / size.width).clamp(0.0, 1.0);
+      _val = 1.0 - (local.dy / size.height).clamp(0.0, 1.0);
+    });
+    widget.onChanged(_currentColor);
+  }
+
+  void _onHueChange(double localX, double width) {
+    setState(() {
+      _hue = 360.0 * (localX / width).clamp(0.0, 1.0);
+    });
+    widget.onChanged(_currentColor);
+  }
+
+  static Color _hsvToColor(double h, double s, double v, double a) {
+    final c = v * s;
+    final x = c * (1 - ((h / 60) % 2 - 1).abs());
+    final m = v - c;
+    double r, g, b;
+    if (h < 60)       { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else              { r = c; g = 0; b = x; }
+    return Color.fromRGBO(
+      ((r + m) * 255).round().clamp(0, 255),
+      ((g + m) * 255).round().clamp(0, 255),
+      ((b + m) * 255).round().clamp(0, 255),
+      a,
+    );
+  }
+
+  static List<double> _colorToHsv(Color c) {
+    final r = c.red / 255.0, g = c.green / 255.0, b = c.blue / 255.0;
+    final mx = [r, g, b].reduce((a, b) => a > b ? a : b);
+    final mn = [r, g, b].reduce((a, b) => a < b ? a : b);
+    final d = mx - mn;
+    double h = 0;
+    if (d != 0) {
+      if (mx == r) h = 60 * (((g - b) / d) % 6);
+      else if (mx == g) h = 60 * (((b - r) / d) + 2);
+      else h = 60 * (((r - g) / d) + 4);
+    }
+    if (h < 0) h += 360;
+    final s = mx == 0 ? 0.0 : d / mx;
+    final v = mx;
+    return [h, s, v];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hueColor = _hsvToColor(_hue, 1.0, 1.0, 1.0);
+    final svThumbX = _sat * _svSize;
+    final svThumbY = (1.0 - _val) * _svSize;
+    final hueThumbX = (_hue / 360.0) * _svSize;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── SV square ──
+        GestureDetector(
+          onTapDown: (d) => _onSvChange(d.localPosition, const Size(_svSize, _svSize)),
+          onPanUpdate: (d) => _onSvChange(d.localPosition, const Size(_svSize, _svSize)),
+          child: Container(
+            width: _svSize, height: _svSize,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0x33FFFFFF)),
+              color: hueColor,
+            ),
+            child: Stack(
+              children: [
+                // White → transparent (left to right = Saturation 0→1)
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(5)),
+                      gradient: LinearGradient(
+                        colors: [Colors.white, Color(0x00FFFFFF)],
+                        stops: [0.0, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+                // Transparent → black (top to bottom = Value 1→0)
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      borderRadius: BorderRadius.all(Radius.circular(5)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Colors.black],
+                        stops: [0.0, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+                // Thumb
+                Positioned(
+                  left: svThumbX - _thumbRadius,
+                  top: svThumbY - _thumbRadius,
+                  child: Container(
+                    width: _thumbRadius * 2, height: _thumbRadius * 2,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentColor,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 3)],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // ── Hue bar ──
+        GestureDetector(
+          onTapDown: (d) => _onHueChange(d.localPosition.dx, _svSize),
+          onPanUpdate: (d) => _onHueChange(d.localPosition.dx, _svSize),
+          child: Container(
+            width: _svSize, height: _hueBarHeight,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                  Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF),
+                  Color(0xFFFF0000),
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  left: hueThumbX - _thumbRadius,
+                  top: 0, bottom: 0,
+                  child: Container(
+                    width: _thumbRadius * 2,
+                    decoration: BoxDecoration(
+                      color: hueColor,
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
