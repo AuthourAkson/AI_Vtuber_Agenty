@@ -33,7 +33,15 @@ class _CharacterScreenState extends State<CharacterScreen> {
   int _petPort = 48889;
   bool _clickThrough = true;
   bool _mouseTracking = true;
-  bool _chromaKeyMode = false;
+  Color? _chromaKeyColor; // null = off; non-null = on with this color
+  static const List<_ChromaKeyPreset> _chromaPresets = [
+    _ChromaKeyPreset('Magenta', Color(0xFFFF00FF)),
+    _ChromaKeyPreset('Blue', Color(0xFF0000FF)),
+    _ChromaKeyPreset('Green', Color(0xFF00FF00)),
+    _ChromaKeyPreset('Cyan', Color(0xFF00FFFF)),
+    _ChromaKeyPreset('Red', Color(0xFFFF0000)),
+    _ChromaKeyPreset('Yellow', Color(0xFFFFFF00)),
+  ];
   bool _panelOpen = true;
   final HttpClient _httpClient = HttpClient();
 
@@ -304,7 +312,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     // VRM mode (3D)
     if (s.use3D) {
       final vrmPath = s.selectedVRMModel;
-      final vrmBgColor = _chromaKeyMode ? const Color(0xFF00FF00) : shad.background;
+      final vrmBgColor = _chromaKeyColor ?? shad.background;
       if (vrmPath != null && vrmPath.isNotEmpty) {
         return Container(
           color: vrmBgColor,
@@ -332,7 +340,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
     // Live2D mode — render full-screen, transparent overlay lets page bg through
     if (modelJsonPath != null) {
-      final l2dBgColor = _chromaKeyMode ? const Color(0xFF00FF00) : shad.background;
+      final l2dBgColor = _chromaKeyColor ?? shad.background;
       return Container(
         color: l2dBgColor,
         child: Live2DView(
@@ -472,15 +480,19 @@ class _CharacterScreenState extends State<CharacterScreen> {
             ),
           ),
           OutlinedButton.icon(
-            onPressed: _toggleChromaKey,
-            icon: Icon(_chromaKeyMode ? Icons.colorize : Icons.colorize_outlined, size: 18),
-            label: Text(_chromaKeyMode ? 'Chroma Key: 绿' : 'Chroma Key'),
+            onPressed: _chromaKeyColor != null ? () => setState(() => _chromaKeyColor = null) : () => setState(() => _chromaKeyColor = const Color(0xFFFF00FF)),
+            icon: Icon(_chromaKeyColor != null ? Icons.colorize : Icons.colorize_outlined, size: 18),
+            label: Text(_chromaKeyColor != null 
+                ? l10n.charChromaKeyOn.replaceAll('\$colorName', _getColorName(_chromaKeyColor!))
+                : l10n.charChromaKey),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _chromaKeyMode ? const Color(0xFF00FF00) : shad.mutedForeground,
-              side: BorderSide(color: _chromaKeyMode ? const Color(0xFF00FF00) : shad.border),
+              foregroundColor: _chromaKeyColor ?? shad.mutedForeground,
+              side: BorderSide(color: _chromaKeyColor ?? shad.border),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             ),
           ),
+          if (_chromaKeyColor != null)
+            _buildChromaColorPicker(shad),
           if (Live2DServer.petRunning || OverlayService.instance.isRunning) ...[
             OutlinedButton.icon(
               onPressed: _closePet,
@@ -880,9 +892,98 @@ class _CharacterScreenState extends State<CharacterScreen> {
     }
   }
 
-  void _toggleChromaKey() {
-    setState(() => _chromaKeyMode = !_chromaKeyMode);
-    // Live2D + VRM both handle background via didUpdateWidget when _chromaKeyMode changes
+  String _getColorName(Color c) {
+    final v = c.value & 0xFFFFFF;
+    for (final p in _chromaPresets) {
+      if ((p.color.value & 0xFFFFFF) == v) return p.name;
+    }
+    return '#${v.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
+
+  Widget _buildChromaColorPicker(ShadTheme shad) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        Text(AppLocalizations.of(context)!.charChromaKeyColor, style: TextStyle(fontSize: 11, color: shad.mutedForeground)),
+        const SizedBox(height: 4),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final preset in _chromaPresets)
+            GestureDetector(
+              onTap: () => setState(() => _chromaKeyColor = preset.color),
+              child: Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  color: preset.color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _chromaKeyColor != null && (_chromaKeyColor!.value & 0xFFFFFF) == (preset.color.value & 0xFFFFFF)
+                        ? Colors.white : Colors.transparent,
+                    width: 2,
+                  ),
+                  boxShadow: [BoxShadow(color: preset.color.withAlpha(60), blurRadius: 4)],
+                ),
+              ),
+            ),
+          // Custom color picker button
+          GestureDetector(
+            onTap: () => _pickCustomColor(shad),
+            child: Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: shad.border),
+                color: shad.secondary,
+              ),
+              child: const Icon(Icons.add, size: 16, color: Colors.white70),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  void _pickCustomColor(ShadTheme shad) {
+    final controller = TextEditingController(
+      text: _chromaKeyColor != null 
+        ? '#${(_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}'
+        : '#FF00FF',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.of(context)!.charChromaKeyColor),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: '#FF00FF',
+            prefixIcon: Container(
+              margin: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: _chromaKeyColor,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: shad.border),
+              ),
+              width: 24,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.charClose)),
+          TextButton(
+            onPressed: () {
+              final hex = controller.text.trim().replaceAll('#', '');
+              final parsed = int.tryParse(hex, radix: 16);
+              if (parsed != null) {
+                setState(() => _chromaKeyColor = Color(0xFF000000 | parsed));
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _reloadPetModel() {
@@ -892,4 +993,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
     final path = sp.settings.selectedLive2DModel;
     if (path != null) _openPet(path, sp.settings);
   }
+}
+
+class _ChromaKeyPreset {
+  final String name;
+  final Color color;
+  const _ChromaKeyPreset(this.name, this.color);
 }

@@ -174,6 +174,9 @@ class AppLocalizations {
   String get charXPosition => _t('charXPosition');
   String get charYPosition => _t('charYPosition');
   String get charClickThroughOn => _t('charClickThroughOn');
+  String get charChromaKey => _t('charChromaKey');
+  String get charChromaKeyOn => _t('charChromaKeyOn');
+  String get charChromaKeyColor => _t('charChromaKeyColor');
   String get ttsTitle => _t('ttsTitle');
   String get ttsSubtitle => _t('ttsSubtitle');
   String get ttsProvider => _t('ttsProvider');
@@ -555,6 +558,9 @@ class AppLocalizations {
     'charXPosition':        {'en': 'X Position',              'zh': '水平位置'},
     'charYPosition':        {'en': 'Y Position',              'zh': '垂直位置'},
     'charClickThroughOn':   {'en': 'Click-through ON',        'zh': '鼠标穿透：开'},
+    'charChromaKey':        {'en': 'Chroma Key',              'zh': '色度键'},
+    'charChromaKeyOn':      {'en': r'Chroma Key: $colorName',  'zh': r'色度键：$colorName'},
+    'charChromaKeyColor':   {'en': 'Color',                   'zh': '颜色'},
     'ttsTitle':       {'en': 'TTS Settings',                      'zh': 'TTS 设置'},
     'ttsSubtitle':    {'en': 'Configure text-to-speech engine and voice settings', 'zh': '配置文字转语音引擎和语音设置'},
     'ttsProvider':    {'en': 'TTS Provider Selection',            'zh': 'TTS 提供商选择'},
