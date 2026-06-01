@@ -482,7 +482,12 @@ class _CharacterScreenState extends State<CharacterScreen> {
             ),
           ),
           OutlinedButton.icon(
-            onPressed: _chromaKeyColor != null ? () => setState(() => _chromaKeyColor = null) : () => setState(() => _chromaKeyColor = const Color(0xFFFF00FF)),
+            onPressed: () {
+              setState(() {
+                _chromaKeyColor = _chromaKeyColor != null ? null : const Color(0xFFFF00FF);
+              });
+              _saveChromaColor();
+            },
             icon: Icon(_chromaKeyColor != null ? Icons.colorize : Icons.colorize_outlined, size: 18),
             label: Text(_chromaKeyColor != null 
                 ? l10n.charChromaKeyOn.replaceAll('\$colorName', _getColorName(_chromaKeyColor!))
@@ -959,10 +964,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   Future<void> _saveChromaColor() async {
     try {
-      if (_chromaKeyColor == null) return;
       final prefs = await SharedPreferences.getInstance();
-      final hex = (_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
-      await prefs.setString('chroma_key_color', hex);
+      if (_chromaKeyColor == null) {
+        await prefs.remove('chroma_key_color');
+      } else {
+        final hex = (_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase();
+        await prefs.setString('chroma_key_color', hex);
+      }
     } catch (_) {}
   }
 
