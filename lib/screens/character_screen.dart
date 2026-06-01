@@ -503,7 +503,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
               _saveChromaColor();
               final hex = _chromaKeyColor != null
                   ? (_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()
-                  : '00FF00';
+                  : 'transparent';
               _syncToPopout({'bgColor': hex});
             },
             icon: Icon(_chromaKeyColor != null ? Icons.colorize : Icons.colorize_outlined, size: 18),
@@ -997,8 +997,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
     // Background color sync
     if (data.containsKey('bgColor')) {
       final hex = data['bgColor'] as String;
-      overlay.executePopoutScript("setBackground('#$hex');");
-      overlay.executePopoutScript("vrmSetBackground('#$hex');");
+      if (hex == 'transparent') {
+        overlay.executePopoutScript("setBackground('transparent');");
+        overlay.executePopoutScript("vrmSetBackground('transparent');");
+      } else {
+        overlay.executePopoutScript("setBackground('#$hex');");
+        overlay.executePopoutScript("vrmSetBackground('#$hex');");
+      }
     }
   }
 

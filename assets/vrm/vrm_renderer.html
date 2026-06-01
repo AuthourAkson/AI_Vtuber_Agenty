@@ -9,7 +9,6 @@
   html, body {
     width: 100%; height: 100%;
     overflow: hidden;
-    background: #1C1C1C;
   }
   canvas {
     display: block;
@@ -100,7 +99,7 @@ async function initScene() {
   const container = document.body;
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#1C1C1C');
+  // Transparent by default — background set via vrmSetBackground when needed
 
   camera = new THREE.PerspectiveCamera(
     30,
@@ -110,11 +109,11 @@ async function initScene() {
   );
   camera.position.copy(CAMERA_POS);
 
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.autoClear = false;
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setClearColor(0x99ddff);
+  renderer.setClearColor(0x000000, 0); // transparent clear color
 
   // OrbitControls (allow user to rotate/zoom)
   controls = new OrbitControls(camera, renderer.domElement);
@@ -367,10 +366,22 @@ window.vrmSetVolume = function(volume) {
 };
 
 window.vrmSetBackground = function(colorHex) {
-  if (scene && scene.background instanceof THREE.Color) {
-    scene.background.set(colorHex);
+  if (!colorHex || colorHex === 'transparent') {
+    // Transparent mode: clear scene background, use alpha clear color
+    if (scene) scene.background = null;
+    if (renderer) renderer.setClearColor(0x000000, 0);
+    document.body.style.background = 'transparent';
+    document.documentElement.style.background = 'transparent';
+  } else {
+    if (!scene.background || !(scene.background instanceof THREE.Color)) {
+      scene.background = new THREE.Color(colorHex);
+    } else {
+      scene.background.set(colorHex);
+    }
+    if (renderer) renderer.setClearColor(scene.background, 1);
+    document.body.style.background = colorHex;
+    document.documentElement.style.background = colorHex;
   }
-  document.body.style.background = colorHex;
 };
 
 window.vrmPlayAnimation = function(filename, type) {
