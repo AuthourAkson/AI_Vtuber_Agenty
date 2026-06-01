@@ -1,3 +1,4 @@
+import 'dart:ui' show Color;
 import 'live2d_overlay_ffi.dart';
 import 'live2d_server.dart';
 
@@ -119,6 +120,88 @@ class OverlayService {
       _ffi.destroy(_windowId);
       _windowId = 0;
       print('[OverlayService] Overlay destroyed');
+    }
+  }
+
+  // ═══ Character Pop Out (for OBS capture) ═══
+
+  int _popoutId = 0;
+
+  /// Whether a Character Pop Out window is currently open.
+  bool get isPopoutRunning => _popoutId > 0 && _ffi.isAlive(_popoutId);
+
+  /// Open a Character Pop Out window — normal window with Chroma Key bg.
+  /// [use3D] — true for VRM, false for Live2D.
+  /// [modelPath] — disk path to the model file.
+  /// [backgroundColor] — Chroma Key color (e.g. green/magenta).
+  Future<bool> startCharacterPopout({
+    required bool use3D,
+    required String modelPath,
+    required Color backgroundColor,
+    double scale = 0.08,
+    int x = 100,
+    int y = 100,
+    int width = 500,
+    int height = 600,
+  }) async {
+    if (!_ffi.isAvailable) {
+      print('[OverlayService] Native overlay FFI not available');
+      return false;
+    }
+
+    // Close existing pop-out
+    if (_popoutId > 0) await stopPopout();
+
+    final modelUrl = Live2DServer.toModelUrl(modelPath);
+    final encodedModel = Uri.encodeComponent(modelUrl);
+    final bgHex = (backgroundColor.value & 0xFFFFFF)
+        .toRadixString(16)
+        .padLeft(6, '0')
+        .toUpperCase();
+
+    final url = use3D
+        ? 'http://localhost:${Live2DServer.port}'
+            '/vrm_web/vrm_renderer.html'
+            '?model=$encodedModel'
+            '&scale=$scale'
+            '&bg=$bgHex'
+        : 'http://localhost:${Live2DServer.port}'
+            '/live2d_web/renderer.html'
+            '?model=$encodedModel'
+            '&scale=$scale'
+            '&x=50&y=50'
+            '&bg=$bgHex';
+
+    _popoutId = _ffi.create(url, x: x, y: y, width: width, height: height);
+    if (_popoutId > 0) {
+      // NOT click-through, NOT always-on-top (normal window for OBS)
+      _ffi.setClickThrough(_popoutId, false);
+      _ffi.setTopMost(_popoutId, false);
+      print('[OverlayService] Character pop-out created (id=$_popoutId)');
+      return true;
+    }
+    print('[OverlayService] Failed to create character pop-out');
+    return false;
+  }
+
+  /// Send JavaScript to the pop-out window (for live sync).
+  void executePopoutScript(String script) {
+    if (_popoutId > 0) _ffi.executeScript(_popoutId, script);
+  }
+
+  /// Update pop-out background color.
+  void setPopoutBackground(Color color) {
+    final hex = '#${(color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    executePopoutScript("setBackground('$hex');");
+    executePopoutScript("vrmSetBackground('$hex');"); // VRM too (no-op if not VRM)
+  }
+
+  /// Close the Character Pop Out.
+  Future<void> stopPopout() async {
+    if (_popoutId > 0) {
+      _ffi.destroy(_popoutId);
+      _popoutId = 0;
+      print('[OverlayService] Pop-out destroyed');
     }
   }
 }

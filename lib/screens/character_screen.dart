@@ -6,7 +6,6 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
@@ -45,7 +44,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _ChromaKeyPreset('Yellow', Color(0xFFFFFF00)),
   ];
   bool _panelOpen = true;
-  WindowController? _popoutController;
   final HttpClient _httpClient = HttpClient();
 
   @override
@@ -475,14 +473,14 @@ class _CharacterScreenState extends State<CharacterScreen> {
         Wrap(spacing: 8, runSpacing: 8, children: [
           // Character Pop Out (for OBS capture)
           OutlinedButton.icon(
-            onPressed: _popoutController != null
+            onPressed: OverlayService.instance.isPopoutRunning
                 ? _closePopout
                 : () => _openPopout(sp, s),
-            icon: Icon(_popoutController != null ? Icons.close_fullscreen : Icons.open_in_full, size: 18),
-            label: Text(_popoutController != null ? l10n.charPopoutClose : l10n.charPopoutOpen),
+            icon: Icon(OverlayService.instance.isPopoutRunning ? Icons.close_fullscreen : Icons.open_in_full, size: 18),
+            label: Text(OverlayService.instance.isPopoutRunning ? l10n.charPopoutClose : l10n.charPopoutOpen),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _popoutController != null ? const Color(0xFFEF4444) : shad.primary,
-              side: BorderSide(color: _popoutController != null ? const Color(0xFFEF4444) : shad.primary),
+              foregroundColor: OverlayService.instance.isPopoutRunning ? const Color(0xFFEF4444) : shad.primary,
+              side: BorderSide(color: OverlayService.instance.isPopoutRunning ? const Color(0xFFEF4444) : shad.primary),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             ),
           ),
@@ -944,9 +942,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
   // ═══ Character Pop Out window (for OBS capture) ═══
 
   Future<void> _openPopout(SettingsProvider sp, AppSettings s) async {
-    if (_popoutController != null) return;
+    if (OverlayService.instance.isPopoutRunning) return;
 
-    // Determine current model
     final is3D = s.use3D;
     final modelPath = is3D ? s.selectedVRMModel : s.selectedLive2DModel;
     if (modelPath == null || modelPath.isEmpty) {
@@ -958,50 +955,51 @@ class _CharacterScreenState extends State<CharacterScreen> {
       return;
     }
 
-    // Write config for the sub-window
-    final bgHex = (_chromaKeyColor != null
-        ? (_chromaKeyColor!.value & 0xFFFFFF)
-        : 0x00FF00)
-        .toRadixString(16)
-        .padLeft(6, '0')
-        .toUpperCase();
+    final overlay = OverlayService.instance;
+    final ok = await overlay.startCharacterPopout(
+      use3D: is3D,
+      modelPath: modelPath,
+      backgroundColor: _chromaKeyColor ?? const Color(0xFF00FF00),
+      scale: is3D ? 0.8 : s.live2DScale,
+      width: 600,
+      height: 700,
+    );
 
-    final config = jsonEncode({
-      'modelPath': modelPath,
-      'use3D': is3D,
-      'x': s.live2DXPosition,
-      'y': s.live2DYPosition,
-      'scale': is3D ? 0.8 : s.live2DScale,
-      'bgColor': bgHex,
-    });
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('popout_config', config);
-    await prefs.setBool('_popout_launch', true);
-
-    try {
-      final window = await WindowController.create(WindowConfiguration(arguments: config));
-      setState(() => _popoutController = window);
-    } catch (e) {
-      debugPrint('[PopOut] Failed to create window: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open Character Pop Out: $e'),
-              backgroundColor: Colors.red));
-      }
+    if (ok && mounted) {
+      setState(() {});
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open Pop Out'), backgroundColor: Colors.red));
     }
   }
 
   void _closePopout() {
-    if (_popoutController != null) {
-      _popoutController!.invokeMethod('close', {});
-      setState(() => _popoutController = null);
-    }
+    OverlayService.instance.stopPopout();
+    if (mounted) setState(() {});
   }
 
   void _syncToPopout(Map<String, dynamic> data) {
-    if (_popoutController == null) return;
-    _popoutController!.invokeMethod('updateAll', data);
+    final overlay = OverlayService.instance;
+    if (!overlay.isPopoutRunning) return;
+
+    // Position sync (Live2D)
+    if (data.containsKey('x') || data.containsKey('y')) {
+      final x = (data['x'] as num?)?.toInt() ?? 50;
+      final y = (data['y'] as num?)?.toInt() ?? 50;
+      overlay.executePopoutScript('setModelPosition($x, $y);');
+    }
+    // Scale sync
+    if (data.containsKey('scale')) {
+      final s = data['scale'];
+      overlay.executePopoutScript('setModelScale($s);');
+      overlay.executePopoutScript('window.setVRMScale && window.setVRMScale($s);');
+    }
+    // Background color sync
+    if (data.containsKey('bgColor')) {
+      final hex = data['bgColor'] as String;
+      overlay.executePopoutScript("setBackground('#$hex');");
+      overlay.executePopoutScript("vrmSetBackground('#$hex');");
+    }
   }
 
   String _getColorName(Color c) {
