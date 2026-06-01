@@ -17,17 +17,12 @@ import 'character_popout_main.dart';
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Route to Character Pop Out sub-window
-  bool isSubWindow = false;
-  try {
-    await WindowController.fromCurrentEngine();
-    isSubWindow = true;
-  } catch (_) {
-    // Normal — main window
-  }
-
-  if (isSubWindow) {
-    final prefs = await SharedPreferences.getInstance();
+  // Route to Character Pop Out sub-window via SharedPreferences flag.
+  // (detection via WindowController.fromCurrentEngine() unreliable on Windows)
+  final prefs = await SharedPreferences.getInstance();
+  final isPopoutLaunch = prefs.getBool('_popout_launch') ?? false;
+  if (isPopoutLaunch) {
+    await prefs.remove('_popout_launch');
     final configJson = prefs.getString('popout_config');
     final configArgs = configJson != null ? [configJson] : <String>[];
     characterPopoutMain(configArgs);

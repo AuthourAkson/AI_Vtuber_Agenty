@@ -976,6 +976,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('popout_config', config);
+    await prefs.setBool('_popout_launch', true);
 
     try {
       final window = await WindowController.create(WindowConfiguration(arguments: config));
