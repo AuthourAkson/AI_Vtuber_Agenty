@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show Color;
 import 'live2d_overlay_ffi.dart';
 import 'live2d_server.dart';
@@ -153,30 +154,42 @@ class OverlayService {
     if (_popoutId > 0) await stopPopout();
 
     final modelUrl = Live2DServer.toModelUrl(modelPath);
-    final encodedModel = Uri.encodeComponent(modelUrl);
     final bgHex = (backgroundColor.value & 0xFFFFFF)
         .toRadixString(16)
         .padLeft(6, '0')
         .toUpperCase();
 
-    final url = use3D
-        ? 'http://localhost:${Live2DServer.port}'
-            '/vrm_web/vrm_renderer.html'
-            '?model=$encodedModel'
-            '&scale=$scale'
-            '&bg=$bgHex'
-        : 'http://localhost:${Live2DServer.port}'
-            '/live2d_web/renderer.html'
-            '?model=$encodedModel'
-            '&scale=$scale'
-            '&x=50&y=50'
-            '&bg=$bgHex';
+    String url;
+    if (use3D) {
+      // VRM: renderer doesn't support query-param model loading, use JS after load
+      url = 'http://localhost:${Live2DServer.port}/vrm_web/vrm_renderer.html';
+    } else {
+      final encodedModel = Uri.encodeComponent(modelUrl);
+      url = 'http://localhost:${Live2DServer.port}'
+          '/live2d_web/renderer.html'
+          '?model=$encodedModel'
+          '&scale=$scale'
+          '&x=50&y=50'
+          '&bg=$bgHex';
+    }
 
     _popoutId = _ffi.create(url, x: x, y: y, width: width, height: height);
     if (_popoutId > 0) {
-      // NOT click-through, NOT always-on-top (normal window for OBS)
       _ffi.setClickThrough(_popoutId, false);
       _ffi.setTopMost(_popoutId, false);
+
+      // VRM: load model + set background after scene initializes
+      if (use3D) {
+        final safeModelUrl = modelUrl.replaceAll("'", "\\'");
+        final safeBg = '#$bgHex';
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (_popoutId > 0) {
+            executePopoutScript("vrmSetBackground('$safeBg');");
+            executePopoutScript("vrmLoadModel('$safeModelUrl');");
+          }
+        });
+      }
+
       print('[OverlayService] Character pop-out created (id=$_popoutId)');
       return true;
     }
