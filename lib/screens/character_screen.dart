@@ -56,7 +56,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   @override
   void dispose() {
-    _closePopout();
     _closePet();
     _httpClient.close();
     super.dispose();
