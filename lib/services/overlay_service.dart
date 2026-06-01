@@ -138,7 +138,7 @@ class OverlayService {
   Future<bool> startCharacterPopout({
     required bool use3D,
     required String modelPath,
-    required Color backgroundColor,
+    Color? backgroundColor,
     double scale = 0.08,
     int x = 100,
     int y = 100,
@@ -154,14 +154,15 @@ class OverlayService {
     if (_popoutId > 0) await stopPopout();
 
     final modelUrl = Live2DServer.toModelUrl(modelPath);
-    final bgHex = (backgroundColor.value & 0xFFFFFF)
-        .toRadixString(16)
-        .padLeft(6, '0')
-        .toUpperCase();
+    final bgHex = backgroundColor != null
+        ? (backgroundColor.value & 0xFFFFFF)
+            .toRadixString(16)
+            .padLeft(6, '0')
+            .toUpperCase()
+        : null;
 
     String url;
     if (use3D) {
-      // VRM: renderer doesn't support query-param model loading, use JS after load
       url = 'http://localhost:${Live2DServer.port}/vrm_web/vrm_renderer.html';
     } else {
       final encodedModel = Uri.encodeComponent(modelUrl);
@@ -170,7 +171,7 @@ class OverlayService {
           '?model=$encodedModel'
           '&scale=$scale'
           '&x=50&y=50'
-          '&bg=$bgHex';
+          '${bgHex != null ? "&bg=$bgHex" : ""}';
     }
 
     _popoutId = _ffi.create(url, x: x, y: y, width: width, height: height);
@@ -181,10 +182,11 @@ class OverlayService {
       // VRM: load model + set background after scene initializes
       if (use3D) {
         final safeModelUrl = modelUrl.replaceAll("'", "\\'");
-        final safeBg = '#$bgHex';
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (_popoutId > 0) {
-            executePopoutScript("vrmSetBackground('$safeBg');");
+            if (bgHex != null) {
+              executePopoutScript("vrmSetBackground('#$bgHex');");
+            }
             executePopoutScript("vrmLoadModel('$safeModelUrl');");
           }
         });

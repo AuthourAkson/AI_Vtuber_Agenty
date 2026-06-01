@@ -959,7 +959,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     final ok = await overlay.startCharacterPopout(
       use3D: is3D,
       modelPath: modelPath,
-      backgroundColor: _chromaKeyColor ?? const Color(0xFF00FF00),
+      backgroundColor: _chromaKeyColor,
       scale: is3D ? 0.8 : s.live2DScale,
       width: 600,
       height: 700,
