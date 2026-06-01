@@ -978,7 +978,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     await prefs.setString('popout_config', config);
 
     try {
-      final window = await DesktopMultiWindow.createWindow(config);
+      final window = await WindowController.create(config);
       setState(() => _popoutWindowId = window.windowId);
     } catch (e) {
       debugPrint('[PopOut] Failed to create window: $e');
@@ -992,14 +992,14 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   void _closePopout() {
     if (_popoutWindowId != null) {
-      DesktopMultiWindow.invokeMethod(_popoutWindowId!, 'close', {});
+      WindowController.invokeMethod(_popoutWindowId!, 'close', {});
       setState(() => _popoutWindowId = null);
     }
   }
 
   void _syncToPopout(Map<String, dynamic> data) {
     if (_popoutWindowId == null) return;
-    DesktopMultiWindow.invokeMethod(_popoutWindowId!, 'updateAll', data);
+    WindowController.invokeMethod(_popoutWindowId!, 'updateAll', data);
   }
 
   String _getColorName(Color c) {
