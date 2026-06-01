@@ -5,13 +5,10 @@ import '../app.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/stream_provider.dart';
 import '../providers/chat_provider.dart';
-import '../providers/settings_provider.dart';
 import '../services/bilibili_chat_service.dart';
-import '../widgets/vrm_view.dart';
-import '../widgets/live2d_view.dart';
 
 /// Bilibili直播Stream页面
-/// 三列布局: 连接面板+角色预览 / 弹幕实时列表 / Setlist编辑器
+/// 三列布局: 连接面板+直播控制 / 弹幕实时列表 / Setlist编辑器
 class StreamScreen extends StatefulWidget {
   const StreamScreen({super.key});
 
@@ -113,8 +110,6 @@ class _StreamScreenState extends State<StreamScreen> {
                   child: Column(
                     children: [
                       _buildConnectionPanel(shad),
-                      const SizedBox(height: 12),
-                      _buildCharacterPreview(shad),
                       const SizedBox(height: 12),
                       _buildControls(shad),
                     ],
@@ -315,72 +310,6 @@ class _StreamScreenState extends State<StreamScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  // ── 角色预览 ──
-  Widget _buildCharacterPreview(ShadTheme shad) {
-    final l10n = AppLocalizations.of(context)!;
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: shad.card,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: shad.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                l10n.streamCharPreview,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: shad.mutedForeground),
-              ),
-            ),
-            Expanded(
-              child: Consumer<SettingsProvider>(
-                builder: (context, settings, _) {
-                  final use3D = settings.settings.use3D;
-                  if (use3D) {
-                    final vrmModel = settings.settings.selectedVRMModel;
-                    if (vrmModel != null && vrmModel.isNotEmpty) {
-                      return VrmView(
-                        modelPath: vrmModel,
-                        positionX: 50,
-                        positionY: 50,
-                        scale: 0.8,
-                      );
-                    }
-                  } else {
-                    final live2dModel =
-                        settings.settings.selectedLive2DModel;
-                    if (live2dModel != null && live2dModel.isNotEmpty) {
-                      return Live2DView(
-                        modelPath: live2dModel,
-                        positionX: 50,
-                        positionY: 45,
-                        scale: 0.12,
-                        interactive: false,
-                      );
-                    }
-                  }
-                  return Center(
-                    child: Text(
-                      use3D ? l10n.streamNoVrmModel : l10n.streamNoLive2DModel,
-                      style: TextStyle(
-                          fontSize: 12, color: shad.mutedForeground),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

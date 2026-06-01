@@ -200,14 +200,11 @@ class AppLocalizations {
   String get streamConnect => _t('streamConnect');
   String get streamDisconnect => _t('streamDisconnect');
   String get streamConnected => _t('streamConnected');
-  String get streamCharPreview => _t('streamCharPreview');
   String get streamControls => _t('streamControls');
   String get streamManualReply => _t('streamManualReply');
   String get streamOBSTip => _t('streamOBSTip');
   String get streamWaiting => _t('streamWaiting');
   String get streamConnectForDanmaku => _t('streamConnectForDanmaku');
-  String get streamNoVrmModel => _t('streamNoVrmModel');
-  String get streamNoLive2DModel => _t('streamNoLive2DModel');
   String get streamMessages => _t('streamMessages');
   String get streamNotConnected => _t('streamNotConnected');
   String get streamSetlist => _t('streamSetlist');
@@ -606,14 +603,11 @@ class AppLocalizations {
     'streamConnect':        {'en': 'Connect to Live Chat',    'zh': '连接直播间'},
     'streamDisconnect':     {'en': 'Disconnect',              'zh': '断开连接'},
     'streamConnected':      {'en': 'Connected',               'zh': '已连接'},
-    'streamCharPreview':    {'en': 'Character Preview',       'zh': '角色预览'},
     'streamControls':       {'en': 'Stream Controls',         'zh': '直播控制'},
     'streamManualReply':    {'en': 'Manual AI Reply',         'zh': '手动触发AI回复'},
     'streamOBSTip':         {'en': 'Use OBS/Bilibili Studio window capture to overlay character onto stream', 'zh': 'OBS/Bilibili直播姬 窗口捕获即可将角色画面推流到直播间'},
     'streamWaiting':        {'en': 'Waiting for danmaku...',  'zh': '等待弹幕中...'},
     'streamConnectForDanmaku': {'en': 'Connect to see danmaku', 'zh': '连接直播间后显示弹幕'},
-    'streamNoVrmModel':     {'en': 'No VRM Model Selected',   'zh': '未选择VRM模型'},
-    'streamNoLive2DModel':  {'en': 'No Live2D Model Selected', 'zh': '未选择Live2D模型'},
     'streamMessages':       {'en': 'Live Danmaku',            'zh': '直播弹幕'},
     'streamNotConnected':   {'en': 'Not connected to stream', 'zh': '未连接到直播'},
     'streamSetlist':        {'en': 'Stream Setlist',          'zh': '直播流程 Setlist'},
