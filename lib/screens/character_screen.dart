@@ -45,7 +45,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _ChromaKeyPreset('Yellow', Color(0xFFFFFF00)),
   ];
   bool _panelOpen = true;
-  int? _popoutWindowId;
+  WindowController? _popoutController;
   final HttpClient _httpClient = HttpClient();
 
   @override
@@ -474,14 +474,14 @@ class _CharacterScreenState extends State<CharacterScreen> {
         Wrap(spacing: 8, runSpacing: 8, children: [
           // Character Pop Out (for OBS capture)
           OutlinedButton.icon(
-            onPressed: _popoutWindowId != null
+            onPressed: _popoutController != null
                 ? _closePopout
                 : () => _openPopout(sp, s),
-            icon: Icon(_popoutWindowId != null ? Icons.close_fullscreen : Icons.open_in_full, size: 18),
-            label: Text(_popoutWindowId != null ? l10n.charPopoutClose : l10n.charPopoutOpen),
+            icon: Icon(_popoutController != null ? Icons.close_fullscreen : Icons.open_in_full, size: 18),
+            label: Text(_popoutController != null ? l10n.charPopoutClose : l10n.charPopoutOpen),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _popoutWindowId != null ? const Color(0xFFEF4444) : shad.primary,
-              side: BorderSide(color: _popoutWindowId != null ? const Color(0xFFEF4444) : shad.primary),
+              foregroundColor: _popoutController != null ? const Color(0xFFEF4444) : shad.primary,
+              side: BorderSide(color: _popoutController != null ? const Color(0xFFEF4444) : shad.primary),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             ),
           ),
@@ -943,7 +943,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
   // ═══ Character Pop Out window (for OBS capture) ═══
 
   Future<void> _openPopout(SettingsProvider sp, AppSettings s) async {
-    if (_popoutWindowId != null) return;
+    if (_popoutController != null) return;
 
     // Determine current model
     final is3D = s.use3D;
@@ -978,8 +978,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
     await prefs.setString('popout_config', config);
 
     try {
-      final window = await WindowController.create(config);
-      setState(() => _popoutWindowId = window.windowId);
+      final window = await WindowController.create(WindowConfiguration(arguments: config));
+      setState(() => _popoutController = window);
     } catch (e) {
       debugPrint('[PopOut] Failed to create window: $e');
       if (mounted) {
@@ -991,15 +991,15 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   void _closePopout() {
-    if (_popoutWindowId != null) {
-      WindowController.invokeMethod(_popoutWindowId!, 'close', {});
-      setState(() => _popoutWindowId = null);
+    if (_popoutController != null) {
+      _popoutController!.invokeMethod('close', {});
+      setState(() => _popoutController = null);
     }
   }
 
   void _syncToPopout(Map<String, dynamic> data) {
-    if (_popoutWindowId == null) return;
-    WindowController.invokeMethod(_popoutWindowId!, 'updateAll', data);
+    if (_popoutController == null) return;
+    _popoutController!.invokeMethod('updateAll', data);
   }
 
   String _getColorName(Color c) {
