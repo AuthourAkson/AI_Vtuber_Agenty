@@ -177,6 +177,8 @@ class AppLocalizations {
   String get charChromaKey => _t('charChromaKey');
   String get charChromaKeyOn => _t('charChromaKeyOn');
   String get charChromaKeyColor => _t('charChromaKeyColor');
+  String get charPopoutOpen => _t('charPopoutOpen');
+  String get charPopoutClose => _t('charPopoutClose');
   String get ttsTitle => _t('ttsTitle');
   String get ttsSubtitle => _t('ttsSubtitle');
   String get ttsProvider => _t('ttsProvider');
@@ -580,6 +582,8 @@ class AppLocalizations {
     'charChromaKey':        {'en': 'Chroma Key',              'zh': '色度键'},
     'charChromaKeyOn':      {'en': r'Chroma Key: $colorName',  'zh': r'色度键：$colorName'},
     'charChromaKeyColor':   {'en': 'Color',                   'zh': '颜色'},
+    'charPopoutOpen':       {'en': 'Pop Out (OBS)',           'zh': '弹出窗口(OBS采集)'},
+    'charPopoutClose':      {'en': 'Close Pop Out',           'zh': '关闭弹出窗口'},
     'ttsTitle':       {'en': 'TTS Settings',                      'zh': 'TTS 设置'},
     'ttsSubtitle':    {'en': 'Configure text-to-speech engine and voice settings', 'zh': '配置文字转语音引擎和语音设置'},
     'ttsProvider':    {'en': 'TTS Provider Selection',            'zh': 'TTS 提供商选择'},

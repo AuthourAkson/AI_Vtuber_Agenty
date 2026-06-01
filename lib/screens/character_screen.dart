@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/live2d_model_service.dart';
@@ -44,6 +45,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _ChromaKeyPreset('Yellow', Color(0xFFFFFF00)),
   ];
   bool _panelOpen = true;
+  int? _popoutWindowId;
   final HttpClient _httpClient = HttpClient();
 
   @override
@@ -396,11 +398,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
             _modelDropdown(context, modelJsonPath, sp, s),
             const SizedBox(height: 16),
             _sliderControl(context, l10n.charXPosition, s.live2DXPosition, -100, 200, 1,
-              (v) => _update(sp, s, live2DXPosition: v)),
+              (v) { _update(sp, s, live2DXPosition: v); _syncToPopout({'x': v}); }),
             _sliderControl(context, l10n.charYPosition, s.live2DYPosition, -100, 200, 1,
-              (v) => _update(sp, s, live2DYPosition: v)),
+              (v) { _update(sp, s, live2DYPosition: v); _syncToPopout({'y': v}); }),
             _sliderControl(context, l10n.charScale, s.live2DScale, 0.01, 0.5, 0.01,
-              (v) => _update(sp, s, live2DScale: v)),
+              (v) { _update(sp, s, live2DScale: v); _syncToPopout({'scale': v}); }),
           ],
           if (_models.isEmpty)
             _emptyHint(context, l10n.charNoModels),
@@ -470,6 +472,19 @@ class _CharacterScreenState extends State<CharacterScreen> {
           style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
         const SizedBox(height: 8),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          // Character Pop Out (for OBS capture)
+          OutlinedButton.icon(
+            onPressed: _popoutWindowId != null
+                ? _closePopout
+                : () => _openPopout(sp, s),
+            icon: Icon(_popoutWindowId != null ? Icons.close_fullscreen : Icons.open_in_full, size: 18),
+            label: Text(_popoutWindowId != null ? l10n.charPopoutClose : l10n.charPopoutOpen),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _popoutWindowId != null ? const Color(0xFFEF4444) : shad.primary,
+              side: BorderSide(color: _popoutWindowId != null ? const Color(0xFFEF4444) : shad.primary),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+            ),
+          ),
           OutlinedButton.icon(
             onPressed: modelJsonPath != null && !Live2DServer.petRunning && !OverlayService.instance.isRunning
               ? () => _openPet(modelJsonPath, s) : null,
@@ -487,6 +502,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 _chromaKeyColor = _chromaKeyColor != null ? null : const Color(0xFFFF00FF);
               });
               _saveChromaColor();
+              final hex = _chromaKeyColor != null
+                  ? (_chromaKeyColor!.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()
+                  : '00FF00';
+              _syncToPopout({'bgColor': hex});
             },
             icon: Icon(_chromaKeyColor != null ? Icons.colorize : Icons.colorize_outlined, size: 18),
             label: Text(_chromaKeyColor != null 
@@ -586,10 +605,20 @@ class _CharacterScreenState extends State<CharacterScreen> {
     final shad = ShadTheme.of(context);
     return Row(children: [
       Expanded(child: _modeCard(context, 'Live2D (2D)', Icons.person_outline, !s.use3D,
-        () => _update(sp, s, use3D: false))),
+        () {
+          _update(sp, s, use3D: false);
+          if (s.selectedLive2DModel != null) {
+            _syncToPopout({'modelPath': s.selectedLive2DModel, 'use3D': false, 'scale': s.live2DScale});
+          }
+        })),
       const SizedBox(width: 10),
       Expanded(child: _modeCard(context, 'VRM (3D)', Icons.view_in_ar, s.use3D,
-        () => _update(sp, s, use3D: true))),
+        () {
+          _update(sp, s, use3D: true);
+          if (s.selectedVRMModel != null) {
+            _syncToPopout({'modelPath': s.selectedVRMModel, 'use3D': true, 'scale': 0.8});
+          }
+        })),
     ]);
   }
 
@@ -640,7 +669,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
               child: Text(m['name']!, style: const TextStyle(fontSize: 13)),
             )).toList(),
             onChanged: (path) {
-              if (path != null) _update(sp, s, selectedLive2DModel: path);
+              if (path != null) {
+                _update(sp, s, selectedLive2DModel: path);
+                _syncToPopout({'modelPath': path, 'use3D': false, 'scale': s.live2DScale});
+              }
             },
           ),
         ),
@@ -674,7 +706,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
               child: Text(m['name']!, style: const TextStyle(fontSize: 13)),
             )).toList(),
             onChanged: (path) {
-              if (path != null) _update(sp, s, selectedVRMModel: path);
+              if (path != null) {
+                _update(sp, s, selectedVRMModel: path);
+                _syncToPopout({'modelPath': path, 'use3D': true, 'scale': 0.8});
+              }
             },
           ),
         ),
@@ -772,7 +807,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
           icon: Icon(Icons.delete_outline, color: shad.mutedForeground, size: 16),
           onPressed: () => _deleteModel(m['name']!),
         ),
-        onTap: () => _update(sp, s, selectedLive2DModel: m['path']),
+        onTap: () {
+          _update(sp, s, selectedLive2DModel: m['path']);
+          _syncToPopout({'modelPath': m['path'], 'use3D': false, 'scale': s.live2DScale});
+        },
       ),
     );
   }
@@ -797,7 +835,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
           icon: Icon(Icons.delete_outline, color: shad.mutedForeground, size: 16),
           onPressed: () => _deleteVRMModel(m['path']!),
         ),
-        onTap: () => _update(sp, s, selectedVRMModel: m['path']),
+        onTap: () {
+          _update(sp, s, selectedVRMModel: m['path']);
+          _syncToPopout({'modelPath': m['path'], 'use3D': true, 'scale': 0.8});
+        },
       ),
     );
   }
@@ -899,6 +940,68 @@ class _CharacterScreenState extends State<CharacterScreen> {
     }
   }
 
+  // ═══ Character Pop Out window (for OBS capture) ═══
+
+  Future<void> _openPopout(SettingsProvider sp, AppSettings s) async {
+    if (_popoutWindowId != null) return;
+
+    // Determine current model
+    final is3D = s.use3D;
+    final modelPath = is3D ? s.selectedVRMModel : s.selectedLive2DModel;
+    if (modelPath == null || modelPath.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.charNoModels),
+              backgroundColor: Colors.red));
+      }
+      return;
+    }
+
+    // Write config for the sub-window
+    final bgHex = (_chromaKeyColor != null
+        ? (_chromaKeyColor!.value & 0xFFFFFF)
+        : 0x00FF00)
+        .toRadixString(16)
+        .padLeft(6, '0')
+        .toUpperCase();
+
+    final config = jsonEncode({
+      'modelPath': modelPath,
+      'use3D': is3D,
+      'x': s.live2DXPosition,
+      'y': s.live2DYPosition,
+      'scale': is3D ? 0.8 : s.live2DScale,
+      'bgColor': bgHex,
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('popout_config', config);
+
+    try {
+      final window = await DesktopMultiWindow.createWindow(config);
+      setState(() => _popoutWindowId = window.windowId);
+    } catch (e) {
+      debugPrint('[PopOut] Failed to create window: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open Character Pop Out: $e'),
+              backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  void _closePopout() {
+    if (_popoutWindowId != null) {
+      DesktopMultiWindow.invokeMethod(_popoutWindowId!, 'close', {});
+      setState(() => _popoutWindowId = null);
+    }
+  }
+
+  void _syncToPopout(Map<String, dynamic> data) {
+    if (_popoutWindowId == null) return;
+    DesktopMultiWindow.invokeMethod(_popoutWindowId!, 'updateAll', data);
+  }
+
   String _getColorName(Color c) {
     final v = c.value & 0xFFFFFF;
     for (final p in _chromaPresets) {
@@ -920,6 +1023,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
               onTap: () {
                 setState(() => _chromaKeyColor = preset.color);
                 _saveChromaColor();
+                _syncToPopout({'bgColor': (preset.color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()});
               },
               child: Container(
                 width: 28, height: 28,
@@ -943,6 +1047,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
           onChanged: (c) {
             setState(() => _chromaKeyColor = c);
             _saveChromaColor();
+            _syncToPopout({'bgColor': (c.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()});
           },
         ),
       ],
