@@ -19,6 +19,7 @@ class StreamScreen extends StatefulWidget {
 class _StreamScreenState extends State<StreamScreen> {
   final _roomIdController = TextEditingController();
   final _scrollController = ScrollController();
+  final _editDanmakuController = TextEditingController();
   late LiveStreamProvider _streamProvider;
 
   @override
@@ -41,6 +42,7 @@ class _StreamScreenState extends State<StreamScreen> {
   void dispose() {
     _roomIdController.dispose();
     _scrollController.dispose();
+    _editDanmakuController.dispose();
     super.dispose();
   }
 
@@ -358,6 +360,7 @@ class _StreamScreenState extends State<StreamScreen> {
   // ── 弹幕消息列表 ──
   Widget _buildChatList(ShadTheme shad) {
     final messages = _streamProvider.messages;
+    final isEdit = _streamProvider.isEditMode;
     final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
@@ -368,6 +371,7 @@ class _StreamScreenState extends State<StreamScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 标题行 + Live/Edit 切换
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -392,17 +396,24 @@ class _StreamScreenState extends State<StreamScreen> {
                     style: TextStyle(fontSize: 11, color: shad.primary),
                   ),
                 ),
+                const Spacer(),
+                // Live / Edit 切换
+                _buildModeToggle(shad),
               ],
             ),
           ),
+          // 编辑模式输入框
+          if (isEdit) _buildEditInput(shad),
           Divider(height: 1, color: shad.border),
           Expanded(
             child: messages.isEmpty
                 ? Center(
                     child: Text(
-                      _streamProvider.isConnected
-                          ? l10n.streamWaiting
-                          : l10n.streamConnectForDanmaku,
+                      isEdit
+                          ? l10n.streamEditDanmakuHint
+                          : _streamProvider.isConnected
+                              ? l10n.streamWaiting
+                              : l10n.streamConnectForDanmaku,
                       style: TextStyle(
                           fontSize: 13, color: shad.mutedForeground),
                     ),
@@ -421,6 +432,104 @@ class _StreamScreenState extends State<StreamScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildModeToggle(ShadTheme shad) {
+    final isEdit = _streamProvider.isEditMode;
+    final l10n = AppLocalizations.of(context)!;
+    return GestureDetector(
+      onTap: () => _streamProvider.isEditMode = !isEdit,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: isEdit
+              ? const Color(0xFFF59E0B).withAlpha(25)
+              : const Color(0xFF22C55E).withAlpha(25),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isEdit ? const Color(0xFFF59E0B) : const Color(0xFF22C55E),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isEdit ? Icons.edit : Icons.circle,
+              size: 10,
+              color: isEdit ? const Color(0xFFF59E0B) : const Color(0xFF22C55E),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              isEdit ? l10n.streamEditMode : l10n.streamLiveMode,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isEdit ? const Color(0xFFF59E0B) : const Color(0xFF22C55E),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditInput(ShadTheme shad) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _editDanmakuController,
+              onSubmitted: (_) => _sendManualDanmaku(),
+              style: TextStyle(fontSize: 13, color: shad.foreground),
+              decoration: InputDecoration(
+                hintText: l10n.streamEditDanmakuHint,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: shad.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: shad.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: shad.primary),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: 35,
+            child: ElevatedButton(
+              onPressed: _sendManualDanmaku,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: shad.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: Text(l10n.streamSendDanmaku, style: const TextStyle(fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _sendManualDanmaku() {
+    final text = _editDanmakuController.text;
+    if (text.trim().isEmpty) return;
+    _streamProvider.addManualDanmaku(text);
+    _editDanmakuController.clear();
   }
 
   Widget _buildChatBubble(BilibiliDanmaku msg, ShadTheme shad) {

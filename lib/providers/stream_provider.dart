@@ -132,6 +132,14 @@ class LiveStreamProvider extends ChangeNotifier {
   bool _isAiBusy = false;
   bool get isAiBusy => _isAiBusy;
 
+  // ── 编辑模式 ──
+  bool _isEditMode = false;
+  bool get isEditMode => _isEditMode;
+  set isEditMode(bool v) {
+    _isEditMode = v;
+    notifyListeners();
+  }
+
   // ── 回调 ──
   Future<void> Function(String message)? onAIResponse; // 由外部注入（异步，支持等待完成）
 
@@ -286,6 +294,33 @@ class LiveStreamProvider extends ChangeNotifier {
       _isAiBusy = false;
       notifyListeners();
     });
+  }
+
+  /// 编辑模式下手动添加弹幕（用于测试AI回复功能）
+  void addManualDanmaku(String content) {
+    if (content.trim().isEmpty) return;
+    final msg = BilibiliDanmaku(
+      type: BilibiliDanmakuType.chat,
+      uid: 0,
+      uname: '🧪 Test',
+      content: content.trim(),
+      timestamp: DateTime.now(),
+    );
+    _messages.insert(0, msg);
+    if (_messages.length > _maxMessages) {
+      _messages.removeRange(_maxMessages, _messages.length);
+    }
+    // 如果自动回复开启，也加入待处理队列
+    if (_autoReply) {
+      _pendingMessages.add(msg.toAIFormat());
+      // Edit模式下可能没连接直播间，定时器未启动，手动启动
+      if (_replyTimer == null) {
+        _startReplyTimer();
+      }
+      // 编辑模式立即尝试触发回复（_flushPendingMessages有_isAiBusy保护）
+      _flushPendingMessages();
+    }
+    notifyListeners();
   }
 
   // ── Setlist管理 ──

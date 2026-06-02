@@ -222,6 +222,10 @@ class AppLocalizations {
   String get streamNodeSettings => _t('streamNodeSettings');
   String get streamPreset => _t('streamPreset');
   String get streamPresetHint => _t('streamPresetHint');
+  String get streamEditMode => _t('streamEditMode');
+  String get streamLiveMode => _t('streamLiveMode');
+  String get streamEditDanmakuHint => _t('streamEditDanmakuHint');
+  String get streamSendDanmaku => _t('streamSendDanmaku');
   String get confirm => _t('confirm');
   String get pipelineTitle => _t('pipelineTitle');
   String get pipelineTasks => _t('pipelineTasks');
@@ -627,6 +631,10 @@ class AppLocalizations {
     'streamNodeSettings':   {'en': r'$name Settings',          'zh': r'$name 设置'},
     'streamPreset':         {'en': 'Preset',                  'zh': '预设'},
     'streamPresetHint':     {'en': 'Choose preset...',        'zh': '选择预设...'},
+    'streamEditMode':       {'en': 'Edit Mode',              'zh': '编辑模式'},
+    'streamLiveMode':       {'en': 'Live Mode',              'zh': '直播模式'},
+    'streamEditDanmakuHint': {'en': 'Type a danmaku to test...', 'zh': '输入弹幕内容测试...'},
+    'streamSendDanmaku':    {'en': 'Send',                   'zh': '发送'},
     'confirm':              {'en': 'Confirm',                 'zh': '确定'},
     'pipelineTitle':    {'en': 'Pipeline Monitor',   'zh': '流水线监控'},
     'pipelineTasks':    {'en': 'tasks',              'zh': '个任务'},
