@@ -264,7 +264,7 @@ class LiveStreamProvider extends ChangeNotifier {
     if (_pendingMessages.isEmpty || onAIResponse == null) return;
     if (_isAiBusy) return; // AI正在回复中，不打扰，弹幕继续积累
 
-    final combined = _pendingMessages.take(10).join('\n');
+    final combined = _pendingMessages.take(3).join('\n');
     _pendingMessages.clear();
 
     _isAiBusy = true;
