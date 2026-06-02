@@ -128,8 +128,12 @@ class LiveStreamProvider extends ChangeNotifier {
   int _currentNodeIndex = -1;
   Timer? _setlistTimer;
 
+  // ── AI忙碌锁 ──
+  bool _isAiBusy = false;
+  bool get isAiBusy => _isAiBusy;
+
   // ── 回调 ──
-  void Function(String message)? onAIResponse; // 由外部注入
+  Future<void> Function(String message)? onAIResponse; // 由外部注入（异步，支持等待完成）
 
   // ── Stream subscriptions ──
   StreamSubscription<BilibiliDanmaku>? _msgSub;
@@ -250,20 +254,38 @@ class LiveStreamProvider extends ChangeNotifier {
 
   void _flushPendingMessages() {
     if (_pendingMessages.isEmpty || onAIResponse == null) return;
+    if (_isAiBusy) return; // AI正在回复中，不打扰，弹幕继续积累
+
     final combined = _pendingMessages.take(10).join('\n');
     _pendingMessages.clear();
+
+    _isAiBusy = true;
+    notifyListeners();
 
     // 组装直播上下文prompt
     final prompt =
         '你正在Bilibili进行直播。以下是观众的最新弹幕，请用自然活泼的语气回应他们（2-4句话即可）：\n\n$combined';
-    onAIResponse!(prompt);
+    onAIResponse!(prompt).then((_) {
+      // AI回复完成，恢复空闲状态
+      _isAiBusy = false;
+      // 如果在AI回复期间有新弹幕进来，立即再发一批
+      if (_pendingMessages.isNotEmpty) {
+        _flushPendingMessages();
+      }
+      notifyListeners();
+    });
   }
 
   /// 手动触发AI回复（带自定义prompt）
   void triggerReply(String prompt) {
-    if (onAIResponse != null) {
-      onAIResponse!(prompt);
-    }
+    if (onAIResponse == null) return;
+    if (_isAiBusy) return; // AI正忙，请稍后再试
+    _isAiBusy = true;
+    notifyListeners();
+    onAIResponse!(prompt).then((_) {
+      _isAiBusy = false;
+      notifyListeners();
+    });
   }
 
   // ── Setlist管理 ──
@@ -369,23 +391,31 @@ class LiveStreamProvider extends ChangeNotifier {
 
     switch (def.type) {
       case StreamNodeType.systemPrompt:
-        // 设置系统提示词 → 立即完成
+        // 设置系统提示词 → 等待设置完成后再推进
         final prompt = node.settings['systemPrompt'] as String? ?? '';
         if (prompt.isNotEmpty && onAIResponse != null) {
-          // 通过特殊的内部指令来设置system prompt
-          onAIResponse!('__SYSTEM_PROMPT__:$prompt');
+          onAIResponse!('__SYSTEM_PROMPT__:$prompt').then((_) {
+            _advanceToNextNode();
+          });
+        } else {
+          _advanceToNextNode();
         }
-        _advanceToNextNode();
         break;
 
       case StreamNodeType.promptedResponse:
-        // AI回复指定提示词
+        // AI回复指定提示词 — 等待AI完成后才推进下一个节点
         final prompt = node.settings['prompt'] as String? ?? '';
-        if (prompt.isNotEmpty && onAIResponse != null) {
-          onAIResponse!(prompt);
+        if (prompt.isNotEmpty && onAIResponse != null && !_isAiBusy) {
+          _isAiBusy = true;
+          onAIResponse!(prompt).then((_) {
+            _isAiBusy = false;
+            _advanceToNextNode();
+            notifyListeners();
+          });
+        } else {
+          // AI正忙或无效prompt，延迟重试
+          _setlistTimer = Timer(const Duration(seconds: 2), _advanceToNextNode);
         }
-        // 等待一会再继续下一个节点
-        _setlistTimer = Timer(const Duration(seconds: 8), _advanceToNextNode);
         break;
 
       case StreamNodeType.chat:

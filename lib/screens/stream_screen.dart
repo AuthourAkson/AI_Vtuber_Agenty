@@ -44,7 +44,7 @@ class _StreamScreenState extends State<StreamScreen> {
     super.dispose();
   }
 
-  void _handleAIResponse(String prompt) {
+  Future<void> _handleAIResponse(String prompt) async {
     if (!mounted) return;
     final chatProvider = context.read<ChatProvider>();
 
@@ -54,7 +54,7 @@ class _StreamScreenState extends State<StreamScreen> {
       return;
     }
 
-    chatProvider.sendMessage(prompt);
+    await chatProvider.sendMessage(prompt);
   }
 
   Future<void> _toggleConnection() async {
