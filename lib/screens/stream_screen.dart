@@ -299,7 +299,8 @@ class _StreamScreenState extends State<StreamScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor:
                     connected ? const Color(0xFFEF4444) : shad.primary,
-                foregroundColor: Colors.white,
+                foregroundColor:
+                    connected ? Colors.white : shad.primaryForeground,
                 padding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
@@ -618,7 +619,7 @@ class _StreamScreenState extends State<StreamScreen> {
               onPressed: _sendManualDanmaku,
               style: ElevatedButton.styleFrom(
                 backgroundColor: shad.primary,
-                foregroundColor: Colors.white,
+                foregroundColor: shad.primaryForeground,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
@@ -775,7 +776,8 @@ class _StreamScreenState extends State<StreamScreen> {
                     backgroundColor: isRunning
                         ? const Color(0xFFEF4444)
                         : shad.primary,
-                    foregroundColor: Colors.white,
+                    foregroundColor:
+                        isRunning ? Colors.white : shad.primaryForeground,
                   ),
                 ),
               ),
