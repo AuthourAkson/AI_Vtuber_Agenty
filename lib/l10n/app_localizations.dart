@@ -226,6 +226,11 @@ class AppLocalizations {
   String get streamLiveMode => _t('streamLiveMode');
   String get streamEditDanmakuHint => _t('streamEditDanmakuHint');
   String get streamSendDanmaku => _t('streamSendDanmaku');
+  String get streamReplyMode => _t('streamReplyMode');
+  String get streamReplyModeSliding => _t('streamReplyModeSliding');
+  String get streamReplyModeSequential => _t('streamReplyModeSequential');
+  String get streamReplyModeSwitch => _t('streamReplyModeSwitch');
+  String get streamTestDanmaku => _t('streamTestDanmaku');
   String get confirm => _t('confirm');
   String get pipelineTitle => _t('pipelineTitle');
   String get pipelineTasks => _t('pipelineTasks');
@@ -635,6 +640,11 @@ class AppLocalizations {
     'streamLiveMode':       {'en': 'Live Mode',              'zh': '直播模式'},
     'streamEditDanmakuHint': {'en': 'Type a danmaku to test...', 'zh': '输入弹幕内容测试...'},
     'streamSendDanmaku':    {'en': 'Send',                   'zh': '发送'},
+    'streamReplyMode':       {'en': 'Reply Mode',             'zh': '回复模式'},
+    'streamReplyModeSliding': {'en': 'Sliding Window',        'zh': '滑动窗口'},
+    'streamReplyModeSequential': {'en': 'Sequential',         'zh': '顺序回复'},
+    'streamReplyModeSwitch': {'en': r'Switch to $mode',        'zh': r'切换到$mode'},
+    'streamTestDanmaku':    {'en': 'Test Danmaku',           'zh': '测试弹幕'},
     'confirm':              {'en': 'Confirm',                 'zh': '确定'},
     'pipelineTitle':    {'en': 'Pipeline Monitor',   'zh': '流水线监控'},
     'pipelineTasks':    {'en': 'tasks',              'zh': '个任务'},

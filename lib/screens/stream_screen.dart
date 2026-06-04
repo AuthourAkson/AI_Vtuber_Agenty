@@ -27,8 +27,17 @@ class _StreamScreenState extends State<StreamScreen> {
     super.initState();
     _streamProvider = context.read<LiveStreamProvider>();
 
-    // 注入AI回复回调
-    _streamProvider.onAIResponse = _handleAIResponse;
+    // 用闭包捕获 ChatProvider，不依赖 mounted 状态
+    // 即使 StreamScreen 被切到后台，AI 回复回调仍能正常工作
+    final chatProvider = context.read<ChatProvider>();
+    _streamProvider.onAIResponse = (String prompt) async {
+      if (prompt.startsWith('__SYSTEM_PROMPT__:')) {
+        chatProvider.systemPrompt =
+            prompt.substring('__SYSTEM_PROMPT__:'.length);
+        return;
+      }
+      await chatProvider.sendMessage(prompt);
+    };
 
     // 恢复上次的房间号
     _streamProvider.loadSavedRoomId().then((id) {
@@ -36,6 +45,9 @@ class _StreamScreenState extends State<StreamScreen> {
         _roomIdController.text = id;
       }
     });
+
+    // 恢复回复模式
+    _streamProvider.loadReplyMode();
   }
 
   @override
@@ -44,19 +56,6 @@ class _StreamScreenState extends State<StreamScreen> {
     _scrollController.dispose();
     _editDanmakuController.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleAIResponse(String prompt) async {
-    if (!mounted) return;
-    final chatProvider = context.read<ChatProvider>();
-
-    if (prompt.startsWith('__SYSTEM_PROMPT__:')) {
-      final newPrompt = prompt.substring('__SYSTEM_PROMPT__:'.length);
-      chatProvider.systemPrompt = newPrompt;
-      return;
-    }
-
-    await chatProvider.sendMessage(prompt);
   }
 
   Future<void> _toggleConnection() async {
@@ -114,6 +113,8 @@ class _StreamScreenState extends State<StreamScreen> {
                       _buildConnectionPanel(shad),
                       const SizedBox(height: 12),
                       _buildControls(shad),
+                      const SizedBox(height: 12),
+                      _buildReplyModePanel(shad),
                     ],
                   ),
                 ),
@@ -347,7 +348,7 @@ class _StreamScreenState extends State<StreamScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+            Text(
             l10n.streamOBSTip,
             style: TextStyle(
                 fontSize: 10, color: shad.mutedForeground, height: 1.4),
@@ -355,6 +356,112 @@ class _StreamScreenState extends State<StreamScreen> {
         ],
       ),
     );
+  }
+
+  // ── 回复模式切换面板 ──
+  Widget _buildReplyModePanel(ShadTheme shad) {
+    final isSliding = _streamProvider.replyMode == StreamReplyMode.slidingWindow;
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: shad.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: shad.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.streamReplyMode,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: shad.foreground)),
+          const SizedBox(height: 8),
+          // 模式切换按钮
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                _streamProvider.replyMode = isSliding
+                    ? StreamReplyMode.sequential
+                    : StreamReplyMode.slidingWindow;
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                side: BorderSide(
+                  color: isSliding
+                      ? const Color(0xFF8B5CF6)
+                      : const Color(0xFF22C55E),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isSliding ? Icons.window : Icons.format_list_numbered,
+                    size: 16,
+                    color: isSliding
+                        ? const Color(0xFF8B5CF6)
+                        : const Color(0xFF22C55E),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isSliding
+                        ? l10n.streamReplyModeSliding
+                        : l10n.streamReplyModeSequential,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isSliding
+                          ? const Color(0xFF8B5CF6)
+                          : const Color(0xFF22C55E),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    l10n.streamReplyModeSwitch.replaceAll(
+                      r'$mode',
+                      isSliding
+                          ? l10n.streamReplyModeSequential
+                          : l10n.streamReplyModeSliding,
+                    ),
+                    style:
+                        TextStyle(fontSize: 9, color: shad.mutedForeground),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 测试弹幕按钮
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _sendTestDanmaku,
+              icon: const Icon(Icons.science, size: 16),
+              label: Text(l10n.streamTestDanmaku,
+                  style: const TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                side: BorderSide(color: shad.border),
+                foregroundColor: shad.mutedForeground,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _sendTestDanmaku() {
+    _streamProvider.sendTestDanmaku();
   }
 
   // ── 弹幕消息列表 ──

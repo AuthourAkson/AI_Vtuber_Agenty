@@ -3,6 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/bilibili_chat_service.dart';
 
+/// AI回复模式
+enum StreamReplyMode {
+  /// 滑动窗口：3槽队列，一次处理一条，处理完从最新弹幕补位
+  slidingWindow,
+  /// 顺序回复：严格FIFO，一条一条按顺序回复
+  sequential,
+}
+
 /// Setlist节点类型 (1:1对应LAV2的NodeRegistry)
 enum StreamNodeType {
   systemPrompt,   // 设置系统提示词
@@ -132,6 +140,22 @@ class LiveStreamProvider extends ChangeNotifier {
   bool _isAiBusy = false;
   bool get isAiBusy => _isAiBusy;
 
+  // ── 回复模式 ──
+  StreamReplyMode _replyMode = StreamReplyMode.slidingWindow;
+  static const int _maxWindowSize = 3;
+  final List<String> _overflowMessages = [];
+
+  StreamReplyMode get replyMode => _replyMode;
+
+  set replyMode(StreamReplyMode v) {
+    if (_replyMode == v) return;
+    _replyMode = v;
+    _pendingMessages.clear();
+    _overflowMessages.clear();
+    _saveReplyMode();
+    notifyListeners();
+  }
+
   // ── 编辑模式 ──
   bool _isEditMode = false;
   bool get isEditMode => _isEditMode;
@@ -161,9 +185,18 @@ class LiveStreamProvider extends ChangeNotifier {
         _messages.removeRange(_maxMessages, _messages.length);
       }
 
-      // 如果开启自动回复，收集弹幕
+      // 如果开启自动回复，按模式收集弹幕
       if (_autoReply && _isConnected) {
-        _pendingMessages.add(msg.toAIFormat());
+        final formatted = msg.toAIFormat();
+        if (_replyMode == StreamReplyMode.slidingWindow) {
+          if (_pendingMessages.length < _maxWindowSize) {
+            _pendingMessages.add(formatted);
+          } else {
+            _overflowMessages.add(formatted);
+          }
+        } else {
+          _pendingMessages.add(formatted);
+        }
       }
 
       notifyListeners();
@@ -233,6 +266,7 @@ class LiveStreamProvider extends ChangeNotifier {
     await _chatService.disconnect();
     _status = BilibiliLiveStatusType.disconnected;
     _pendingMessages.clear();
+    _overflowMessages.clear();
     notifyListeners();
   }
 
@@ -246,12 +280,46 @@ class LiveStreamProvider extends ChangeNotifier {
     return _roomId;
   }
 
+  /// 加载保存的回复模式
+  Future<void> loadReplyMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final modeName = prefs.getString('stream_reply_mode');
+      if (modeName != null) {
+        _replyMode = modeName == 'sequential'
+            ? StreamReplyMode.sequential
+            : StreamReplyMode.slidingWindow;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveReplyMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'stream_reply_mode',
+        _replyMode == StreamReplyMode.sequential ? 'sequential' : 'slidingWindow',
+      );
+    } catch (_) {}
+  }
+
+  /// 发送测试弹幕
+  void sendTestDanmaku() {
+    addManualDanmaku('主播今天好可爱啊~', uname: '观众A');
+    addManualDanmaku('能唱首歌吗？', uname: '观众B');
+    addManualDanmaku('主播今天吃了什么好吃的', uname: '观众C');
+    addManualDanmaku('哈哈哈这个表情绝了', uname: '观众D');
+    addManualDanmaku('关注了关注了！', uname: '观众E');
+    addManualDanmaku('主播会跳舞吗', uname: '观众F');
+    addManualDanmaku('从首页推荐来的', uname: '观众G');
+  }
+
   // ── 自动回复 ──
 
   void _startReplyTimer() {
     _stopReplyTimer();
     _replyTimer = Timer.periodic(Duration(seconds: _replyInterval), (_) {
-      _flushPendingMessages();
+      _tryFlushOne();
     });
   }
 
@@ -260,28 +328,55 @@ class LiveStreamProvider extends ChangeNotifier {
     _replyTimer = null;
   }
 
-  void _flushPendingMessages() {
+  /// 队列里有待处理消息时切换到快速轮询(1s)，处理完回到正常间隔
+  void _startFastPoll() {
+    _stopReplyTimer();
+    _replyTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _tryFlushOne();
+      if (_pendingMessages.isEmpty && _overflowMessages.isEmpty && !_isAiBusy) {
+        _stopReplyTimer();
+        _startReplyTimer(); // 队列空了，回到正常间隔
+      }
+    });
+  }
+
+  /// 尝试发送一条弹幕。有 _isAiBusy 保护，不会重复。
+  /// 不递归、不 .then() 链、不在同一个函数里处理多条。
+  void _tryFlushOne() {
     if (_pendingMessages.isEmpty || onAIResponse == null) return;
-    if (_isAiBusy) return; // AI正在回复中，不打扰，弹幕继续积累
+    if (_isAiBusy) return;
 
-    final combined = _pendingMessages.take(3).join('\n');
-    _pendingMessages.clear();
-
+    final msg = _pendingMessages.removeAt(0);
     _isAiBusy = true;
     notifyListeners();
 
-    // 组装直播上下文prompt
     final prompt =
-        '你正在Bilibili进行直播。以下是观众的最新弹幕，请用自然活泼的语气回应他们（2-4句话即可）：\n\n$combined';
+        '你正在Bilibili进行直播。以下是观众的最新弹幕，请用自然活泼的语气回应（1-2句话即可）：\n\n$msg';
+
     onAIResponse!(prompt).then((_) {
-      // AI回复完成，恢复空闲状态
       _isAiBusy = false;
-      // 如果在AI回复期间有新弹幕进来，立即再发一批
-      if (_pendingMessages.isNotEmpty) {
-        _flushPendingMessages();
+      if (_replyMode == StreamReplyMode.slidingWindow) {
+        _refillSlidingWindow();
       }
       notifyListeners();
+      if (_pendingMessages.isNotEmpty) {
+        _startFastPoll();
+      }
+    }).catchError((_) {
+      _isAiBusy = false;
+      notifyListeners();
+      if (_pendingMessages.isNotEmpty) {
+        _startFastPoll();
+      }
     });
+  }
+
+  /// 滑动窗口补位：从溢出缓冲区取最新弹幕填充窗口
+  void _refillSlidingWindow() {
+    while (_pendingMessages.length < _maxWindowSize &&
+        _overflowMessages.isNotEmpty) {
+      _pendingMessages.add(_overflowMessages.removeLast());
+    }
   }
 
   /// 手动触发AI回复（带自定义prompt）
@@ -297,12 +392,13 @@ class LiveStreamProvider extends ChangeNotifier {
   }
 
   /// 编辑模式下手动添加弹幕（用于测试AI回复功能）
-  void addManualDanmaku(String content) {
+  /// [content] 弹幕内容，[uname] 可选自定义用户名
+  void addManualDanmaku(String content, {String uname = '🧪 Test'}) {
     if (content.trim().isEmpty) return;
     final msg = BilibiliDanmaku(
       type: BilibiliDanmakuType.chat,
       uid: 0,
-      uname: '🧪 Test',
+      uname: uname,
       content: content.trim(),
       timestamp: DateTime.now(),
     );
@@ -310,15 +406,24 @@ class LiveStreamProvider extends ChangeNotifier {
     if (_messages.length > _maxMessages) {
       _messages.removeRange(_maxMessages, _messages.length);
     }
-    // 如果自动回复开启，也加入待处理队列
+    // 如果自动回复开启，按模式加入待处理队列
     if (_autoReply) {
-      _pendingMessages.add(msg.toAIFormat());
+      final formatted = msg.toAIFormat();
+      if (_replyMode == StreamReplyMode.slidingWindow) {
+        if (_pendingMessages.length < _maxWindowSize) {
+          _pendingMessages.add(formatted);
+        } else {
+          _overflowMessages.add(formatted);
+        }
+      } else {
+        _pendingMessages.add(formatted);
+      }
       // Edit模式下可能没连接直播间，定时器未启动，手动启动
       if (_replyTimer == null) {
         _startReplyTimer();
       }
-      // 编辑模式立即尝试触发回复（_flushPendingMessages有_isAiBusy保护）
-      _flushPendingMessages();
+      // 编辑模式立即尝试触发回复（_tryFlushOne有_isAiBusy保护）
+      _tryFlushOne();
     }
     notifyListeners();
   }
