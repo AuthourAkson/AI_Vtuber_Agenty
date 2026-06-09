@@ -179,6 +179,17 @@ class AppLocalizations {
   String get charChromaKeyColor => _t('charChromaKeyColor');
   String get charPopoutOpen => _t('charPopoutOpen');
   String get charPopoutClose => _t('charPopoutClose');
+  String get charOpenVrmPet => _t('charOpenVrmPet');
+  String get charVrmPetActive => _t('charVrmPetActive');
+  String get charVrmPetDesc => _t('charVrmPetDesc');
+  String get charVrmPetNotFound => _t('charVrmPetNotFound');
+  String charVrmPetNotFoundPath(String path) => _t('charVrmPetNotFoundPath').replaceAll(r'$path', path);
+  String get charVrmPetLaunched => _t('charVrmPetLaunched');
+  String get charVrmPetLaunchedConnected => _t('charVrmPetLaunchedConnected');
+  String charVrmPetPath(String path) => _t('charVrmPetPath').replaceAll(r'$path', path);
+  String charVrmPetFailed(String error) => _t('charVrmPetFailed').replaceAll(r'$error', error);
+  String get charVrmPetSettings => _t('charVrmPetSettings');
+  String get charVrmPetSettingsDesc => _t('charVrmPetSettingsDesc');
   String get ttsTitle => _t('ttsTitle');
   String get ttsSubtitle => _t('ttsSubtitle');
   String get ttsProvider => _t('ttsProvider');
@@ -593,6 +604,17 @@ class AppLocalizations {
     'charChromaKeyColor':   {'en': 'Color',                   'zh': '颜色'},
     'charPopoutOpen':       {'en': 'Pop Out (OBS)',           'zh': '弹出窗口(OBS采集)'},
     'charPopoutClose':      {'en': 'Close Pop Out',           'zh': '关闭弹出窗口'},
+    'charOpenVrmPet':       {'en': 'Launch VRM Pet',          'zh': '启动 VRM 桌宠'},
+    'charVrmPetActive':     {'en': 'VRM Pet Running',         'zh': 'VRM 桌宠运行中'},
+    'charVrmPetDesc':       {'en': 'Launch AI-Pet-Engine as a standalone VRM desktop pet. The Unity engine will handle 3D model rendering on your desktop.', 'zh': '启动 AI-Pet-Engine 作为独立 VRM 桌面宠物。Unity 引擎将在桌面上渲染 3D 模型。'},
+    'charVrmPetPath':       {'en': r'Expected path: $path',    'zh': r'预期路径：$path'},
+    'charVrmPetNotFound':   {'en': 'AI-Pet-Engine.exe not found. Please build the Unity project first.', 'zh': '未找到 AI-Pet-Engine.exe，请先构建 Unity 项目。'},
+    'charVrmPetNotFoundPath': {'en': r'Not found: $path', 'zh': r'未找到：$path'},
+    'charVrmPetLaunched':   {'en': 'VRM desktop pet launched.', 'zh': 'VRM 桌宠已启动。'},
+    'charVrmPetLaunchedConnected': {'en': 'VRM pet launched & connected. Chat messages will be forwarded.', 'zh': 'VRM 桌宠已启动并连接。对话将同步转发。'},
+    'charVrmPetFailed':     {'en': r'Failed to launch: $error', 'zh': r'启动失败：$error'},
+    'charVrmPetSettings':   {'en': 'VRM Pet Path',            'zh': 'VRM 桌宠路径'},
+    'charVrmPetSettingsDesc': {'en': 'Path to the AI-Pet-Engine executable (MateEngineX.exe).', 'zh': 'AI-Pet-Engine 可执行文件 (MateEngineX.exe) 的路径。'},
     'ttsTitle':       {'en': 'TTS Settings',                      'zh': 'TTS 设置'},
     'ttsSubtitle':    {'en': 'Configure text-to-speech engine and voice settings', 'zh': '配置文字转语音引擎和语音设置'},
     'ttsProvider':    {'en': 'TTS Provider Selection',            'zh': 'TTS 提供商选择'},
