@@ -7,6 +7,7 @@ import '../models/task.dart';
 import '../services/backend_service.dart';
 import '../services/pipeline_manager.dart';
 import '../services/session_manager.dart';
+import '../services/vrm_pet_bridge.dart';
 
 /// Central state for chat messages, sessions, and pipeline interaction.
 /// Uses ChangeNotifier for Provider-based reactive UI updates.
@@ -132,6 +133,9 @@ class ChatProvider extends ChangeNotifier {
     final userMsg = HistoryItem(role: 'user', content: input);
     _messages.add(userMsg);
     notifyListeners();
+
+    // Forward to VRM Desktop Pet (AI-Pet-Engine) if running
+    VrmPetBridge.forwardMessage(input);
 
     try {
       // Sync LLM config + system prompt from saved settings before making API call
