@@ -12,6 +12,7 @@ import '../services/live2d_model_service.dart';
 import '../services/live2d_server.dart';
 import '../services/vrm_model_service.dart';
 import '../services/overlay_service.dart';
+import '../services/vrm_pet_bridge.dart';
 import '../widgets/live2d_view.dart';
 import '../widgets/vrm_view.dart';
 import '../app.dart';
@@ -44,6 +45,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _ChromaKeyPreset('Yellow', Color(0xFFFFFF00)),
   ];
   bool _panelOpen = true;
+
   final HttpClient _httpClient = HttpClient();
 
   @override
@@ -52,11 +54,19 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _refreshModels();
     _ensureDefaults();
     _loadChromaColor();
+    VrmPetBridge.loadPath();
+    VrmPetBridge.runningNotifier.addListener(_onVrmPetStateChanged);
+  }
+
+  void _onVrmPetStateChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _closePet();
+    VrmPetBridge.runningNotifier.removeListener(_onVrmPetStateChanged);
+    // NOTE: Do NOT close VRM pet here — the process survives page navigation.
     _httpClient.close();
     super.dispose();
   }
@@ -466,9 +476,23 @@ class _CharacterScreenState extends State<CharacterScreen> {
         // ── Section: Desktop Pet ──
         _panelSectionLabel(context, l10n.charPetSection, Icons.pets),
         const SizedBox(height: 12),
-        Text('Open a separate transparent always-on-top window with your Live2D character.',
-          style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
-        const SizedBox(height: 8),
+        if (isLive2D) ...[
+          Text('Open a separate transparent always-on-top window with your Live2D character.',
+            style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
+          const SizedBox(height: 8),
+        ] else ...[
+          // VRM Desktop Pet description
+          Text(l10n.charVrmPetDesc,
+            style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
+          const SizedBox(height: 4),
+          Row(children: [
+            Expanded(
+              child: Text(l10n.charVrmPetPath(VrmPetBridge.exePath),
+                style: TextStyle(fontSize: 11, color: shad.mutedForeground)),
+            ),
+          ]),
+          const SizedBox(height: 8),
+        ],
         Wrap(spacing: 8, runSpacing: 8, children: [
           // Character Pop Out (for OBS capture)
           OutlinedButton.icon(
@@ -483,17 +507,44 @@ class _CharacterScreenState extends State<CharacterScreen> {
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             ),
           ),
-          OutlinedButton.icon(
-            onPressed: modelJsonPath != null && !Live2DServer.petRunning && !OverlayService.instance.isRunning
-              ? () => _openPet(modelJsonPath, s) : null,
-            icon: const Icon(Icons.open_in_new, size: 18),
-            label: Text((Live2DServer.petRunning || OverlayService.instance.isRunning) ? l10n.charPetActive : l10n.charOpenPet),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: shad.primary,
-              side: BorderSide(color: shad.primary),
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          // ── Live2D Pet: Open Pet button ──
+          if (isLive2D)
+            OutlinedButton.icon(
+              onPressed: modelJsonPath != null && !Live2DServer.petRunning && !OverlayService.instance.isRunning
+                ? () => _openPet(modelJsonPath, s) : null,
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: Text((Live2DServer.petRunning || OverlayService.instance.isRunning) ? l10n.charPetActive : l10n.charOpenPet),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: shad.primary,
+                side: BorderSide(color: shad.primary),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              ),
             ),
-          ),
+          // ── VRM Pet: Launch + Settings ──
+          if (!isLive2D)
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              OutlinedButton.icon(
+                onPressed: VrmPetBridge.isRunning ? null : _launchVRMPet,
+                icon: Icon(VrmPetBridge.isRunning ? Icons.check_circle : Icons.play_arrow, size: 18),
+                label: Text(VrmPetBridge.isRunning ? l10n.charVrmPetActive : l10n.charOpenVrmPet),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: VrmPetBridge.isRunning ? const Color(0xFF4CAF50) : shad.primary,
+                  side: BorderSide(color: VrmPetBridge.isRunning ? const Color(0xFF4CAF50) : shad.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                ),
+              ),
+              const SizedBox(width: 4),
+              OutlinedButton(
+                onPressed: _showVrmPetSettings,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: shad.mutedForeground,
+                  side: BorderSide(color: shad.border),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                  minimumSize: Size.zero,
+                ),
+                child: const Icon(Icons.settings, size: 18),
+              ),
+            ]),
           OutlinedButton.icon(
             onPressed: () {
               setState(() {
@@ -517,9 +568,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
           ),
           if (_chromaKeyColor != null)
             _buildChromaColorPicker(shad),
-          if (Live2DServer.petRunning || OverlayService.instance.isRunning) ...[
+          if (Live2DServer.petRunning || OverlayService.instance.isRunning || VrmPetBridge.isRunning) ...[
             OutlinedButton.icon(
-              onPressed: _closePet,
+              onPressed: () { if (VrmPetBridge.isRunning) VrmPetBridge.close(); else _closePet(); },
               icon: const Icon(Icons.close, size: 18),
               label: Text(l10n.charClose),
               style: OutlinedButton.styleFrom(
@@ -919,6 +970,111 @@ class _CharacterScreenState extends State<CharacterScreen> {
     if (!Live2DServer.petRunning) return;
     Live2DServer.killPet();
     setState(() {});
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // VRM Desktop Pet — launches AI-Pet-Engine (Unity)
+  // ════════════════════════════════════════════════════════════
+
+  Future<void> _launchVRMPet() async {
+    if (VrmPetBridge.isRunning) return;
+    final l10n = AppLocalizations.of(context);
+
+    final error = await VrmPetBridge.launch();
+    if (!mounted) return;
+
+    if (error == 'timeout') {
+      // Launched but bridge not ready yet
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.charVrmPetLaunched),
+            backgroundColor: ShadTheme.of(context).primary,
+            duration: const Duration(seconds: 2)));
+      return;
+    }
+
+    if (error != null) {
+      if (error.startsWith('Not found:')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.charVrmPetNotFoundPath(VrmPetBridge.exePath)),
+              backgroundColor: Colors.red));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.charVrmPetFailed(error)),
+              backgroundColor: Colors.red));
+      }
+      return;
+    }
+
+    // Bridge alive — push system prompt
+    try {
+      final sp = context.read<SettingsProvider>();
+      final prompt = sp.settings.systemPrompt;
+      if (prompt.isNotEmpty) {
+        await VrmPetBridge.pushSystemPrompt(prompt);
+        debugPrint('[VRM Pet] System prompt pushed (len=${prompt.length})');
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.charVrmPetLaunchedConnected),
+            backgroundColor: ShadTheme.of(context).primary,
+            duration: const Duration(seconds: 2)));
+    }
+  }
+
+  Future<void> _showVrmPetSettings() async {
+    final l10n = AppLocalizations.of(context);
+    final shad = ShadTheme.of(context);
+    final controller = TextEditingController(text: VrmPetBridge.exePath);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: shad.card,
+        title: Text(l10n.charVrmPetSettings),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.charVrmPetSettingsDesc,
+              style: TextStyle(fontSize: 13, color: shad.mutedForeground)),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: shad.secondary,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: shad.border),
+              ),
+              child: TextField(
+                controller: controller,
+                style: TextStyle(fontSize: 13, color: shad.foreground),
+                decoration: InputDecoration(
+                  hintText: VrmPetBridge.defaultPath,
+                  hintStyle: TextStyle(fontSize: 12, color: shad.mutedForeground),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.cancel, style: TextStyle(color: shad.mutedForeground))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(l10n.save, style: TextStyle(color: shad.primary))),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await VrmPetBridge.savePath(result);
+      if (mounted) setState(() {});
+    }
+    controller.dispose();
   }
 
   void _togglePetClickThrough() {
