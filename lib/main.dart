@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
@@ -10,12 +11,11 @@ import 'providers/settings_provider.dart';
 import 'providers/multi_agent_provider.dart';
 import 'providers/stream_provider.dart';
 import 'services/live2d_server.dart';
+import 'services/vrm_pet_bridge.dart';
 import 'providers/appearance_provider.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ─── Main app window ───
 
   // Start Live2D HTTP file server
   await Live2DServer.start();
@@ -29,10 +29,15 @@ void main(List<String> args) async {
   // Load saved preferences
   await SharedPreferences.getInstance();
 
-  // ─── Process signal handler: kill pet subprocess on app exit ───
-  ProcessSignal.sigterm.watch().listen((_) {
+  // ─── Cleanup child processes on signal (Ctrl+C / kill) ───
+  // Window X close is handled automatically by Windows Job Object in VrmPetBridge.
+  void cleanupAll() {
+    VrmPetBridge.close();
     Live2DServer.killPet();
-  });
+  }
+
+  ProcessSignal.sigterm.watch().listen((_) { cleanupAll(); exit(0); });
+  ProcessSignal.sigint.watch().listen((_)  { cleanupAll(); exit(0); });
 
   runApp(
     MultiProvider(
