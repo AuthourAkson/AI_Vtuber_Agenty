@@ -305,7 +305,7 @@ class AgentManager extends ChangeNotifier {
   }
 
   Future<void> refreshSummaries() async {
-    _agentSummaries = wenzagent.getAgentSummaries().where((a) {
+    _agentSummaries = (await wenzagent.getAgentSummaries()).where((a) {
       // Filter out orphaned sessions whose employee no longer exists.
       // This prevents "Employee not found" errors when the SDK tries to
       // restore agents for deleted employees during initialization.
