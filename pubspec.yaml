@@ -38,7 +38,7 @@ dependencies:
   window_manager: ^0.5.1
   # WenzAgent multi-agent SDK
   wenzagent:
-    path: D:/wenzagent-1.0.2
+    path: D:/wenzagent-1.0.4
 
 dev_dependencies:
   flutter_test:
@@ -59,8 +59,4 @@ flutter:
     - assets/vrm/lib/three-vrm-animation/lib/
     - assets/python/
 
-dependency_overrides:
-  llm_dart:
-    git:
-      url: https://github.com/Latias94/llm_dart.git
-      ref: v0.10.7
+
