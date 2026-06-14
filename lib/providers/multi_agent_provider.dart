@@ -680,7 +680,7 @@ class AgentManager extends ChangeNotifier {
     _scrollToBottom();
 
     await wenzagent.sendMessage(text);
-    // No polling — _onMessage will trigger _refreshActiveMessages via stream
+    _startStreamingPoll(); // Start polling to show tool calls progressively
   }
 
   void _scrollToBottom() {
@@ -695,11 +695,13 @@ class AgentManager extends ChangeNotifier {
   }
 
   Future<void> interruptAgent() async {
+    _stopStreamingPoll();
     await wenzagent.interrupt();
     notifyListeners();
   }
 
   void closeAgent() {
+    _stopStreamingPoll();
     _activeEmployeeId = null;
     _activeEmployeeName = null;
     _activeMessages = [];
