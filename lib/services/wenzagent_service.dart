@@ -240,10 +240,10 @@ class WenzAgentService {
     }
   }
 
-  List<MultiAgentInfo> getSessionSummaries() {
+  Future<List<MultiAgentInfo>> getSessionSummaries() async {
     if (_client == null) return [];
     try {
-      final summaries = _client!.getSessionSummaries();
+      final summaries = await _client!.getSessionSummaries();
       return summaries.map((s) {
         return MultiAgentInfo(
           employeeId: s.employeeId,
@@ -366,8 +366,8 @@ class WenzAgentService {
   // ─── Agent Summaries (for AgentManager) ───────────────────
 
   /// Get agent summaries as AgentModel-compatible list.
-  List<MultiAgentInfo> getAgentSummaries() {
-    return getSessionSummaries();
+  Future<List<MultiAgentInfo>> getAgentSummaries() async {
+    return await getSessionSummaries();
   }
 
   // ─── Global Skill Management ──────────────────
