@@ -334,7 +334,8 @@ border: isActive ? Border.all(color: Theme.of(context).colorScheme.primary.withA
 ),
 child: Row(
 children: [
-Icon(Icons.smart_toy, size: 20, color: ShadTheme.of(context).foreground),
+Icon(Icons.smart_toy, size: 20,
+    color: isActive ? ShadTheme.of(context).sidebarAccentForeground : ShadTheme.of(context).foreground),
 SizedBox(width: 8),
 Expanded(
 child: Column(
@@ -342,10 +343,13 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 Text(agent.name, style: TextStyle(fontSize: 13,
 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-color: ShadTheme.of(context).foreground)),
+color: isActive ? ShadTheme.of(context).sidebarAccentForeground : ShadTheme.of(context).foreground)),
 if (lastMsg.isNotEmpty)
 Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis,
-style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+style: TextStyle(fontSize: 11,
+    color: isActive
+        ? ShadTheme.of(context).sidebarAccentForeground.withAlpha(180)
+        : ShadTheme.of(context).mutedForeground)),
 ],
 ),
 ),
@@ -362,7 +366,8 @@ behavior: HitTestBehavior.opaque,
 onTap: () => _confirmDeleteSession(agent, mgr),
 child: Container(
 padding: EdgeInsets.all(6),
-child: Icon(Icons.close, size: 16, color: ShadTheme.of(context).mutedForeground),
+child: Icon(Icons.close, size: 16,
+    color: isActive ? ShadTheme.of(context).sidebarAccentForeground.withAlpha(150) : ShadTheme.of(context).mutedForeground),
 ),
 ),
 ],
@@ -3010,7 +3015,9 @@ mgr.openAgentWithProfile(agent.uuid, agent.name, i);
               Icon(
                 skill.skillType == 'folder' ? Icons.folder_outlined : Icons.settings,
                 size: 16,
-                color: skill.enabled == 1 ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : (skill.enabled == 1 ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground),
               ),
               SizedBox(width: 8),
               Expanded(
@@ -3023,7 +3030,10 @@ mgr.openAgentWithProfile(agent.uuid, agent.name, i);
                       overflow: TextOverflow.ellipsis),
                     if (skill.description != null && skill.description!.isNotEmpty)
                       Text(skill.description!,
-                        style: TextStyle(fontSize: 10, color: ShadTheme.of(context).mutedForeground),
+                        style: TextStyle(fontSize: 10,
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.onPrimary.withAlpha(180)
+                                : ShadTheme.of(context).mutedForeground),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
