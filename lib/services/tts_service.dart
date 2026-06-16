@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:path/path.dart' as p;
 import 'storage_service.dart';
 
@@ -7,8 +9,12 @@ import 'storage_service.dart';
 /// Audio cached in D:\AiVtuber_Agent_profile\tts_cache\
 class TTSService {
   final StorageService _storage;
+  final AudioPlayer _player = AudioPlayer();
 
   String _voice = 'zh-CN-XiaoxiaoNeural';
+  String _pitch = '+0Hz';
+  String _rate = '+0%';
+  String _volume = '+0%';
   final _cacheDir = p.join(StorageService.profileDir, 'tts_cache');
 
   TTSService(this._storage) {
@@ -16,6 +22,9 @@ class TTSService {
   }
 
   String get voice => _voice;
+  String get pitch => _pitch;
+  String get rate => _rate;
+  String get volume => _volume;
 
   void _ensureCacheDir() {
     final dir = Directory(_cacheDir);
@@ -25,45 +34,110 @@ class TTSService {
   /// Change TTS voice.
   void setVoice(String v) => _voice = v;
 
+  /// Set EdgeTTS parameters.
+  void setParams({
+    String? voice,
+    String? pitch,
+    String? rate,
+    String? volume,
+  }) {
+    if (voice != null) _voice = voice;
+    if (pitch != null) _pitch = pitch;
+    if (rate != null) _rate = rate;
+    if (volume != null) _volume = volume;
+  }
+
   /// Synthesize text to speech. Returns WAV audio bytes.
   Future<List<int>> synthesize(String text) async {
-    if (text.trim().isEmpty) return <int>[];
+    final path = await synthesizeToFile(text);
+    if (path != null) {
+      final file = File(path);
+      if (file.existsSync()) {
+        return file.readAsBytesSync();
+      }
+    }
+    return <int>[];
+  }
+
+  /// Synthesize text to speech, returns file path to cached audio.
+  Future<String?> synthesizeToFile(String text) async {
+    if (text.trim().isEmpty) return null;
 
     // Check cache
-    final cacheKey = _cacheKey(text, _voice);
+    final cacheKey = _cacheKey(text, _voice, _pitch, _rate, _volume);
     final cacheFile = File(p.join(_cacheDir, cacheKey));
     if (cacheFile.existsSync()) {
-      return cacheFile.readAsBytesSync();
+      return cacheFile.path;
     }
 
     // Use edge-tts CLI
     try {
-      final tempWav = p.join(_cacheDir, '${cacheKey}_temp.mp3');
+      final tempMp3 = p.join(_cacheDir, '${cacheKey}_temp.mp3');
       final result = await Process.run(
         'edge-tts',
-        ['--voice', _voice, '--text', text, '--write-media', tempWav],
+        [
+          '--voice', _voice,
+          '--text', text,
+          '--pitch', _pitch,
+          '--rate', _rate,
+          '--volume', _volume,
+          '--write-media', tempMp3,
+        ],
         runInShell: true,
       );
 
       if (result.exitCode == 0) {
-        final tempFile = File(tempWav);
+        final tempFile = File(tempMp3);
         if (tempFile.existsSync()) {
-          final bytes = tempFile.readAsBytesSync();
           // Move to cache
           tempFile.copySync(cacheFile.path);
           tempFile.deleteSync();
-          return bytes;
+          return cacheFile.path;
         }
       }
     } catch (_) {
-      // edge-tts not available — return empty
+      // edge-tts not available — return null
     }
 
-    return <int>[];
+    return null;
   }
 
+  /// Synthesize and play audio immediately.
+  /// Returns true if playback started successfully.
+  Future<bool> synthesizeAndPlay(String text) async {
+    final path = await synthesizeToFile(text);
+    if (path == null) return false;
+
+    try {
+      await _player.stop();
+      await _player.play(DeviceFileSource(path));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Stop current playback.
+  Future<void> stop() async {
+    try {
+      await _player.stop();
+    } catch (_) {}
+  }
+
+  /// Check if currently playing.
+  bool get isPlaying {
+    try {
+      return _player.state == PlayerState.playing;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Stream of player state changes.
+  Stream<PlayerState> get onPlayerStateChanged => _player.onPlayerStateChanged;
+
   /// List available edge-tts voices.
-  Future<List<Map<String, dynamic>>> listVoices() async {
+  Future<List<Map<String, String>>> listVoices() async {
     try {
       final result = await Process.run(
         'edge-tts',
@@ -72,29 +146,82 @@ class TTSService {
       );
       if (result.exitCode == 0) {
         final lines = (result.stdout as String).split('\n');
-        final voices = <Map<String, dynamic>>[];
+        final voices = <Map<String, String>>[];
+        final seen = <String>{};
         for (final line in lines) {
           final trimmed = line.trim();
           if (trimmed.startsWith('Name:') || trimmed.startsWith('ShortName:')) {
             final name = trimmed.split(':').last.trim();
-            voices.add({'name': name, 'id': name});
+            if (seen.add(name)) {
+              // Extract locale info from name (e.g., "Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)")
+              voices.add(_parseVoiceEntry(trimmed));
+            }
           }
         }
-        // Deduplicate
-        final seen = <String>{};
-        return voices.where((v) => seen.add(v['name'] as String)).toList();
+        return voices;
       }
     } catch (_) {}
+    return _defaultVoices();
+  }
+
+  Map<String, String> _parseVoiceEntry(String line) {
+    // Try to extract locale and display name
+    final parts = line.split(RegExp(r'[():,]'));
+    String locale = '';
+    String displayName = '';
+    String shortName = line.split(':').last.trim();
+
+    for (int i = 0; i < parts.length; i++) {
+      final p = parts[i].trim();
+      if (RegExp(r'^[a-z]{2}-[A-Z]{2}$').hasMatch(p)) {
+        locale = p;
+      } else if (p.contains('Neural') || p.contains('Standard')) {
+        displayName = p;
+      }
+    }
+
+    if (displayName.isEmpty) displayName = shortName;
+
+    return {
+      'shortName': shortName,
+      'locale': locale,
+      'displayName': displayName,
+    };
+  }
+
+  List<Map<String, String>> _defaultVoices() {
     return [
-      {'name': 'zh-CN-XiaoxiaoNeural', 'id': 'zh-CN-XiaoxiaoNeural'},
-      {'name': 'zh-CN-YunxiNeural', 'id': 'zh-CN-YunxiNeural'},
-      {'name': 'en-US-JennyNeural', 'id': 'en-US-JennyNeural'},
-      {'name': 'ja-JP-NanamiNeural', 'id': 'ja-JP-NanamiNeural'},
+      {'shortName': 'zh-CN-XiaoxiaoNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoxiao (晓晓)'},
+      {'shortName': 'zh-CN-YunxiNeural', 'locale': 'zh-CN', 'displayName': 'Yunxi (云希)'},
+      {'shortName': 'zh-CN-YunyangNeural', 'locale': 'zh-CN', 'displayName': 'Yunyang (云扬)'},
+      {'shortName': 'zh-CN-XiaoyiNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoyi (晓伊)'},
+      {'shortName': 'zh-CN-YunjianNeural', 'locale': 'zh-CN', 'displayName': 'Yunjian (云健)'},
+      {'shortName': 'zh-CN-XiaochenNeural', 'locale': 'zh-CN', 'displayName': 'Xiaochen (晓辰)'},
+      {'shortName': 'zh-CN-XiaohanNeural', 'locale': 'zh-CN', 'displayName': 'Xiaohan (晓涵)'},
+      {'shortName': 'zh-CN-XiaomengNeural', 'locale': 'zh-CN', 'displayName': 'Xiaomeng (晓萌)'},
+      {'shortName': 'zh-CN-XiaomoNeural', 'locale': 'zh-CN', 'displayName': 'Xiaomo (晓墨)'},
+      {'shortName': 'zh-CN-XiaoqiuNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoqiu (晓秋)'},
+      {'shortName': 'zh-CN-XiaoruiNeural', 'locale': 'zh-CN', 'displayName': 'Xiaorui (晓睿)'},
+      {'shortName': 'zh-CN-XiaoshuangNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoshuang (晓双)'},
+      {'shortName': 'zh-CN-XiaoxuanNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoxuan (晓萱)'},
+      {'shortName': 'zh-CN-XiaoyanNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoyan (晓颜)'},
+      {'shortName': 'zh-CN-XiaoyouNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoyou (晓悠)'},
+      {'shortName': 'zh-CN-XiaozhenNeural', 'locale': 'zh-CN', 'displayName': 'Xiaozhen (晓臻)'},
+      {'shortName': 'en-US-JennyNeural', 'locale': 'en-US', 'displayName': 'Jenny'},
+      {'shortName': 'en-US-AriaNeural', 'locale': 'en-US', 'displayName': 'Aria'},
+      {'shortName': 'ja-JP-NanamiNeural', 'locale': 'ja-JP', 'displayName': 'Nanami'},
+      {'shortName': 'ja-JP-KeitaNeural', 'locale': 'ja-JP', 'displayName': 'Keita'},
     ];
   }
 
-  String _cacheKey(String text, String voice) {
-    final hash = (text.hashCode ^ voice.hashCode).toRadixString(16);
+  String _cacheKey(String text, String voice, String pitch, String rate, String volume) {
+    final combined = '$text|$voice|$pitch|$rate|$volume';
+    final hash = combined.hashCode.toRadixString(16);
     return 'tts_${voice}_$hash.mp3';
+  }
+
+  /// Dispose resources.
+  void dispose() {
+    _player.dispose();
   }
 }
