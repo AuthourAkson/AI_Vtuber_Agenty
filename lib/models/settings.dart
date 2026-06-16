@@ -11,6 +11,12 @@ class AppSettings {
   String ttsProvider;
   String ttsVoice;
 
+  // EdgeTTS
+  String edgeTtsVoice;
+  String edgeTtsPitch;
+  String edgeTtsRate;
+  String edgeTtsVolume;
+
   // RVC
   bool useRvc;
   int rvcF0UpKey;
@@ -48,6 +54,10 @@ class AppSettings {
     this.showMonitor = false,
     this.ttsProvider = 'gpt-sovits',
     this.ttsVoice = '',
+    this.edgeTtsVoice = 'zh-CN-XiaoxiaoNeural',
+    this.edgeTtsPitch = '+0Hz',
+    this.edgeTtsRate = '+0%',
+    this.edgeTtsVolume = '+0%',
     this.useRvc = false,
     this.rvcF0UpKey = 0,
     this.selectedLive2DModel,
@@ -78,6 +88,10 @@ class AppSettings {
       showMonitor: json['llm.showMonitor'] as bool? ?? false,
       ttsProvider: json['tts.provider'] as String? ?? 'gpt-sovits',
       ttsVoice: json['tts.voice'] as String? ?? '',
+      edgeTtsVoice: json['tts.edge_tts_voice'] as String? ?? 'zh-CN-XiaoxiaoNeural',
+      edgeTtsPitch: json['tts.edge_tts_pitch'] as String? ?? '+0Hz',
+      edgeTtsRate: json['tts.edge_tts_rate'] as String? ?? '+0%',
+      edgeTtsVolume: json['tts.edge_tts_volume'] as String? ?? '+0%',
       useRvc: json['rvc.use-rvc'] as bool? ?? false,
       rvcF0UpKey: json['rvc.f0-up-key'] as int? ?? 0,
       selectedLive2DModel: json['frontend.character.selectedLive2DModel'] as String?,
@@ -109,6 +123,10 @@ class AppSettings {
     bool? showMonitor,
     String? ttsProvider,
     String? ttsVoice,
+    String? edgeTtsVoice,
+    String? edgeTtsPitch,
+    String? edgeTtsRate,
+    String? edgeTtsVolume,
     bool? useRvc,
     int? rvcF0UpKey,
     String? selectedLive2DModel,
@@ -137,6 +155,10 @@ class AppSettings {
       showMonitor: showMonitor ?? this.showMonitor,
       ttsProvider: ttsProvider ?? this.ttsProvider,
       ttsVoice: ttsVoice ?? this.ttsVoice,
+      edgeTtsVoice: edgeTtsVoice ?? this.edgeTtsVoice,
+      edgeTtsPitch: edgeTtsPitch ?? this.edgeTtsPitch,
+      edgeTtsRate: edgeTtsRate ?? this.edgeTtsRate,
+      edgeTtsVolume: edgeTtsVolume ?? this.edgeTtsVolume,
       useRvc: useRvc ?? this.useRvc,
       rvcF0UpKey: rvcF0UpKey ?? this.rvcF0UpKey,
       selectedLive2DModel: selectedLive2DModel ?? this.selectedLive2DModel,
@@ -167,6 +189,10 @@ class AppSettings {
     'llm.showMonitor': showMonitor,
     'tts.provider': ttsProvider,
     'tts.voice': ttsVoice,
+    'tts.edge_tts_voice': edgeTtsVoice,
+    'tts.edge_tts_pitch': edgeTtsPitch,
+    'tts.edge_tts_rate': edgeTtsRate,
+    'tts.edge_tts_volume': edgeTtsVolume,
     'rvc.use-rvc': useRvc,
     'rvc.f0-up-key': rvcF0UpKey,
     'frontend.character.selectedLive2DModel': selectedLive2DModel,
