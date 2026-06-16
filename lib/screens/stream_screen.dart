@@ -5,7 +5,9 @@ import '../app.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/stream_provider.dart';
 import '../providers/chat_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/bilibili_chat_service.dart';
+import '../services/tts_service.dart';
 
 /// Bilibili直播Stream页面
 /// 三列布局: 连接面板+直播控制 / 弹幕实时列表 / Setlist编辑器
@@ -27,16 +29,48 @@ class _StreamScreenState extends State<StreamScreen> {
     super.initState();
     _streamProvider = context.read<LiveStreamProvider>();
 
-    // 用闭包捕获 ChatProvider，不依赖 mounted 状态
+    // 用闭包捕获 ChatProvider 和 SettingsProvider，不依赖 mounted 状态
     // 即使 StreamScreen 被切到后台，AI 回复回调仍能正常工作
     final chatProvider = context.read<ChatProvider>();
+    final settingsProvider = context.read<SettingsProvider>();
+    final tts = chatProvider.backend.tts;
+
     _streamProvider.onAIResponse = (String prompt) async {
       if (prompt.startsWith('__SYSTEM_PROMPT__:')) {
         chatProvider.systemPrompt =
             prompt.substring('__SYSTEM_PROMPT__:'.length);
         return;
       }
+
+      // Count messages before to find the AI response after
+      final msgCountBefore = chatProvider.messages.length;
       await chatProvider.sendMessage(prompt);
+
+      // Extract AI response and TTS it
+      final messages = chatProvider.messages;
+      if (messages.length > msgCountBefore) {
+        // Find the last assistant message added
+        String? aiText;
+        for (int i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role == 'assistant') {
+            aiText = messages[i].content;
+            break;
+          }
+        }
+
+        if (aiText != null && aiText.isNotEmpty) {
+          // Apply saved EdgeTTS settings
+          final s = settingsProvider.settings;
+          tts.setParams(
+            voice: s.edgeTtsVoice,
+            pitch: s.edgeTtsPitch,
+            rate: s.edgeTtsRate,
+            volume: s.edgeTtsVolume,
+          );
+          // Synthesize and play (fire and forget)
+          tts.synthesizeAndPlay(aiText);
+        }
+      }
     };
 
     // 恢复上次的房间号
