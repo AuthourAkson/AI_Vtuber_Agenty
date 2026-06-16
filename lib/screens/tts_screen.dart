@@ -293,51 +293,22 @@ class _TTSScreenState extends State<TTSScreen> {
           // ── Voice selector ──
           Text(l10n.ttsEdgeTtsVoice, style: _labelStyle(shad)),
           SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: shad.secondary,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: shad.input),
-            ),
-            child: _loadingVoices
-                ? Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Row(children: [
-                      SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                      SizedBox(width: 10),
-                      Text(l10n.ttsLoadingVoices, style: TextStyle(fontSize: 13, color: shad.mutedForeground)),
-                    ]),
-                  )
-                : DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _voices.any((v) => v['shortName'] == s.edgeTtsVoice)
-                          ? s.edgeTtsVoice
-                          : null,
-                      isExpanded: true,
-                      hint: Text(l10n.ttsEdgeTtsVoiceHint,
-                          style: TextStyle(fontSize: 13, color: shad.mutedForeground)),
-                      style: TextStyle(fontSize: 13, color: shad.foreground),
-                      items: _voices.map((v) {
-                        final locale = v['locale'] ?? '';
-                        final display = v['displayName'] ?? v['shortName'] ?? '';
-                        final label = locale.isNotEmpty
-                            ? '$display ($locale)'
-                            : display;
-                        return DropdownMenuItem(
-                          value: v['shortName'],
-                          child: Text(label, style: TextStyle(fontSize: 13)),
-                        );
-                      }).toList(),
-                      onChanged: (voice) {
-                        if (voice != null) {
-                          _update(sp, s, edgeTtsVoice: voice);
-                        }
-                      },
-                    ),
+          _loadingVoices
+              ? Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: shad.secondary,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: shad.input),
                   ),
-          ),
+                  child: Row(children: [
+                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(width: 10),
+                    Text(l10n.ttsLoadingVoices, style: TextStyle(fontSize: 13, color: shad.mutedForeground)),
+                  ]),
+                )
+              : _buildVoiceAutocomplete(s, shad, l10n, sp),
           SizedBox(height: 16),
 
           // ── Pitch slider ──
@@ -444,6 +415,78 @@ class _TTSScreenState extends State<TTSScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Voice autocomplete: type to search or enter custom voice ──
+  Widget _buildVoiceAutocomplete(AppSettings s, ShadTheme shad, AppLocalizations l10n, SettingsProvider sp) {
+    // Build display labels for sorting/filtering
+    final voiceLabels = <String, String>{};
+    final voiceSearchTexts = <String, String>{};
+    for (final v in _voices) {
+      final sn = v['shortName'] ?? '';
+      final locale = v['locale'] ?? '';
+      final display = v['displayName'] ?? sn;
+      voiceLabels[sn] = locale.isNotEmpty ? '$display ($locale)' : display;
+      voiceSearchTexts[sn] = '$sn $display $locale'.toLowerCase();
+    }
+
+    String _voiceToLabel(String sn) => voiceLabels[sn] ?? sn;
+
+    return Autocomplete<String>(
+      initialValue: TextEditingValue(text: _voiceToLabel(s.edgeTtsVoice)),
+      optionsBuilder: (textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return _voices.map((v) => v['shortName'] ?? '');
+        }
+        final query = textEditingValue.text.toLowerCase();
+        return _voices
+            .where((v) {
+              final sn = v['shortName'] ?? '';
+              final searchText = voiceSearchTexts[sn] ?? sn.toLowerCase();
+              return searchText.contains(query);
+            })
+            .map((v) => v['shortName'] ?? '');
+      },
+      displayStringForOption: _voiceToLabel,
+      onSelected: (shortName) {
+        _update(sp, s, edgeTtsVoice: shortName);
+      },
+      fieldViewBuilder: (context, textEditingController, focusNode, onSubmitted) {
+        // Keep controller in sync with settings
+        if (textEditingController.text != _voiceToLabel(s.edgeTtsVoice) && !focusNode.hasFocus) {
+          textEditingController.text = _voiceToLabel(s.edgeTtsVoice);
+        }
+        return Container(
+          decoration: BoxDecoration(
+            color: shad.secondary,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: focusNode.hasFocus ? shad.primary : shad.input,
+            ),
+          ),
+          child: TextField(
+            controller: textEditingController,
+            focusNode: focusNode,
+            onSubmitted: (text) {
+              // On submit, try to match a voice; if no match, use raw text
+              final match = _voices.firstWhere(
+                (v) => _voiceToLabel(v['shortName'] ?? '') == text || v['shortName'] == text,
+                orElse: () => {'shortName': text},
+              );
+              _update(sp, s, edgeTtsVoice: match['shortName'] ?? text);
+            },
+            style: TextStyle(fontSize: 13, color: shad.foreground),
+            decoration: InputDecoration(
+              hintText: l10n.ttsEdgeTtsVoiceHint,
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: InputBorder.none,
+              suffixIcon: Icon(Icons.arrow_drop_down, size: 20, color: shad.mutedForeground),
+            ),
+          ),
+        );
+      },
     );
   }
 
