@@ -198,6 +198,21 @@ class AppLocalizations {
   String get ttsRvcSettings => _t('ttsRvcSettings');
   String get ttsPitchShift => _t('ttsPitchShift');
   String get ttsUploadVoice => _t('ttsUploadVoice');
+  String get ttsEdgeTtsVoice => _t('ttsEdgeTtsVoice');
+  String get ttsEdgeTtsVoiceHint => _t('ttsEdgeTtsVoiceHint');
+  String get ttsEdgeTtsPitch => _t('ttsEdgeTtsPitch');
+  String get ttsEdgeTtsRate => _t('ttsEdgeTtsRate');
+  String get ttsEdgeTtsVolume => _t('ttsEdgeTtsVolume');
+  String get ttsTestPlay => _t('ttsTestPlay');
+  String get ttsTestPlayHint => _t('ttsTestPlayHint');
+  String get ttsProviderEdgeTts => _t('ttsProviderEdgeTts');
+  String get ttsProviderGptSovits => _t('ttsProviderGptSovits');
+  String get ttsProviderRvc => _t('ttsProviderRvc');
+  String get ttsProviderAzure => _t('ttsProviderAzure');
+  String get ttsEdgeTtsSettings => _t('ttsEdgeTtsSettings');
+  String get ttsNoVoiceSelected => _t('ttsNoVoiceSelected');
+  String get ttsLoadingVoices => _t('ttsLoadingVoices');
+  String get ttsPlaying => _t('ttsPlaying');
   String get visionTitle => _t('visionTitle');
   String get visionPrompt => _t('visionPrompt');
   String get visionPromptHint => _t('visionPromptHint');
@@ -617,12 +632,27 @@ class AppLocalizations {
     'charVrmPetSettingsDesc': {'en': 'Path to the AI-Pet-Engine executable (MateEngineX.exe).', 'zh': 'AI-Pet-Engine 可执行文件 (MateEngineX.exe) 的路径。'},
     'ttsTitle':       {'en': 'TTS Settings',                      'zh': 'TTS 设置'},
     'ttsSubtitle':    {'en': 'Configure text-to-speech engine and voice settings', 'zh': '配置文字转语音引擎和语音设置'},
-    'ttsProvider':    {'en': 'TTS Provider Selection',            'zh': 'TTS 提供商选择'},
-    'ttsActiveVoice': {'en': 'Active Voice',                      'zh': '当前语音'},
-    'ttsEnableRVC':   {'en': 'Enable RVC',                        'zh': '启用 RVC'},
-    'ttsRvcSettings': {'en': 'RVC Settings',                      'zh': 'RVC 设置'},
-    'ttsPitchShift':  {'en': 'Pitch Shift (semitones):',          'zh': '音高偏移（半音）：'},
-    'ttsUploadVoice': {'en': 'Upload Voice Model',                'zh': '上传语音模型'},
+    'ttsProvider':    {'en': 'TTS Provider',                     'zh': 'TTS 提供商'},
+    'ttsActiveVoice':   {'en': 'Active Voice',                      'zh': '当前语音'},
+    'ttsEnableRVC':     {'en': 'Enable RVC',                        'zh': '启用 RVC'},
+    'ttsRvcSettings':   {'en': 'RVC Settings',                      'zh': 'RVC 设置'},
+    'ttsPitchShift':    {'en': 'Pitch Shift (semitones):',          'zh': '音调偏移（半音）：'},
+    'ttsUploadVoice':   {'en': 'Upload Voice Model',                'zh': '上传语音模型'},
+    'ttsEdgeTtsVoice':  {'en': 'Voice',                             'zh': '音色'},
+    'ttsEdgeTtsVoiceHint': {'en': 'Select voice...',                'zh': '选择音色...'},
+    'ttsEdgeTtsPitch':  {'en': 'Pitch',                             'zh': '音调'},
+    'ttsEdgeTtsRate':   {'en': 'Speed',                             'zh': '语速'},
+    'ttsEdgeTtsVolume': {'en': 'Volume',                            'zh': '音量'},
+    'ttsTestPlay':      {'en': 'Test Play',                         'zh': '试听'},
+    'ttsTestPlayHint':  {'en': 'Enter text to test TTS voice...',   'zh': '输入文字试听 TTS 语音...'},
+    'ttsProviderEdgeTts':  {'en': 'EdgeTTS',                        'zh': 'EdgeTTS'},
+    'ttsProviderGptSovits': {'en': 'GPT-SoVITS',                    'zh': 'GPT-SoVITS'},
+    'ttsProviderRvc':   {'en': 'RVC',                               'zh': 'RVC'},
+    'ttsProviderAzure': {'en': 'Azure TTS',                         'zh': 'Azure TTS'},
+    'ttsEdgeTtsSettings': {'en': 'EdgeTTS Settings',                'zh': 'EdgeTTS 设置'},
+    'ttsNoVoiceSelected':{'en': 'No voice selected',                'zh': '未选择语音'},
+    'ttsLoadingVoices': {'en': 'Loading voices...',                 'zh': '加载语音列表...'},
+    'ttsPlaying':       {'en': 'Playing...',                        'zh': '播放中...'},
     'visionTitle':        {'en': 'Vision / Screenshot',           'zh': '视觉 / 截图'},
     'visionPrompt':       {'en': 'Vision Prompt',                 'zh': '视觉提示词'},
     'visionPromptHint':   {'en': 'Describe the screen for the AI...', 'zh': '为 AI 描述屏幕内容...'},
