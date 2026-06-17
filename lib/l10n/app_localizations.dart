@@ -179,6 +179,9 @@ class AppLocalizations {
   String get charChromaKeyColor => _t('charChromaKeyColor');
   String get charPopoutOpen => _t('charPopoutOpen');
   String get charPopoutClose => _t('charPopoutClose');
+  String get charMouthScale => _t('charMouthScale');
+  String get charMouthScaleMin => _t('charMouthScaleMin');
+  String get charMouthScaleMax => _t('charMouthScaleMax');
   String get charOpenVrmPet => _t('charOpenVrmPet');
   String get charVrmPetActive => _t('charVrmPetActive');
   String get charVrmPetDesc => _t('charVrmPetDesc');
@@ -619,6 +622,9 @@ class AppLocalizations {
     'charChromaKeyColor':   {'en': 'Color',                   'zh': '颜色'},
     'charPopoutOpen':       {'en': 'Pop Out (OBS)',           'zh': '弹出窗口(OBS采集)'},
     'charPopoutClose':      {'en': 'Close Pop Out',           'zh': '关闭弹出窗口'},
+    'charMouthScale':       {'en': 'Mouth Scale',             'zh': '嘴型幅度'},
+    'charMouthScaleMin':    {'en': 'Min',                     'zh': '最小'},
+    'charMouthScaleMax':    {'en': 'Max',                     'zh': '最大'},
     'charOpenVrmPet':       {'en': 'Launch VRM Pet',          'zh': '启动 VRM 桌宠'},
     'charVrmPetActive':     {'en': 'VRM Pet Running',         'zh': 'VRM 桌宠运行中'},
     'charVrmPetDesc':       {'en': 'Launch AI-Pet-Engine as a standalone VRM desktop pet. The Unity engine will handle 3D model rendering on your desktop.', 'zh': '启动 AI-Pet-Engine 作为独立 VRM 桌面宠物。Unity 引擎将在桌面上渲染 3D 模型。'},
