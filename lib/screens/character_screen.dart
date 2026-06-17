@@ -36,6 +36,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
   bool _clickThrough = true;
   bool _mouseTracking = true;
   Color? _chromaKeyColor; // null = off; non-null = on with this color
+  double _mouthScaleMin = 0.0;
+  double _mouthScaleMax = 3.0;
   static const List<_ChromaKeyPreset> _chromaPresets = [
     _ChromaKeyPreset('Magenta', Color(0xFFFF00FF)),
     _ChromaKeyPreset('Blue', Color(0xFF0000FF)),
@@ -54,6 +56,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     _refreshModels();
     _ensureDefaults();
     _loadChromaColor();
+    _syncMouthScaleFromSettings();
     VrmPetBridge.loadPath();
     VrmPetBridge.runningNotifier.addListener(_onVrmPetStateChanged);
   }
@@ -507,6 +510,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
             ),
           ),
+          // ── Mouth Scale slider (only when pop-out is running) ──
+          if (OverlayService.instance.isPopoutRunning)
+            _mouthScaleControl(context, sp, s),
           // ── Live2D Pet: Open Pet button ──
           if (isLive2D)
             OutlinedButton.icon(
@@ -794,6 +800,96 @@ class _CharacterScreenState extends State<CharacterScreen> {
           child: Slider(value: value, min: min, max: max,
             divisions: ((max - min) / step).round(),
             onChanged: onChanged),
+        ),
+      ]),
+    );
+  }
+
+  /// Mouth scale control: editable min/max text fields + slider.
+  /// Only shown when pop-out is running. Value persisted to settings.
+  Widget _mouthScaleControl(BuildContext context, SettingsProvider sp, AppSettings s) {
+    final shad = ShadTheme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final overlay = OverlayService.instance;
+    final currentScale = overlay.mouthScale;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(l10n.charMouthScale, style: TextStyle(fontSize: 11, color: shad.mutedForeground)),
+        const SizedBox(height: 4),
+        Row(children: [
+          // Min input
+          SizedBox(
+            width: 52,
+            child: TextField(
+              controller: TextEditingController(text: _mouthScaleMin.toStringAsFixed(1)),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: TextStyle(fontSize: 11, color: shad.foreground),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                labelText: l10n.charMouthScaleMin,
+                labelStyle: TextStyle(fontSize: 9, color: shad.mutedForeground),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: shad.border)),
+              ),
+              onSubmitted: (v) {
+                final val = double.tryParse(v);
+                if (val != null && val < _mouthScaleMax) {
+                  setState(() => _mouthScaleMin = val);
+                }
+              },
+            ),
+          ),
+          // Slider
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: shad.primary,
+                inactiveTrackColor: shad.secondary,
+                thumbColor: shad.primary,
+                overlayColor: shad.primary.withAlpha(40),
+                trackHeight: 4,
+              ),
+              child: Slider(
+                value: currentScale.clamp(_mouthScaleMin, _mouthScaleMax),
+                min: _mouthScaleMin,
+                max: _mouthScaleMax,
+                onChanged: (v) {
+                  overlay.mouthScale = v;
+                  _update(sp, s, mouthScale: v);
+                },
+              ),
+            ),
+          ),
+          // Max input
+          SizedBox(
+            width: 52,
+            child: TextField(
+              controller: TextEditingController(text: _mouthScaleMax.toStringAsFixed(1)),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: TextStyle(fontSize: 11, color: shad.foreground),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                labelText: l10n.charMouthScaleMax,
+                labelStyle: TextStyle(fontSize: 9, color: shad.mutedForeground),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: shad.border)),
+              ),
+              onSubmitted: (v) {
+                final val = double.tryParse(v);
+                if (val != null && val > _mouthScaleMin) {
+                  setState(() => _mouthScaleMax = val);
+                }
+              },
+            ),
+          ),
+        ]),
+        // Current value display
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text('${currentScale.toStringAsFixed(2)}',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: shad.primary)),
         ),
       ]),
     );
@@ -1224,6 +1320,14 @@ class _CharacterScreenState extends State<CharacterScreen> {
           setState(() => _chromaKeyColor = Color(0xFF000000 | parsed));
         }
       }
+    } catch (_) {}
+  }
+
+  /// Sync mouthScale from persisted settings into OverlayService.
+  void _syncMouthScaleFromSettings() {
+    try {
+      final sp = context.read<SettingsProvider>();
+      OverlayService.instance.mouthScale = sp.settings.mouthScale;
     } catch (_) {}
   }
 
