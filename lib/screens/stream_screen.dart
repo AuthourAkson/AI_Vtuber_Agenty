@@ -9,6 +9,7 @@ import '../providers/settings_provider.dart';
 import '../services/bilibili_chat_service.dart';
 import '../services/tts_service.dart';
 import '../services/overlay_service.dart';
+import '../services/live2d_server.dart';
 
 /// Bilibili直播Stream页面
 /// 三列布局: 连接面板+直播控制 / 弹幕实时列表 / Setlist编辑器
@@ -71,11 +72,16 @@ class _StreamScreenState extends State<StreamScreen> {
           );
 
           // Synthesize + compute real audio volume sequence + play
-          final (_, volumes) = await tts.synthesizeWithVolumes(aiText);
+          final (audioPath, volumes) = await tts.synthesizeWithVolumes(aiText);
 
-          // Start mouth animation on pop-out overlay with real audio data
           final overlay = OverlayService.instance;
           if (overlay.isPopoutRunning) {
+            // VRM: push audio URL for real-time Web Audio API analysis
+            // Live2D: start Dart timer with precomputed volumes
+            if (audioPath != null) {
+              final audioUrl = Live2DServer.toModelUrl(audioPath);
+              overlay.pushAudioToPopout(audioUrl);
+            }
             overlay.startMouthAnimation(volumes);
           }
 
