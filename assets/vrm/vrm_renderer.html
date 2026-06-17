@@ -365,6 +365,71 @@ window.vrmSetVolume = function(volume) {
   currentVolume = typeof volume === 'number' ? volume : 0;
 };
 
+// ─── Real-time audio analysis (matches LocalAIVtuber2's approach) ───
+let audioEl = null;
+let audioCtx = null;
+let analyserNode = null;
+let animFrameId = null;
+
+window.vrmPlayAudio = function(audioUrl) {
+  // Stop previous audio
+  if (audioEl) {
+    audioEl.pause();
+    audioEl.src = '';
+  }
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+  currentVolume = 0;
+
+  if (!audioUrl) return;
+
+  try {
+    // Create or reuse AudioContext
+    if (!audioCtx || audioCtx.state === 'closed') {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+
+    audioEl = new Audio(audioUrl);
+    audioEl.crossOrigin = 'anonymous';
+    audioEl.volume = 0; // silent — audio plays via Flutter audioplayers
+
+    const source = audioCtx.createMediaElementSource(audioEl);
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 256;
+    const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+    source.connect(analyserNode);
+    analyserNode.connect(audioCtx.destination); // needed for browser to process the graph
+
+    // Per-frame volume update (matching LAV2 ttsManager.ts)
+    const updateVolume = () => {
+      analyserNode.getByteFrequencyData(dataArray);
+      const sum = dataArray.reduce((a, b) => a + b, 0);
+      currentVolume = sum / 15096; // exact LAV2 normalization
+      if (!audioEl.paused) {
+        animFrameId = requestAnimationFrame(updateVolume);
+      } else {
+        currentVolume = 0;
+      }
+    };
+
+    audioEl.onended = () => {
+      currentVolume = 0;
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+    };
+
+    audioEl.play();
+    updateVolume();
+  } catch (e) {
+    console.warn('[VRM] Audio analysis failed:', e);
+  }
+};
+
 window.vrmSetBackground = function(colorHex) {
   if (!colorHex || colorHex === 'transparent') {
     // Transparent mode: clear scene background, use alpha clear color
