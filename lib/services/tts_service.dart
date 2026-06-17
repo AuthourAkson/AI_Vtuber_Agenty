@@ -18,9 +18,6 @@ class TTSService {
   String _volume = '+0%';
   final _cacheDir = p.join(StorageService.profileDir, 'tts_cache');
 
-  /// Mouth volume amplification factor (matches AUAK_Live2D_Desktop_AI).
-  static const double mouthAmplify = 1.8;
-
   TTSService(this._storage) {
     _ensureCacheDir();
   }
@@ -184,7 +181,7 @@ class TTSService {
           sumSq += (sample * sample).toDouble();
         }
         final rms = sqrt(sumSq / samplesPerChunk);
-        final normalized = (rms / 32768.0 * mouthAmplify).clamp(0.0, 1.0);
+        final normalized = (rms / 32768.0).clamp(0.0, 1.0);
         volumes.add(normalized);
       }
 
