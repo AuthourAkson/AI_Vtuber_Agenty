@@ -99,6 +99,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     double? live2DXPosition, double? live2DYPosition, double? live2DScale,
     String? selectedLive2DModel,
     String? selectedVRMModel,
+    double? mouthScale,
   }) {
     sp.saveSettings(AppSettings(
       renderModel: renderModel ?? s.renderModel,
@@ -108,6 +109,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
       live2DScale: live2DScale ?? s.live2DScale,
       selectedLive2DModel: selectedLive2DModel ?? s.selectedLive2DModel,
       selectedVRMModel: selectedVRMModel ?? s.selectedVRMModel,
+      mouthScale: mouthScale ?? s.mouthScale,
       systemPrompt: s.systemPrompt,
       enableMemoryRetrieval: s.enableMemoryRetrieval,
       keepModelLoaded: s.keepModelLoaded,
