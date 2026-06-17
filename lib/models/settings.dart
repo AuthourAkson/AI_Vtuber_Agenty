@@ -29,6 +29,7 @@ class AppSettings {
   double live2DYPosition;
   double live2DScale;
   bool use3D; // true = VRM 3D, false = Live2D 2D
+  double mouthScale; // mouth amplification for TTS lip sync
 
   // API Relay
   String apiRelayBaseUrl;
@@ -67,6 +68,7 @@ class AppSettings {
     this.live2DYPosition = 51,
     this.live2DScale = 0.16,
     this.use3D = false,
+    this.mouthScale = 1.8,
     this.apiRelayBaseUrl = '',
     this.apiRelayApiKey = '',
     this.apiRelayModel = '',
@@ -101,6 +103,7 @@ class AppSettings {
       live2DYPosition: (json['frontend.character.live2D.yPosition'] as num?)?.toDouble() ?? 51,
       live2DScale: (json['frontend.character.live2D.scale'] as num?)?.toDouble() ?? 0.16,
       use3D: json['frontend.character.3d2dSwitch'] as bool? ?? false,
+      mouthScale: (json['frontend.character.mouthScale'] as num?)?.toDouble() ?? 1.8,
       apiRelayBaseUrl: json['api_relay']?['base_url'] as String? ?? '',
       apiRelayApiKey: json['api_relay']?['api_key'] as String? ?? '',
       apiRelayModel: json['api_relay']?['model'] as String? ?? '',
@@ -136,6 +139,7 @@ class AppSettings {
     double? live2DYPosition,
     double? live2DScale,
     bool? use3D,
+    double? mouthScale,
     String? apiRelayBaseUrl,
     String? apiRelayApiKey,
     String? apiRelayModel,
@@ -168,6 +172,7 @@ class AppSettings {
       live2DYPosition: live2DYPosition ?? this.live2DYPosition,
       live2DScale: live2DScale ?? this.live2DScale,
       use3D: use3D ?? this.use3D,
+      mouthScale: mouthScale ?? this.mouthScale,
       apiRelayBaseUrl: apiRelayBaseUrl ?? this.apiRelayBaseUrl,
       apiRelayApiKey: apiRelayApiKey ?? this.apiRelayApiKey,
       apiRelayModel: apiRelayModel ?? this.apiRelayModel,
@@ -202,6 +207,7 @@ class AppSettings {
     'frontend.character.live2D.yPosition': live2DYPosition,
     'frontend.character.live2D.scale': live2DScale,
     'frontend.character.3d2dSwitch': use3D,
+    'frontend.character.mouthScale': mouthScale,
     'api_relay': {
       'base_url': apiRelayBaseUrl,
       'api_key': apiRelayApiKey,
