@@ -231,9 +231,19 @@ class OverlayService {
   int _mouthIndex = 0;
   List<double> _mouthVolumes = const [];
 
-  /// Dynamic mouth scale multiplier applied in the animation loop.
+  /// Dynamic mouth scale multiplier.
+  /// Live2D: amplifies precomputed RMS volumes in the animation timer.
+  /// VRM: pushed to renderer as speakAnimation.weight via vrmSetMouthScale.
   /// Adjustable at runtime from the Character page slider.
-  double mouthScale = 1.0;
+  double _mouthScale = 3.0;
+  double get mouthScale => _mouthScale;
+  set mouthScale(double v) {
+    _mouthScale = v;
+    // Push to VRM pop-out immediately for real-time feedback
+    if (isPopoutRunning && _popoutIs3D) {
+      executePopoutScript('vrmSetMouthScale($v);');
+    }
+  }
 
   /// Whether a mouth animation is currently running.
   bool get isMouthAnimating => _mouthTimer != null;
