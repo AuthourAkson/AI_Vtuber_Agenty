@@ -181,7 +181,9 @@ class TTSService {
           sumSq += (sample * sample).toDouble();
         }
         final rms = sqrt(sumSq / samplesPerChunk);
-        final normalized = (rms / 32768.0).clamp(0.0, 1.0);
+        // Normalize to LAV2-compatible scale: divisor ~2000 matches Web Audio API
+        // getByteFrequencyData() sum/15096 sensitivity (LAV2's approach)
+        final normalized = (rms / 2000.0).clamp(0.0, 1.0);
         volumes.add(normalized);
       }
 
