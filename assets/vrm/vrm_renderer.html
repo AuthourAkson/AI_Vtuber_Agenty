@@ -309,9 +309,10 @@ function animate() {
     if (vrm) vrm.update(delta);
   }
 
-  // Speak animation driven by volume
+  // Speak animation driven by volume (proportional mouth opening)
   if (speakAnimation) {
-    if (currentVolume > 0.1) {
+    speakAnimation.weight = currentVolume;
+    if (currentVolume > 0.05) {
       if (!speakAnimation.isRunning()) speakAnimation.play();
     } else {
       if (speakAnimation.isRunning()) speakAnimation.stop();
