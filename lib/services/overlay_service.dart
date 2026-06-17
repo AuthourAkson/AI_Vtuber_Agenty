@@ -228,16 +228,52 @@ class OverlayService {
   // ═══ Mouth sync animation ═══
 
   Timer? _mouthTimer;
+  int _mouthIndex = 0;
+  List<double> _mouthVolumes = const [];
 
   /// Whether a mouth animation is currently running.
   bool get isMouthAnimating => _mouthTimer != null;
 
-  /// Start mouth animation on the pop-out window.
-  /// Drives Live2D mouth open parameter or VRM speak volume in sync with TTS.
-  void startMouthAnimation() {
-    if (_mouthTimer != null) return; // already running
+  /// Start mouth animation driven by real audio volume data.
+  /// [volumes] — precomputed RMS values [0.0, 1.0] at ~50ms intervals.
+  /// Pass empty list for fallback sine-wave animation.
+  void startMouthAnimation([List<double> volumes = const []]) {
+    _stopMouthAnimation(); // cancel any previous animation
     if (!isPopoutRunning) return;
 
+    if (volumes.isEmpty) {
+      // Fallback: simple sine wave (no audio analysis available)
+      _startSineWaveAnimation();
+      return;
+    }
+
+    _mouthVolumes = volumes;
+    _mouthIndex = 0;
+
+    // 50ms intervals = 20 FPS (matches AUAK_Live2D_Desktop_AI chunk_ms=50)
+    _mouthTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (!isPopoutRunning) {
+        _stopMouthAnimation();
+        return;
+      }
+      if (_mouthIndex >= _mouthVolumes.length) {
+        _stopMouthAnimation(); // sequence complete
+        return;
+      }
+
+      final value = _mouthVolumes[_mouthIndex];
+      _mouthIndex++;
+
+      if (_popoutIs3D) {
+        executePopoutScript('vrmSetVolume($value);');
+      } else {
+        executePopoutScript('setMouthOpen($value);');
+      }
+    });
+  }
+
+  /// Fallback sine-wave animation when no audio volume data is available.
+  void _startSineWaveAnimation() {
     final random = Random();
     double phase = 0;
 
@@ -246,16 +282,13 @@ class OverlayService {
         _stopMouthAnimation();
         return;
       }
-      // Natural-looking mouth movement: sine wave with random variation
       phase += 0.2 + random.nextDouble() * 0.4;
       final value = ((sin(phase) * 0.5 + 0.5) * 0.85 + random.nextDouble() * 0.15)
           .clamp(0.0, 1.0);
 
       if (_popoutIs3D) {
-        // VRM: push volume to drive built-in speak animation
         executePopoutScript('vrmSetVolume($value);');
       } else {
-        // Live2D: direct mouth parameter control
         executePopoutScript('setMouthOpen($value);');
       }
     });
@@ -265,6 +298,8 @@ class OverlayService {
   void _stopMouthAnimation() {
     _mouthTimer?.cancel();
     _mouthTimer = null;
+    _mouthVolumes = const [];
+    _mouthIndex = 0;
     // Reset mouth to closed
     if (isPopoutRunning) {
       if (_popoutIs3D) {
