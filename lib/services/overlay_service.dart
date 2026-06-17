@@ -233,7 +233,7 @@ class OverlayService {
 
   /// Dynamic mouth scale multiplier applied in the animation loop.
   /// Adjustable at runtime from the Character page slider.
-  double mouthScale = 1.8;
+  double mouthScale = 1.0;
 
   /// Whether a mouth animation is currently running.
   bool get isMouthAnimating => _mouthTimer != null;
