@@ -136,6 +136,9 @@ class TTSService {
   /// Stream of player state changes.
   Stream<PlayerState> get onPlayerStateChanged => _player.onPlayerStateChanged;
 
+  /// Stream that fires when audio playback completes naturally.
+  Stream<void> get onPlayerComplete => _player.onPlayerComplete;
+
   /// List available edge-tts voices.
   Future<List<Map<String, String>>> listVoices() async {
     try {
