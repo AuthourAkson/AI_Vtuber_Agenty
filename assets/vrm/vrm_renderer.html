@@ -366,16 +366,16 @@ window.vrmSetVolume = function(volume) {
 };
 
 // ─── Real-time audio analysis (matches LocalAIVtuber2's approach) ───
-let audioEl = null;
 let audioCtx = null;
 let analyserNode = null;
 let animFrameId = null;
+let sourceNode = null;
 
-window.vrmPlayAudio = function(audioUrl) {
-  // Stop previous audio
-  if (audioEl) {
-    audioEl.pause();
-    audioEl.src = '';
+window.vrmPlayAudio = async function(audioUrl) {
+  // Stop previous analysis
+  if (sourceNode) {
+    try { sourceNode.stop(); } catch(_) {}
+    sourceNode = null;
   }
   if (animFrameId) {
     cancelAnimationFrame(animFrameId);
@@ -386,47 +386,63 @@ window.vrmPlayAudio = function(audioUrl) {
   if (!audioUrl) return;
 
   try {
-    // Create or reuse AudioContext
+    // Create or reuse AudioContext (must be user-gesture-resumed)
     if (!audioCtx || audioCtx.state === 'closed') {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
     if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+      await audioCtx.resume();
     }
+    console.log('[VRM] AudioContext state:', audioCtx.state);
 
-    audioEl = new Audio(audioUrl);
-    audioEl.crossOrigin = 'anonymous';
-    audioEl.volume = 0; // silent — audio plays via Flutter audioplayers
+    // Fetch and decode audio (bypasses autoplay restrictions)
+    const response = await fetch(audioUrl);
+    if (!response.ok) throw new Error('Fetch failed: ' + response.status);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    console.log('[VRM] Audio decoded, duration:', audioBuffer.duration, 's');
 
-    const source = audioCtx.createMediaElementSource(audioEl);
+    // Create analyser
     analyserNode = audioCtx.createAnalyser();
     analyserNode.fftSize = 256;
     const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
-    source.connect(analyserNode);
-    analyserNode.connect(audioCtx.destination); // needed for browser to process the graph
+    // Buffer source → analyser → gain(0) → destination (silent analysis)
+    sourceNode = audioCtx.createBufferSource();
+    sourceNode.buffer = audioBuffer;
 
-    // Per-frame volume update (matching LAV2 ttsManager.ts)
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0; // silent — audio output via Flutter audioplayers
+
+    sourceNode.connect(analyserNode);
+    analyserNode.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    // Per-frame volume update (matching LAV2 ttsManager.ts exactly)
     const updateVolume = () => {
       analyserNode.getByteFrequencyData(dataArray);
       const sum = dataArray.reduce((a, b) => a + b, 0);
       currentVolume = sum / 15096; // exact LAV2 normalization
-      if (!audioEl.paused) {
+      // Check if source is still playing (0 = UNSCHEDULED, 1 = SCHEDULED, 2 = PLAYING, 3 = FINISHED)
+      if (sourceNode && sourceNode.playbackState !== 3) {
         animFrameId = requestAnimationFrame(updateVolume);
       } else {
         currentVolume = 0;
       }
     };
 
-    audioEl.onended = () => {
+    sourceNode.onended = () => {
+      console.log('[VRM] Audio analysis complete');
       currentVolume = 0;
       if (animFrameId) cancelAnimationFrame(animFrameId);
     };
 
-    audioEl.play();
+    sourceNode.start(0);
     updateVolume();
+    console.log('[VRM] Analysis started for:', audioUrl);
   } catch (e) {
-    console.warn('[VRM] Audio analysis failed:', e);
+    console.error('[VRM] Audio analysis failed:', e);
+    currentVolume = 0;
   }
 };
 
