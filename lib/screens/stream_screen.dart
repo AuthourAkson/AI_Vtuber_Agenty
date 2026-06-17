@@ -8,6 +8,7 @@ import '../providers/chat_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/bilibili_chat_service.dart';
 import '../services/tts_service.dart';
+import '../services/overlay_service.dart';
 
 /// Bilibili直播Stream页面
 /// 三列布局: 连接面板+直播控制 / 弹幕实时列表 / Setlist编辑器
@@ -23,6 +24,7 @@ class _StreamScreenState extends State<StreamScreen> {
   final _scrollController = ScrollController();
   final _editDanmakuController = TextEditingController();
   late LiveStreamProvider _streamProvider;
+  StreamSubscription<void>? _ttsCompleteSub;
 
   @override
   void initState() {
@@ -67,8 +69,27 @@ class _StreamScreenState extends State<StreamScreen> {
             rate: s.edgeTtsRate,
             volume: s.edgeTtsVolume,
           );
-          // Synthesize and play (fire and forget)
-          tts.synthesizeAndPlay(aiText);
+
+          // Start mouth animation on pop-out overlay if open
+          final overlay = OverlayService.instance;
+          if (overlay.isPopoutRunning) {
+            overlay.startMouthAnimation();
+          }
+
+          // Synthesize and play
+          final ok = await tts.synthesizeAndPlay(aiText);
+
+          // Listen for playback completion to stop mouth animation
+          if (ok && overlay.isPopoutRunning) {
+            _ttsCompleteSub?.cancel();
+            _ttsCompleteSub = tts.onPlayerComplete.listen((_) {
+              overlay.stopMouthAnimation();
+              _ttsCompleteSub?.cancel();
+              _ttsCompleteSub = null;
+            });
+          } else {
+            overlay.stopMouthAnimation();
+          }
         }
       }
     };
@@ -86,6 +107,7 @@ class _StreamScreenState extends State<StreamScreen> {
 
   @override
   void dispose() {
+    _ttsCompleteSub?.cancel();
     _roomIdController.dispose();
     _scrollController.dispose();
     _editDanmakuController.dispose();
