@@ -26,7 +26,7 @@ class OverlayService {
   final Live2DOverlayFfi _ffi = Live2DOverlayFfi.instance;
 
   /// 启动Live2D角色透明Overlay
-  /// [modelPath] 磁盘路径, 如 D:\AiVtuber_Agent_profile\models\live2d\xxx
+  /// [modelPath] 磁盘路径, 如 D:\\AiVtuber_Agent_profile\\models\\live2d\\xxx
   /// [scale] 缩放比例, 默认0.15
   Future<bool> startLive2D({
     required String modelPath,
@@ -182,15 +182,22 @@ class OverlayService {
       _ffi.setClickThrough(_popoutId, false);
       _ffi.setTopMost(_popoutId, false);
 
-      // VRM: load model + set background after scene initializes
+      // VRM: load model + set background + sync mouthScale after scene initializes
       if (use3D) {
         final safeModelUrl = modelUrl.replaceAll("'", "\\'");
+        final scale = _mouthScale; // capture current value
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (_popoutId > 0) {
             if (bgHex != null) {
               executePopoutScript("vrmSetBackground('#$bgHex');");
             }
             executePopoutScript("vrmLoadModel('$safeModelUrl');");
+            // Sync mouth scale after model loads
+            Future.delayed(const Duration(milliseconds: 2000), () {
+              if (_popoutId > 0) {
+                executePopoutScript('vrmSetMouthScale($scale);');
+              }
+            });
           }
         });
       }

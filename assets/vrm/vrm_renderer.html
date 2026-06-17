@@ -230,13 +230,16 @@ async function loadModel(modelUrl) {
     if (vrm.expressionManager) {
       const speakTrackName = vrm.expressionManager.getExpressionTrackName('aa');
       if (speakTrackName) {
+        // Build initial speak anim, then scale immediately via rebuild
         const speakTrack = new THREE.NumberKeyframeTrack(
           speakTrackName,
-          [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.9],
-          [0.0, 0.3, 0.0, 0.3, 0.1, 0.1, 0.3, 0.1, 0.1, 0.2]
+          _baseSpeakTimes,
+          _baseSpeakValues
         );
         const clip = new THREE.AnimationClip('SpeakAnim', 1.9, [speakTrack]);
         speakAnimation = mixer.clipAction(clip);
+        // Apply current mouthScale to initial animation
+        _rebuildSpeakAnimation(vrmMouthScale);
       }
     }
 
@@ -321,9 +324,8 @@ function animate() {
     if (vrm) vrm.update(delta);
   }
 
-  // Speak animation driven by volume + weight-scaled by mouthScale
+  // Speak animation driven by volume (binary play/stop, keyframes scaled by mouthScale)
   if (speakAnimation) {
-    speakAnimation.weight = vrmMouthScale;
     if (currentVolume > 0.02) {
       if (!speakAnimation.isRunning()) speakAnimation.play();
     } else {
@@ -378,10 +380,35 @@ window.vrmSetVolume = function(volume) {
   currentVolume = typeof volume === 'number' ? volume : 0;
 };
 
-// Dynamic mouth scale — multiplies speak animation keyframe values
+// Dynamic mouth scale — rebuilds speak animation with scaled keyframe values
 let vrmMouthScale = 3.0;
+const _baseSpeakValues = [0.0, 0.3, 0.0, 0.3, 0.1, 0.1, 0.3, 0.1, 0.1, 0.2];
+const _baseSpeakTimes  = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.9];
+
+function _rebuildSpeakAnimation(scale) {
+  if (!vrm || !mixer || !vrm.expressionManager) return;
+  const trackName = vrm.expressionManager.getExpressionTrackName('aa');
+  if (!trackName) return;
+
+  // Stop and remove old speak animation
+  if (speakAnimation) {
+    speakAnimation.stop();
+    mixer.uncacheClip(speakAnimation.getClip());
+    speakAnimation = null;
+  }
+
+  const scaledValues = _baseSpeakValues.map(function(v) {
+    return Math.min(v * scale, 1.0);
+  });
+
+  const track = new THREE.NumberKeyframeTrack(trackName, _baseSpeakTimes, scaledValues);
+  const clip = new THREE.AnimationClip('SpeakAnim', 1.9, [track]);
+  speakAnimation = mixer.clipAction(clip);
+}
+
 window.vrmSetMouthScale = function(scale) {
   vrmMouthScale = Math.max(0.1, Number(scale) || 3.0);
+  _rebuildSpeakAnimation(vrmMouthScale);
 };
 
 // ─── Real-time audio analysis (matches LocalAIVtuber2's approach) ───
