@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui' show Color;
 import 'live2d_overlay_ffi.dart';
 import 'live2d_server.dart';
@@ -127,6 +128,7 @@ class OverlayService {
   // ═══ Character Pop Out (for OBS capture) ═══
 
   int _popoutId = 0;
+  bool _popoutIs3D = false; // true when pop-out is VRM, false for Live2D
 
   /// Whether a Character Pop Out window is currently open.
   bool get isPopoutRunning => _popoutId > 0 && _ffi.isAlive(_popoutId);
@@ -175,6 +177,7 @@ class OverlayService {
     }
 
     _popoutId = _ffi.create(url, x: x, y: y, width: width, height: height);
+    _popoutIs3D = use3D;
     if (_popoutId > 0) {
       _ffi.setClickThrough(_popoutId, false);
       _ffi.setTopMost(_popoutId, false);
@@ -213,10 +216,65 @@ class OverlayService {
 
   /// Close the Character Pop Out.
   Future<void> stopPopout() async {
+    _stopMouthAnimation();
     if (_popoutId > 0) {
       _ffi.destroy(_popoutId);
       _popoutId = 0;
+      _popoutIs3D = false;
       print('[OverlayService] Pop-out destroyed');
     }
   }
+
+  // ═══ Mouth sync animation ═══
+
+  Timer? _mouthTimer;
+
+  /// Whether a mouth animation is currently running.
+  bool get isMouthAnimating => _mouthTimer != null;
+
+  /// Start mouth animation on the pop-out window.
+  /// Drives Live2D mouth open parameter or VRM speak volume in sync with TTS.
+  void startMouthAnimation() {
+    if (_mouthTimer != null) return; // already running
+    if (!isPopoutRunning) return;
+
+    final random = Random();
+    double phase = 0;
+
+    _mouthTimer = Timer.periodic(const Duration(milliseconds: 80), (timer) {
+      if (!isPopoutRunning) {
+        _stopMouthAnimation();
+        return;
+      }
+      // Natural-looking mouth movement: sine wave with random variation
+      phase += 0.2 + random.nextDouble() * 0.4;
+      final value = ((sin(phase) * 0.5 + 0.5) * 0.85 + random.nextDouble() * 0.15)
+          .clamp(0.0, 1.0);
+
+      if (_popoutIs3D) {
+        // VRM: push volume to drive built-in speak animation
+        executePopoutScript('vrmSetVolume($value);');
+      } else {
+        // Live2D: direct mouth parameter control
+        executePopoutScript('setMouthOpen($value);');
+      }
+    });
+  }
+
+  /// Stop mouth animation and reset mouth to closed.
+  void _stopMouthAnimation() {
+    _mouthTimer?.cancel();
+    _mouthTimer = null;
+    // Reset mouth to closed
+    if (isPopoutRunning) {
+      if (_popoutIs3D) {
+        executePopoutScript('vrmSetVolume(0);');
+      } else {
+        executePopoutScript('setMouthOpen(0);');
+      }
+    }
+  }
+
+  /// Public stop that can be called from outside (e.g., when TTS finishes).
+  void stopMouthAnimation() => _stopMouthAnimation();
 }
