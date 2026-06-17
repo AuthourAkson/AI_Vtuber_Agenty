@@ -3,8 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--SpeakTrackName 调控嘴部系数用的
+     第一个数组是时间轴（秒），第二个是嘴张开度（expression weight，0=闭 1=全开）：
+
+    时间:  0.0  0.2  0.4  0.6  0.8  1.0  1.2  1.4  1.6  1.9
+    张嘴:  0.0  0.9  0.0  0.9  0.3  0.3  0.9  0.3  0.3  0.6
+           ↑    ↑    ↑    ↑    ↑    ↑    ↑    ↑    ↑    ↑
+          闭   张   闭   张   微   微   张   微   微   半
+
+    这两两配对就是关键帧——比如 (0.0s, 0.0) 意思是"在 0 秒时嘴巴闭着"，(0.2s, 0.9) 意思是"0.2 秒时嘴巴全开"，中间自动插值过渡。
+
+    整个 1.9 秒的动画循环播放，就是一张一合的说话效果。你要调的话改第二行就行：数字越大嘴越张，0 是完全闭。-->
 <title>VRM 3D Renderer</title>
 <style>
+  
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     width: 100%; height: 100%;
@@ -221,7 +233,7 @@ async function loadModel(modelUrl) {
         const speakTrack = new THREE.NumberKeyframeTrack(
           speakTrackName,
           [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.9],
-          [0.0, 0.9, 0.0, 0.9, 0.3, 0.3, 0.9, 0.3, 0.3, 0.6]
+          [0.0, 0.3, 0.0, 0.3, 0.1, 0.1, 0.3, 0.1, 0.1, 0.2]
         );
         const clip = new THREE.AnimationClip('SpeakAnim', 1.9, [speakTrack]);
         speakAnimation = mixer.clipAction(clip);
@@ -309,8 +321,9 @@ function animate() {
     if (vrm) vrm.update(delta);
   }
 
-  // Speak animation driven by volume (binary play/stop matching LAV2)
+  // Speak animation driven by volume + weight-scaled by mouthScale
   if (speakAnimation) {
+    speakAnimation.weight = vrmMouthScale;
     if (currentVolume > 0.02) {
       if (!speakAnimation.isRunning()) speakAnimation.play();
     } else {
@@ -363,6 +376,12 @@ window.vrmLoadModel = function(modelUrl) {
 
 window.vrmSetVolume = function(volume) {
   currentVolume = typeof volume === 'number' ? volume : 0;
+};
+
+// Dynamic mouth scale — multiplies speak animation keyframe values
+let vrmMouthScale = 3.0;
+window.vrmSetMouthScale = function(scale) {
+  vrmMouthScale = Math.max(0.1, Number(scale) || 3.0);
 };
 
 // ─── Real-time audio analysis (matches LocalAIVtuber2's approach) ───
