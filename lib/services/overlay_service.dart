@@ -231,6 +231,10 @@ class OverlayService {
   int _mouthIndex = 0;
   List<double> _mouthVolumes = const [];
 
+  /// Dynamic mouth scale multiplier applied in the animation loop.
+  /// Adjustable at runtime from the Character page slider.
+  double mouthScale = 1.8;
+
   /// Whether a mouth animation is currently running.
   bool get isMouthAnimating => _mouthTimer != null;
 
@@ -261,8 +265,9 @@ class OverlayService {
         return;
       }
 
-      final value = _mouthVolumes[_mouthIndex];
+      final rawValue = _mouthVolumes[_mouthIndex];
       _mouthIndex++;
+      final value = (rawValue * mouthScale).clamp(0.0, 1.0);
 
       if (_popoutIs3D) {
         executePopoutScript('vrmSetVolume($value);');
