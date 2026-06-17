@@ -241,9 +241,14 @@ class OverlayService {
   /// Start mouth animation driven by real audio volume data.
   /// [volumes] — precomputed RMS values [0.0, 1.0] at ~50ms intervals.
   /// Pass empty list for fallback sine-wave animation.
+  /// NOTE: VRM pop-out uses its own Web Audio API analysis (vrmPlayAudio),
+  /// so this timer is only used for Live2D.
   void startMouthAnimation([List<double> volumes = const []]) {
     _stopMouthAnimation(); // cancel any previous animation
     if (!isPopoutRunning) return;
+
+    // VRM handles its own audio analysis via vrmPlayAudio — skip timer
+    if (_popoutIs3D) return;
 
     if (volumes.isEmpty) {
       // Fallback: simple sine wave (no audio analysis available)
@@ -317,4 +322,15 @@ class OverlayService {
 
   /// Public stop that can be called from outside (e.g., when TTS finishes).
   void stopMouthAnimation() => _stopMouthAnimation();
+
+  /// Push TTS audio URL to the pop-out renderer for real-time analysis.
+  /// VRM: injects vrmPlayAudio(url) → Web Audio API → currentVolume → speak anim.
+  /// Live2D: no-op (Live2D uses the Dart volume timer instead).
+  void pushAudioToPopout(String audioUrl) {
+    if (!isPopoutRunning) return;
+    if (_popoutIs3D) {
+      final safeUrl = audioUrl.replaceAll("'", "\\'");
+      executePopoutScript("vrmPlayAudio('$safeUrl');");
+    }
+  }
 }
