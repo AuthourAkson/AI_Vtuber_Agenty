@@ -70,25 +70,23 @@ class _StreamScreenState extends State<StreamScreen> {
             volume: s.edgeTtsVolume,
           );
 
-          // Start mouth animation on pop-out overlay if open
+          // Synthesize + compute real audio volume sequence + play
+          final (_, volumes) = await tts.synthesizeWithVolumes(aiText);
+
+          // Start mouth animation on pop-out overlay with real audio data
           final overlay = OverlayService.instance;
           if (overlay.isPopoutRunning) {
-            overlay.startMouthAnimation();
+            overlay.startMouthAnimation(volumes);
           }
 
-          // Synthesize and play
-          final ok = await tts.synthesizeAndPlay(aiText);
-
           // Listen for playback completion to stop mouth animation
-          if (ok && overlay.isPopoutRunning) {
+          if (volumes.isNotEmpty && overlay.isPopoutRunning) {
             _ttsCompleteSub?.cancel();
             _ttsCompleteSub = tts.onPlayerComplete.listen((_) {
               overlay.stopMouthAnimation();
               _ttsCompleteSub?.cancel();
               _ttsCompleteSub = null;
             });
-          } else {
-            overlay.stopMouthAnimation();
           }
         }
       }
