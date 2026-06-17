@@ -121,17 +121,23 @@ class TTSService {
   /// Synthesize to file, compute mouth volume sequence, and play.
   /// Returns (audioPath, volumeSequence) — volumeSequence is empty on failure.
   /// Volume values are [0.0, 1.0] at ~50ms intervals (20 FPS).
-  Future<(String?, List<double>)> synthesizeWithVolumes(String text) async {
+  /// [onBeforePlay] is called after synthesis but before playback starts —
+  /// gives VRM pop-out a head start on fetching/decoding the audio.
+  Future<(String?, List<double>)> synthesizeWithVolumes(String text,
+      {void Function(String path)? onBeforePlay}) async {
     final path = await synthesizeToFile(text);
     if (path == null) return (null, <double>[]);
 
     final volumes = await computeVolumeSequence(path);
 
+    // VRM head start: push audio URL before playback begins
+    onBeforePlay?.call(path);
+
     try {
       await _player.stop();
       await _player.play(DeviceFileSource(path));
     } catch (_) {
-      return (path, volumes); // volumes computed but playback failed
+      return (path, volumes);
     }
 
     return (path, volumes);

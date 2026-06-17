@@ -71,17 +71,19 @@ class _StreamScreenState extends State<StreamScreen> {
             volume: s.edgeTtsVolume,
           );
 
-          // Synthesize + compute real audio volume sequence + play
-          final (audioPath, volumes) = await tts.synthesizeWithVolumes(aiText);
-
+          // Synthesize + compute volumes + play (VRM gets head start via callback)
           final overlay = OverlayService.instance;
+          final (audioPath, volumes) = await tts.synthesizeWithVolumes(
+            aiText,
+            onBeforePlay: (path) {
+              if (overlay.isPopoutRunning) {
+                final audioUrl = Live2DServer.toModelUrl(path);
+                overlay.pushAudioToPopout(audioUrl);
+              }
+            },
+          );
+
           if (overlay.isPopoutRunning) {
-            // VRM: push audio URL for real-time Web Audio API analysis
-            // Live2D: start Dart timer with precomputed volumes
-            if (audioPath != null) {
-              final audioUrl = Live2DServer.toModelUrl(audioPath);
-              overlay.pushAudioToPopout(audioUrl);
-            }
             overlay.startMouthAnimation(volumes);
           }
 
