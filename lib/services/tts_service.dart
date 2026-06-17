@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path/path.dart' as p;
 import 'storage_service.dart';
 
 /// TTS service using edge-tts CLI (subprocess).
-/// Audio cached in D:\AiVtuber_Agent_profile\tts_cache\
+/// Audio cached in D:\\AiVtuber_Agent_profile\\tts_cache\\
 class TTSService {
   final StorageService _storage;
   final AudioPlayer _player = AudioPlayer();
@@ -16,6 +17,9 @@ class TTSService {
   String _rate = '+0%';
   String _volume = '+0%';
   final _cacheDir = p.join(StorageService.profileDir, 'tts_cache');
+
+  /// Mouth volume amplification factor (matches AUAK_Live2D_Desktop_AI).
+  static const double mouthAmplify = 1.8;
 
   TTSService(this._storage) {
     _ensureCacheDir();
@@ -114,6 +118,79 @@ class TTSService {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Synthesize to file, compute mouth volume sequence, and play.
+  /// Returns (audioPath, volumeSequence) — volumeSequence is empty on failure.
+  /// Volume values are [0.0, 1.0] at ~50ms intervals (20 FPS).
+  Future<(String?, List<double>)> synthesizeWithVolumes(String text) async {
+    final path = await synthesizeToFile(text);
+    if (path == null) return (null, <double>[]);
+
+    final volumes = await computeVolumeSequence(path);
+
+    try {
+      await _player.stop();
+      await _player.play(DeviceFileSource(path));
+    } catch (_) {
+      return (path, volumes); // volumes computed but playback failed
+    }
+
+    return (path, volumes);
+  }
+
+  /// Compute RMS volume sequence from an audio file.
+  /// Uses ffmpeg to extract raw PCM, then slices into 50ms chunks.
+  /// Returns normalized values [0.0, 1.0] at ~20 FPS resolution.
+  /// Falls back to empty list if ffmpeg is unavailable.
+  Future<List<double>> computeVolumeSequence(String audioPath) async {
+    try {
+      // ffmpeg: extract 16-bit signed PCM mono at 16kHz
+      final result = await Process.run(
+        'ffmpeg',
+        [
+          '-i', audioPath,
+          '-f', 's16le',
+          '-acodec', 'pcm_s16le',
+          '-ar', '16000',
+          '-ac', '1',
+          'pipe:1',
+        ],
+        stdoutEncoding: null, // raw bytes
+        runInShell: true,
+      );
+
+      if (result.exitCode != 0) return <double>[];
+
+      final rawBytes = result.stdout as List<int>;
+      if (rawBytes.length < 2) return <double>[];
+
+      // 16kHz mono → 50ms = 800 samples = 1600 bytes
+      const samplesPerChunk = 800;
+      const bytesPerChunk = samplesPerChunk * 2; // int16 = 2 bytes
+      final chunkCount = rawBytes.length ~/ bytesPerChunk;
+
+      final volumes = <double>[];
+      final byteData = ByteData.sublistView(Uint8List.fromList(rawBytes));
+
+      for (int i = 0; i < chunkCount; i++) {
+        final offset = i * bytesPerChunk;
+        double sumSq = 0;
+        for (int s = 0; s < samplesPerChunk; s++) {
+          final sampleOffset = offset + s * 2;
+          if (sampleOffset + 1 >= rawBytes.length) break;
+          final sample = byteData.getInt16(sampleOffset, Endian.little);
+          sumSq += (sample * sample).toDouble();
+        }
+        final rms = sqrt(sumSq / samplesPerChunk);
+        final normalized = (rms / 32768.0 * mouthAmplify).clamp(0.0, 1.0);
+        volumes.add(normalized);
+      }
+
+      return volumes;
+    } catch (_) {
+      return <double>[];
     }
   }
 
