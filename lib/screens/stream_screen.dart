@@ -62,39 +62,49 @@ class _StreamScreenState extends State<StreamScreen> {
         }
 
         if (aiText != null && aiText.isNotEmpty) {
-          // Apply saved EdgeTTS settings
           final s = settingsProvider.settings;
-          tts.setParams(
-            voice: s.edgeTtsVoice,
-            pitch: s.edgeTtsPitch,
-            rate: s.edgeTtsRate,
-            volume: s.edgeTtsVolume,
-          );
 
-          // Synthesize + compute volumes + play (VRM gets head start via callback)
-          final overlay = OverlayService.instance;
-          final (audioPath, volumes) = await tts.synthesizeWithVolumes(
-            aiText,
-            onBeforePlay: (path) {
-              if (overlay.isPopoutRunning) {
-                final audioUrl = Live2DServer.toModelUrl(path);
-                overlay.pushAudioToPopout(audioUrl);
-              }
-            },
-          );
+          if (s.ttsProvider == 'gpt-sovits' && tts.isGptSovitsRunning &&
+              s.gptSovitsRefAudio.isNotEmpty) {
+            // Use GPT-SoVITS for TTS
+            await tts.synthesizeGptSovitsAndPlay(
+              text: aiText,
+              refAudioPath: s.gptSovitsRefAudio,
+              promptText: s.gptSovitsPromptText,
+              promptLang: s.gptSovitsPromptLang,
+            );
+          } else {
+            // Default: EdgeTTS with mouth sync
+            tts.setParams(
+              voice: s.edgeTtsVoice,
+              pitch: s.edgeTtsPitch,
+              rate: s.edgeTtsRate,
+              volume: s.edgeTtsVolume,
+            );
 
-          if (overlay.isPopoutRunning) {
-            overlay.startMouthAnimation(volumes);
-          }
+            final overlay = OverlayService.instance;
+            final (audioPath, volumes) = await tts.synthesizeWithVolumes(
+              aiText,
+              onBeforePlay: (path) {
+                if (overlay.isPopoutRunning) {
+                  final audioUrl = Live2DServer.toModelUrl(path);
+                  overlay.pushAudioToPopout(audioUrl);
+                }
+              },
+            );
 
-          // Listen for playback completion to stop mouth animation
-          if (volumes.isNotEmpty && overlay.isPopoutRunning) {
-            _ttsCompleteSub?.cancel();
-            _ttsCompleteSub = tts.onPlayerComplete.listen((_) {
-              overlay.stopMouthAnimation();
+            if (overlay.isPopoutRunning) {
+              overlay.startMouthAnimation(volumes);
+            }
+
+            if (volumes.isNotEmpty && overlay.isPopoutRunning) {
               _ttsCompleteSub?.cancel();
-              _ttsCompleteSub = null;
-            });
+              _ttsCompleteSub = tts.onPlayerComplete.listen((_) {
+                overlay.stopMouthAnimation();
+                _ttsCompleteSub?.cancel();
+                _ttsCompleteSub = null;
+              });
+            }
           }
         }
       }
