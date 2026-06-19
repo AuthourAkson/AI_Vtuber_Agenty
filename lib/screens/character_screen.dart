@@ -127,6 +127,15 @@ class _CharacterScreenState extends State<CharacterScreen> {
       edgeTtsVolume: s.edgeTtsVolume,
       useRvc: s.useRvc,
       rvcF0UpKey: s.rvcF0UpKey,
+      gptSovitsPath: s.gptSovitsPath,
+      gptSovitsGptWeights: s.gptSovitsGptWeights,
+      gptSovitsSovitsWeights: s.gptSovitsSovitsWeights,
+      gptSovitsRefAudio: s.gptSovitsRefAudio,
+      gptSovitsPromptText: s.gptSovitsPromptText,
+      gptSovitsPromptLang: s.gptSovitsPromptLang,
+      gptSovitsPort: s.gptSovitsPort,
+      gptSovitsDevice: s.gptSovitsDevice,
+      gptSovitsPythonPath: s.gptSovitsPythonPath,
       backendUrl: s.backendUrl,
     ));
   }
