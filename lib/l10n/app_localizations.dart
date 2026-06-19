@@ -216,6 +216,32 @@ class AppLocalizations {
   String get ttsNoVoiceSelected => _t('ttsNoVoiceSelected');
   String get ttsLoadingVoices => _t('ttsLoadingVoices');
   String get ttsPlaying => _t('ttsPlaying');
+  String get ttsGptSovitsSettings => _t('ttsGptSovitsSettings');
+  String get ttsGptSovitsPath => _t('ttsGptSovitsPath');
+  String get ttsGptSovitsPathHint => _t('ttsGptSovitsPathHint');
+  String get ttsGptSovitsBrowse => _t('ttsGptSovitsBrowse');
+  String get ttsGptSovitsPythonPath => _t('ttsGptSovitsPythonPath');
+  String get ttsGptSovitsPythonPathHint => _t('ttsGptSovitsPythonPathHint');
+  String get ttsGptSovitsDevice => _t('ttsGptSovitsDevice');
+  String get ttsGptSovitsGptWeights => _t('ttsGptSovitsGptWeights');
+  String get ttsGptSovitsSovitsWeights => _t('ttsGptSovitsSovitsWeights');
+  String get ttsGptSovitsRefAudio => _t('ttsGptSovitsRefAudio');
+  String get ttsGptSovitsPromptText => _t('ttsGptSovitsPromptText');
+  String get ttsGptSovitsPromptLang => _t('ttsGptSovitsPromptLang');
+  String get ttsGptSovitsSelectWeights => _t('ttsGptSovitsSelectWeights');
+  String get ttsGptSovitsStartServer => _t('ttsGptSovitsStartServer');
+  String get ttsGptSovitsStopServer => _t('ttsGptSovitsStopServer');
+  String get ttsGptSovitsServerRunning => _t('ttsGptSovitsServerRunning');
+  String get ttsGptSovitsServerStopped => _t('ttsGptSovitsServerStopped');
+  String get ttsGptSovitsNoRefAudios => _t('ttsGptSovitsNoRefAudios');
+  String get ttsGptSovitsUploadVoice => _t('ttsGptSovitsUploadVoice');
+  String get ttsGptSovitsVoiceName => _t('ttsGptSovitsVoiceName');
+  String get ttsGptSovitsVoiceNameHint => _t('ttsGptSovitsVoiceNameHint');
+  String get ttsGptSovitsDelete => _t('ttsGptSovitsDelete');
+  String get ttsGptSovitsDeleteConfirm => _t('ttsGptSovitsDeleteConfirm');
+  String get ttsGptSovitsUploadSuccess => _t('ttsGptSovitsUploadSuccess');
+  String get ttsGptSovitsUploadFailed => _t('ttsGptSovitsUploadFailed');
+  String get ttsProcessing => _t('ttsProcessing');
   String get visionTitle => _t('visionTitle');
   String get visionPrompt => _t('visionPrompt');
   String get visionPromptHint => _t('visionPromptHint');
@@ -659,6 +685,32 @@ class AppLocalizations {
     'ttsNoVoiceSelected':{'en': 'No voice selected',                'zh': '未选择语音'},
     'ttsLoadingVoices': {'en': 'Loading voices...',                 'zh': '加载语音列表...'},
     'ttsPlaying':       {'en': 'Playing...',                        'zh': '播放中...'},
+    'ttsGptSovitsSettings': {'en': 'GPT-SoVITS Settings',             'zh': 'GPT-SoVITS 设置'},
+    'ttsGptSovitsPath':  {'en': 'Project Path',                      'zh': '项目路径'},
+    'ttsGptSovitsPathHint': {'en': 'Path to GPT-SoVITS-v2pro root...', 'zh': 'GPT-SoVITS-v2pro 根目录路径...'},
+    'ttsGptSovitsBrowse': {'en': 'Browse',                            'zh': '浏览'},
+    'ttsGptSovitsPythonPath': {'en': 'Python Path',                  'zh': 'Python 路径'},
+    'ttsGptSovitsPythonPathHint': {'en': 'python or full path...',    'zh': 'python 或完整路径...'},
+    'ttsGptSovitsDevice': {'en': 'Device',                           'zh': '设备'},
+    'ttsGptSovitsGptWeights': {'en': 'GPT Weights (.ckpt)',          'zh': 'GPT 权重 (.ckpt)'},
+    'ttsGptSovitsSovitsWeights': {'en': 'SoVITS Weights (.pth)',     'zh': 'SoVITS 权重 (.pth)'},
+    'ttsGptSovitsRefAudio': {'en': 'Reference Voice',                'zh': '参考音色'},
+    'ttsGptSovitsPromptText': {'en': 'Prompt Text',                  'zh': '提示文本'},
+    'ttsGptSovitsPromptLang': {'en': 'Prompt Language',              'zh': '提示语言'},
+    'ttsGptSovitsSelectWeights': {'en': 'Select weights...',         'zh': '选择权重...'},
+    'ttsGptSovitsStartServer': {'en': 'Start Server',                'zh': '启动服务'},
+    'ttsGptSovitsStopServer': {'en': 'Stop Server',                  'zh': '停止服务'},
+    'ttsGptSovitsServerRunning': {'en': r'Server running on port :$port', 'zh': r'服务运行中，端口 :$port'},
+    'ttsGptSovitsServerStopped': {'en': 'Server stopped',            'zh': '服务已停止'},
+    'ttsGptSovitsNoRefAudios': {'en': 'No reference voices. Upload one below.', 'zh': '暂无参考音色，请在下方上传。'},
+    'ttsGptSovitsUploadVoice': {'en': 'Upload Voice',                'zh': '上传音色'},
+    'ttsGptSovitsVoiceName': {'en': 'Voice Name',                    'zh': '音色名称'},
+    'ttsGptSovitsVoiceNameHint': {'en': 'e.g. amiya',               'zh': '如 amiya'},
+    'ttsGptSovitsDelete': {'en': 'Delete',                           'zh': '删除'},
+    'ttsGptSovitsDeleteConfirm': {'en': r'Delete "$name"?',            'zh': r'确认删除「$name」？'},
+    'ttsGptSovitsUploadSuccess': {'en': 'Voice uploaded successfully', 'zh': '音色上传成功'},
+    'ttsGptSovitsUploadFailed': {'en': 'Upload failed',               'zh': '上传失败'},
+    'ttsProcessing':    {'en': 'Processing...',                       'zh': '处理中...'},
     'visionTitle':        {'en': 'Vision / Screenshot',           'zh': '视觉 / 截图'},
     'visionPrompt':       {'en': 'Vision Prompt',                 'zh': '视觉提示词'},
     'visionPromptHint':   {'en': 'Describe the screen for the AI...', 'zh': '为 AI 描述屏幕内容...'},
