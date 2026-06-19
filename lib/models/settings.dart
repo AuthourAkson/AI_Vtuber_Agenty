@@ -21,6 +21,17 @@ class AppSettings {
   bool useRvc;
   int rvcF0UpKey;
 
+  // GPT-SoVITS
+  String gptSovitsPath;     // root directory of GPT-SoVITS-v2pro
+  String gptSovitsGptWeights;    // GPT model weights (.ckpt)
+  String gptSovitsSovitsWeights; // SoVITS model weights (.pth)
+  String gptSovitsRefAudio;      // reference audio path (relative or absolute)
+  String gptSovitsPromptText;    // prompt text for reference audio
+  String gptSovitsPromptLang;    // prompt language (zh/en/ja/ko/yue)
+  int gptSovitsPort;        // api_v2.py port
+  String gptSovitsDevice;   // cuda / cpu
+  String gptSovitsPythonPath; // path to python executable
+
   // Character
   String? selectedLive2DModel;
   String? selectedVRMModel;
@@ -61,6 +72,15 @@ class AppSettings {
     this.edgeTtsVolume = '+0%',
     this.useRvc = false,
     this.rvcF0UpKey = 0,
+    this.gptSovitsPath = r'D:\GPT-SoVITS-v2pro-20250604',
+    this.gptSovitsGptWeights = '',
+    this.gptSovitsSovitsWeights = '',
+    this.gptSovitsRefAudio = '',
+    this.gptSovitsPromptText = '',
+    this.gptSovitsPromptLang = 'zh',
+    this.gptSovitsPort = 9880,
+    this.gptSovitsDevice = 'cuda',
+    this.gptSovitsPythonPath = r'D:\GPT-SoVITS-v2pro-20250604\runtime\python.exe',
     this.selectedLive2DModel,
     this.selectedVRMModel,
     this.renderModel = true,
@@ -96,6 +116,15 @@ class AppSettings {
       edgeTtsVolume: json['tts.edge_tts_volume'] as String? ?? '+0%',
       useRvc: json['rvc.use-rvc'] as bool? ?? false,
       rvcF0UpKey: json['rvc.f0-up-key'] as int? ?? 0,
+      gptSovitsPath: json['gpt_sovits.path'] as String? ?? r'D:\GPT-SoVITS-v2pro-20250604',
+      gptSovitsGptWeights: json['gpt_sovits.gpt_weights'] as String? ?? '',
+      gptSovitsSovitsWeights: json['gpt_sovits.sovits_weights'] as String? ?? '',
+      gptSovitsRefAudio: json['gpt_sovits.ref_audio'] as String? ?? '',
+      gptSovitsPromptText: json['gpt_sovits.prompt_text'] as String? ?? '',
+      gptSovitsPromptLang: json['gpt_sovits.prompt_lang'] as String? ?? 'zh',
+      gptSovitsPort: json['gpt_sovits.port'] as int? ?? 9880,
+      gptSovitsDevice: json['gpt_sovits.device'] as String? ?? 'cuda',
+      gptSovitsPythonPath: json['gpt_sovits.python_path'] as String? ?? r'D:\GPT-SoVITS-v2pro-20250604\runtime\python.exe',
       selectedLive2DModel: json['frontend.character.selectedLive2DModel'] as String?,
       selectedVRMModel: json['frontend.character.selectedVRMModel'] as String?,
       renderModel: json['frontend.character.renderModel'] as bool? ?? true,
@@ -132,6 +161,15 @@ class AppSettings {
     String? edgeTtsVolume,
     bool? useRvc,
     int? rvcF0UpKey,
+    String? gptSovitsPath,
+    String? gptSovitsGptWeights,
+    String? gptSovitsSovitsWeights,
+    String? gptSovitsRefAudio,
+    String? gptSovitsPromptText,
+    String? gptSovitsPromptLang,
+    int? gptSovitsPort,
+    String? gptSovitsDevice,
+    String? gptSovitsPythonPath,
     String? selectedLive2DModel,
     String? selectedVRMModel,
     bool? renderModel,
@@ -165,6 +203,15 @@ class AppSettings {
       edgeTtsVolume: edgeTtsVolume ?? this.edgeTtsVolume,
       useRvc: useRvc ?? this.useRvc,
       rvcF0UpKey: rvcF0UpKey ?? this.rvcF0UpKey,
+      gptSovitsPath: gptSovitsPath ?? this.gptSovitsPath,
+      gptSovitsGptWeights: gptSovitsGptWeights ?? this.gptSovitsGptWeights,
+      gptSovitsSovitsWeights: gptSovitsSovitsWeights ?? this.gptSovitsSovitsWeights,
+      gptSovitsRefAudio: gptSovitsRefAudio ?? this.gptSovitsRefAudio,
+      gptSovitsPromptText: gptSovitsPromptText ?? this.gptSovitsPromptText,
+      gptSovitsPromptLang: gptSovitsPromptLang ?? this.gptSovitsPromptLang,
+      gptSovitsPort: gptSovitsPort ?? this.gptSovitsPort,
+      gptSovitsDevice: gptSovitsDevice ?? this.gptSovitsDevice,
+      gptSovitsPythonPath: gptSovitsPythonPath ?? this.gptSovitsPythonPath,
       selectedLive2DModel: selectedLive2DModel ?? this.selectedLive2DModel,
       selectedVRMModel: selectedVRMModel ?? this.selectedVRMModel,
       renderModel: renderModel ?? this.renderModel,
@@ -200,6 +247,15 @@ class AppSettings {
     'tts.edge_tts_volume': edgeTtsVolume,
     'rvc.use-rvc': useRvc,
     'rvc.f0-up-key': rvcF0UpKey,
+    'gpt_sovits.path': gptSovitsPath,
+    'gpt_sovits.gpt_weights': gptSovitsGptWeights,
+    'gpt_sovits.sovits_weights': gptSovitsSovitsWeights,
+    'gpt_sovits.ref_audio': gptSovitsRefAudio,
+    'gpt_sovits.prompt_text': gptSovitsPromptText,
+    'gpt_sovits.prompt_lang': gptSovitsPromptLang,
+    'gpt_sovits.port': gptSovitsPort,
+    'gpt_sovits.device': gptSovitsDevice,
+    'gpt_sovits.python_path': gptSovitsPythonPath,
     'frontend.character.selectedLive2DModel': selectedLive2DModel,
     'frontend.character.selectedVRMModel': selectedVRMModel,
     'frontend.character.renderModel': renderModel,
