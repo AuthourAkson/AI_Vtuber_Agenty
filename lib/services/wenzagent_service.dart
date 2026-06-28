@@ -384,12 +384,46 @@ class WenzAgentService {
   }
 
   /// Create a global folder skill.
+  ///
+  /// Copies the source folder to {skillsDir}/{name} so that the WenzAgent
+  /// SDK can discover and load it at agent warmup time.  The SDK's
+  /// _resolveFolderSkillPath() always points to skillsDir/<name>, never
+  /// to an arbitrary path, so the copy step is mandatory.
   Future<GlobalSkillEntity?> createGlobalFolderSkill({
     required String name,
     String? description,
     required String folderPath,
   }) async {
     try {
+      // 1. Resolve the SDK's expected skill folder location
+      final skillsDir = _client?.skillsDir;
+      if (skillsDir == null || skillsDir.isEmpty) {
+        print('[WenzAgentService] createGlobalFolderSkill: skillsDir not set, device not initialized?');
+        return null;
+      }
+      final targetPath = p.join(skillsDir, name);
+
+      // 2. Validate source folder exists
+      final sourceDir = Directory(folderPath);
+      if (!await sourceDir.exists()) {
+        print('[WenzAgentService] createGlobalFolderSkill: source folder not found: $folderPath');
+        return null;
+      }
+
+      // 3. Copy folder to skillsDir/<name> (skip if already at target)
+      final normalizedSource = p.normalize(p.absolute(folderPath));
+      final normalizedTarget = p.normalize(p.absolute(targetPath));
+      if (normalizedSource != normalizedTarget) {
+        try {
+          await _copyDirectory(folderPath, targetPath);
+          print('[WenzAgentService] createGlobalFolderSkill: copied $folderPath -> $targetPath');
+        } catch (e) {
+          print('[WenzAgentService] createGlobalFolderSkill: copy failed: $e');
+          return null;
+        }
+      }
+
+      // 4. Save to global skill library
       final gsm = GlobalSkillManager.getInstance(_deviceId);
       final entity = GlobalSkillEntity(
         uuid: 'gskill-${DateTime.now().millisecondsSinceEpoch}',
@@ -406,6 +440,27 @@ class WenzAgentService {
     } catch (e) {
       print('[WenzAgentService] createGlobalFolderSkill failed: $e');
       return null;
+    }
+  }
+
+  /// Recursively copy a directory.
+  Future<void> _copyDirectory(String source, String target) async {
+    final sourceDir = Directory(source);
+    final targetDir = Directory(target);
+    if (await targetDir.exists()) {
+      await targetDir.delete(recursive: true);
+    }
+    await targetDir.create(recursive: true);
+
+    await for (final entity in sourceDir.list(recursive: true)) {
+      final relativePath = p.relative(entity.path, from: source);
+      final destPath = p.join(target, relativePath);
+      if (entity is Directory) {
+        await Directory(destPath).create(recursive: true);
+      } else if (entity is File) {
+        await Directory(p.dirname(destPath)).create(recursive: true);
+        await entity.copy(destPath);
+      }
     }
   }
 
