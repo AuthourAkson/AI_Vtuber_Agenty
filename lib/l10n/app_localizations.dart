@@ -330,6 +330,7 @@ class AppLocalizations {
   String get waEmptyHint => _t('waEmptyHint');
   String get waEmptySub => _t('waEmptySub');
   String get waSendMessage => _t('waSendMessage');
+  String get waSend => _t('waSend');
   String get cancel => _t('cancel');
   String get save => _t('save');
   String get create => _t('create');
@@ -799,6 +800,7 @@ class AppLocalizations {
     'waEmptyHint':        {'en': 'Create an AI employee to get started', 'zh': '创建 AI 员工以开始使用'},
     'waEmptySub':         {'en': 'Messages are routed through the WenzAgent LAN network', 'zh': '消息通过 WenzAgent LAN 网络路由'},
     'waSendMessage':      {'en': 'Send message to agent...',     'zh': '发送消息给代理...'},
+    'waSend':             {'en': 'Send',                        'zh': '发送'},
     'cancel':       {'en': 'Cancel',       'zh': '取消'},
     'save':         {'en': 'Save',         'zh': '保存'},
     'create':       {'en': 'Create',       'zh': '创建'},
