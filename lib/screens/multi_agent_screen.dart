@@ -2852,36 +2852,303 @@ Widget _buildToolCallHeader(String name, bool hasResult) {
 }
 
 Widget _buildChatInput(AgentManager mgr) {
+  final l10n = AppLocalizations.of(context);
+  final theme = ShadTheme.of(context);
+  final primary = Theme.of(context).colorScheme.primary;
+
+  // Count enabled skills attached to active agent
+  final enabledSkills = mgr.skills.where((s) => s.enabled == 1).length;
+
   return Container(
-    padding: EdgeInsets.all(12),
-    color: ShadTheme.of(context).card,
-    child: Row(
-      children: [
-        Expanded(
-          child: _SmoothCursorField(
-            controller: _msgCtrl,
-            decoration: InputDecoration(
-              hintText: 'Send message to agent...',
-              filled: true, fillColor: ShadTheme.of(context).secondary,
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              isDense: true,
+    padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+    color: theme.card,
+    child: Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 900),
+        child: AnimatedBuilder(
+          animation: _msgCtrl,
+          builder: (context, _) {
+            final hasText = _msgCtrl.text.trim().isNotEmpty;
+            return Container(
+              decoration: BoxDecoration(
+                color: theme.card,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: theme.border?.withAlpha(80) ?? Color(0xFFECECEC)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(8),
+                    blurRadius: 12,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Row 1: Context Pills ──
+                  if (enabledSkills > 0 || mgr.activeProfile != null)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 10, 12, 0),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          // Skills pill
+                          if (enabledSkills > 0)
+                            _contextPill(
+                              icon: Icons.extension_outlined,
+                              label: l10n.skills,
+                              count: enabledSkills,
+                              onTap: () => setState(() {
+                                _skillsMode = true;
+                                _contactsMode = false;
+                              }),
+                              theme: theme,
+                            ),
+                          // Active model pill
+                          if (mgr.activeProfile != null)
+                            _contextPill(
+                              icon: Icons.auto_awesome,
+                              label: mgr.activeProfile!.model,
+                              count: null,
+                              onTap: () {
+                                final dummy = _DummyAgent(
+                                  mgr.activeEmployeeId ?? '',
+                                  mgr.activeEmployeeName ?? '',
+                                );
+                                _showProfilePicker(dummy, mgr);
+                              },
+                              theme: theme,
+                            ),
+                          // Add context button
+                          _addContextPill(theme),
+                        ],
+                      ),
+                    ),
+                  // ── Row 2: Input area ──
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: _SmoothCursorField(
+                      controller: _msgCtrl,
+                      decoration: InputDecoration(
+                        hintText: l10n.waSendMessage,
+                        hintStyle: TextStyle(
+                          color: theme.mutedForeground,
+                          fontSize: 15,
+                        ),
+                        filled: true,
+                        fillColor: theme.card,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                        isDense: true,
+                      ),
+                      style: TextStyle(fontSize: 15, height: 24 / 15, color: theme.foreground),
+                      maxLines: 5,
+                      minLines: 1,
+                      onSubmitted: (t) => _send(t, mgr),
+                    ),
+                  ),
+                  // ── Row 3: Bottom toolbar ──
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+                    child: Row(
+                      children: [
+                        // Left: Employee/Workspace selector
+                        if (mgr.activeEmployeeName != null)
+                          _bottomSelector(
+                            icon: Icons.folder_outlined,
+                            label: mgr.activeEmployeeName!,
+                            onTap: () => setState(() {
+                              _contactsMode = true;
+                              _skillsMode = false;
+                            }),
+                            theme: theme,
+                          ),
+                        SizedBox(width: 6),
+                        // Model selector
+                        if (mgr.activeProfile != null)
+                          _bottomSelector(
+                            icon: Icons.auto_awesome,
+                            label: mgr.activeProfile!.name,
+                            onTap: () {
+                              final dummy = _DummyAgent(
+                                mgr.activeEmployeeId ?? '',
+                                mgr.activeEmployeeName ?? '',
+                              );
+                              _showProfilePicker(dummy, mgr);
+                            },
+                            theme: theme,
+                          ),
+                        Spacer(),
+                        // Right: Send button
+                        _sendButton(hasText, primary, theme, mgr),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+/// Context pill (capsule tag with icon + label + optional count badge).
+Widget _contextPill({
+  required IconData icon,
+  required String label,
+  int? count,
+  required VoidCallback onTap,
+  required dynamic theme,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 30,
+      padding: EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: theme.border?.withAlpha(80) ?? Color(0xFFE0E0E0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: ShadTheme.of(context).mutedForeground),
+          SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: ShadTheme.of(context).foreground,
             ),
-            style: TextStyle(fontSize: 14, color: ShadTheme.of(context).foreground),
-            maxLines: 3, minLines: 1,
-            onSubmitted: (t) => _send(t, mgr),
           ),
+          if (count != null) ...[
+            SizedBox(width: 5),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: ShadTheme.of(context).mutedForeground.withAlpha(20),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: ShadTheme.of(context).mutedForeground,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// "+" add context pill.
+Widget _addContextPill(dynamic theme) {
+  return GestureDetector(
+    onTap: () => setState(() {
+      _skillsMode = true;
+      _contactsMode = false;
+    }),
+    child: Container(
+      height: 30,
+      width: 30,
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: theme.border?.withAlpha(60) ?? Color(0xFFE0E0E0),
         ),
-        SizedBox(width: 8),
-        GestureDetector(
-          onTap: () => _send(_msgCtrl.text, mgr),
-          child: Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-            child: Icon(Icons.send, size: 18, color: Theme.of(context).colorScheme.onPrimary),
+      ),
+      child: Icon(
+        Icons.add,
+        size: 15,
+        color: ShadTheme.of(context).mutedForeground,
+      ),
+    ),
+  );
+}
+
+/// Bottom toolbar selector button (workspace / model).
+Widget _bottomSelector({
+  required IconData icon,
+  required String label,
+  required VoidCallback onTap,
+  required dynamic theme,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 32,
+      padding: EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: ShadTheme.of(context).secondary.withAlpha(100),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: ShadTheme.of(context).mutedForeground),
+          SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 120),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: ShadTheme.of(context).foreground,
+              ),
+            ),
           ),
-        ),
-      ],
+          SizedBox(width: 3),
+          Icon(Icons.keyboard_arrow_down, size: 14, color: ShadTheme.of(context).mutedForeground),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Send button — disabled (gray) when empty, primary color when has text.
+Widget _sendButton(bool hasText, Color primary, dynamic theme, AgentManager mgr) {
+  return GestureDetector(
+    onTap: hasText ? () => _send(_msgCtrl.text, mgr) : null,
+    child: AnimatedContainer(
+      duration: Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      height: 34,
+      padding: EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: hasText ? primary : (theme.mutedForeground?.withAlpha(40) ?? Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            AppLocalizations.of(context).waSend,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: hasText ? Colors.white : (theme.mutedForeground ?? Color(0xFF999999)),
+            ),
+          ),
+          SizedBox(width: 5),
+          Icon(Icons.arrow_upward, size: 15,
+            color: hasText ? Colors.white : (theme.mutedForeground ?? Color(0xFF999999))),
+        ],
+      ),
     ),
   );
 }
