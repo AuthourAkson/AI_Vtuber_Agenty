@@ -524,10 +524,12 @@ class TTSService {
     int batchSize = 1,
     String mediaType = 'wav',
   }) async {
+    // Strip emoji to avoid GBK encoding errors in GPT-SoVITS Python server
+    final cleanText = text.replaceAll(RegExp(r'[\u{1F600}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{200D}\u{200C}]', unicode: true), '');
     final uri = Uri.parse('$_gptSovitsBaseUrl/tts');
-    print('[GPT-SoVITS] TTS request:\n  text=${text.length>50 ? "${text.substring(0,50)}..." : text}\n  ref_audio=$refAudioPath\n  prompt_text=$promptText\n  prompt_lang=$promptLang');
+    print('[GPT-SoVITS] TTS request:\n  text=${cleanText.length>50 ? "${cleanText.substring(0,50)}..." : cleanText}\n  ref_audio=$refAudioPath\n  prompt_text=$promptText\n  prompt_lang=$promptLang');
     final body = utf8.encode(jsonEncode({
-      'text': text,
+      'text': cleanText,
       'text_lang': textLang,
       'ref_audio_path': refAudioPath,
       'aux_ref_audio_paths': [],
@@ -610,6 +612,38 @@ class TTSService {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Synthesize via GPT-SoVITS, compute mouth volume sequence, and play.
+  /// Returns (audioPath, volumeSequence).
+  Future<(String?, List<double>)> synthesizeGptSovitsWithVolumes(
+    String text, {
+    String textLang = 'zh',
+    required String refAudioPath,
+    String promptText = '',
+    String promptLang = 'zh',
+  }) async {
+    final bytes = await synthesizeGptSovits(
+      text: text,
+      textLang: textLang,
+      refAudioPath: refAudioPath,
+      promptText: promptText,
+      promptLang: promptLang,
+    );
+    if (bytes == null || bytes.isEmpty) return (null, <double>[]);
+
+    final tempFile = File(p.join(_cacheDir, 'gpt_sovits_temp.wav'));
+    tempFile.writeAsBytesSync(bytes);
+
+    final volumes = await computeVolumeSequence(tempFile.path);
+
+    try {
+      await _player.stop();
+      await _player.play(DeviceFileSource(tempFile.path));
+      return (tempFile.path, volumes);
+    } catch (_) {
+      return (null, <double>[]);
     }
   }
 
