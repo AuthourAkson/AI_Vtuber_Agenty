@@ -66,13 +66,34 @@ class _StreamScreenState extends State<StreamScreen> {
 
           if (s.ttsProvider == 'gpt-sovits' && tts.isGptSovitsRunning &&
               s.gptSovitsRefAudio.isNotEmpty) {
-            // Use GPT-SoVITS for TTS
-            await tts.synthesizeGptSovitsAndPlay(
-              text: aiText,
+            // Use GPT-SoVITS for TTS with mouth sync (Live2D + VRM)
+            final overlay = OverlayService.instance;
+            final (audioPath, volumes) = await tts.synthesizeGptSovitsWithVolumes(
+              aiText,
               refAudioPath: s.gptSovitsRefAudio,
               promptText: s.gptSovitsPromptText,
               promptLang: s.gptSovitsPromptLang,
             );
+
+            // Push audio URL to VRM pop-out (Web Audio API analysis)
+            if (audioPath != null && overlay.isPopoutRunning) {
+              final audioUrl = Live2DServer.toModelUrl(audioPath);
+              overlay.pushAudioToPopout(audioUrl);
+            }
+
+            // Start mouth animation for Live2D (volume-based)
+            if (overlay.isPopoutRunning) {
+              overlay.startMouthAnimation(volumes);
+            }
+
+            if (volumes.isNotEmpty && overlay.isPopoutRunning) {
+              _ttsCompleteSub?.cancel();
+              _ttsCompleteSub = tts.onPlayerComplete.listen((_) {
+                overlay.stopMouthAnimation();
+                _ttsCompleteSub?.cancel();
+                _ttsCompleteSub = null;
+              });
+            }
           } else {
             // Default: EdgeTTS with mouth sync
             tts.setParams(
