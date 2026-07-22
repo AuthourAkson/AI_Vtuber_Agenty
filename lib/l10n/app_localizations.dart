@@ -482,6 +482,11 @@ class AppLocalizations {
   String get storage => _t('storage');
   String get files => _t('files');
   String get comingSoon => _t('comingSoon');
+  String get aboutAppName => _t('aboutAppName');
+  String get aboutVersion => _t('aboutVersion');
+  String get aboutCheckUpdate => _t('aboutCheckUpdate');
+  String get aboutOfficialWebsite => _t('aboutOfficialWebsite');
+  String get aboutOpenWebsite => _t('aboutOpenWebsite');
 
   String _t(String key) {
     final entry = _strings[key];
@@ -844,6 +849,11 @@ class AppLocalizations {
     'privacyClearCacheButton': {'en': 'Clear Cache', 'zh': '清除缓存'},
     'logs':         {'en': 'Logs',         'zh': '日志'},
     'about':        {'en': 'About',        'zh': '关于'},
+    'aboutAppName': {'en': 'AUAK AIVtuberAgent', 'zh': 'AUAK AIVtuberAgent'},
+    'aboutVersion': {'en': 'Version v1.0.0', 'zh': '版本 v1.0.0'},
+    'aboutCheckUpdate': {'en': 'Check for Updates', 'zh': '检查更新'},
+    'aboutOfficialWebsite': {'en': 'Official Website', 'zh': '官方网站'},
+    'aboutOpenWebsite': {'en': 'Visit Official Website', 'zh': '访问官方网站'},
     'sync':         {'en': 'Sync',         'zh': '同步'},
     'storage':      {'en': 'Storage',      'zh': '存储'},
     'files':        {'en': 'Files',        'zh': '文件'},
