@@ -3432,6 +3432,7 @@ Widget _bottomSelector({
 
 /// Send button — disabled (gray) when empty, primary color when has text.
 Widget _sendButton(bool hasText, Color primary, dynamic theme, AgentManager mgr) {
+  final onPrimary = Theme.of(context).colorScheme.onPrimary;
   return GestureDetector(
     onTap: hasText ? () => _send(_msgCtrl.text, mgr) : null,
     child: AnimatedContainer(
@@ -3451,12 +3452,12 @@ Widget _sendButton(bool hasText, Color primary, dynamic theme, AgentManager mgr)
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: hasText ? Colors.white : (theme.mutedForeground ?? Color(0xFF999999)),
+              color: hasText ? onPrimary : (theme.mutedForeground ?? Color(0xFF999999)),
             ),
           ),
           SizedBox(width: 5),
           Icon(Icons.arrow_upward, size: 15,
-            color: hasText ? Colors.white : (theme.mutedForeground ?? Color(0xFF999999))),
+            color: hasText ? onPrimary : (theme.mutedForeground ?? Color(0xFF999999))),
         ],
       ),
     ),
