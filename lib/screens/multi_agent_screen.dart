@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:wenzagent/wenzagent.dart';
@@ -802,6 +803,8 @@ return _buildGeneralPanel();
         return _buildLogsPanel(mgr);
       case 'sys_privacy':
         return _buildPrivacyPanel(mgr);
+      case 'sys_about':
+        return _buildAboutPanel(mgr);
 default:
 return Center(
 child: Text('$_activeSettingSection — coming soon',
@@ -2167,6 +2170,313 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     ),
     );
     }
+
+  Widget _buildAboutPanel(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    final imgPath = r'D:\AiVtuber_Agent\image\auak.png';
+    final websiteUrl = 'https://authourakson.github.io/Arknights-Web/Login.html';
+
+    return ListView(
+      padding: EdgeInsets.all(24),
+      children: [
+        Center(
+          child: Column(
+            children: [
+              // Logo
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Image.file(
+                    File(imgPath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: ShadTheme.of(context).secondary,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(Icons.image, size: 48, color: ShadTheme.of(context).mutedForeground),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              // Artistic app name
+              ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.tertiary,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ).createShader(bounds),
+                child: Text(
+                  l10n.aboutAppName,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              SizedBox(height: 8),
+              // Version
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: ShadTheme.of(context).secondary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  l10n.aboutVersion,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: ShadTheme.of(context).mutedForeground,
+                  ),
+                ),
+              ),
+              SizedBox(height: 32),
+              // Check Update button
+              SizedBox(
+                width: 220,
+                child: OutlinedButton.icon(
+                  onPressed: () => _checkForUpdate(mgr),
+                  icon: Icon(Icons.system_update_alt, size: 18),
+                  label: Text(l10n.aboutCheckUpdate),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                    side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              SizedBox(height: 12),
+              // Official Website button
+              SizedBox(
+                width: 220,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Process.run('cmd', ['/c', 'start', websiteUrl]);
+                  },
+                  icon: Icon(Icons.language, size: 18),
+                  label: Text(l10n.aboutOpenWebsite),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              SizedBox(height: 24),
+              // Footer
+              Text(
+                l10n.locale.languageCode == 'zh' ? '© 2026 AUAK Studio' : '© 2026 AUAK Studio',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: ShadTheme.of(context).mutedForeground,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _checkForUpdate(AgentManager mgr) async {
+    final l10n = AppLocalizations.of(context);
+    const currentVersion = 'v1.0.0';
+    const repoApi = 'https://api.github.com/repos/AuthourAkson/AI_Vtuber_Agenty/releases/latest';
+
+    // Show checking indicator
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(l10n.locale.languageCode == 'zh' ? '正在检查更新...' : 'Checking for updates...'),
+          ],
+        ),
+        backgroundColor: ShadTheme.of(context).card,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      final response = await http.get(Uri.parse(repoApi)).timeout(Duration(seconds: 8));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final latestTag = (data['tag_name'] as String?)?.trim() ?? '';
+        final releaseUrl = (data['html_url'] as String?) ?? '';
+
+        if (latestTag.isEmpty) {
+          _showUpdateResult(l10n, false, currentVersion, '', releaseUrl, error: true);
+          return;
+        }
+
+        // Compare versions: strip leading 'v', compare numeric segments
+        if (_compareVersions(latestTag, currentVersion) > 0) {
+          // New version available
+          _showUpdateResult(l10n, true, currentVersion, latestTag, releaseUrl);
+        } else {
+          // Already up to date
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n.locale.languageCode == 'zh' ? '已是最新版本 ($currentVersion)' : 'Up to date ($currentVersion)',
+              ),
+              backgroundColor: ShadTheme.of(context).card,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        _showUpdateResult(l10n, false, currentVersion, '', '', error: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            l10n.locale.languageCode == 'zh'
+                ? '检查更新失败，请检查网络连接'
+                : 'Update check failed. Check your network.',
+          ),
+          backgroundColor: ShadTheme.of(context).card,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  /// Returns >0 if v1 > v2, <0 if v1 < v2, 0 if equal.
+  int _compareVersions(String v1, String v2) {
+    final strip = (String v) => v.startsWith('v') || v.startsWith('V') ? v.substring(1) : v;
+    final p1 = strip(v1).split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    final p2 = strip(v2).split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    for (int i = 0; i < 3; i++) {
+      final a = i < p1.length ? p1[i] : 0;
+      final b = i < p2.length ? p2[i] : 0;
+      if (a != b) return a - b;
+    }
+    return 0;
+  }
+
+  void _showUpdateResult(AppLocalizations l10n, bool hasUpdate, String current, String latest, String releaseUrl, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (error) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ShadTheme.of(context).card,
+          title: Text(
+            l10n.locale.languageCode == 'zh' ? '检查更新失败' : 'Update Check Failed',
+            style: TextStyle(color: ShadTheme.of(context).foreground),
+          ),
+          content: Text(
+            l10n.locale.languageCode == 'zh'
+                ? '无法获取最新版本信息，请检查网络连接。'
+                : 'Unable to fetch latest version info. Check your network.',
+            style: TextStyle(color: ShadTheme.of(context).mutedForeground),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.locale.languageCode == 'zh' ? '确定' : 'OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ShadTheme.of(context).card,
+        title: Row(
+          children: [
+            Icon(Icons.system_update, color: Theme.of(context).colorScheme.primary, size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.locale.languageCode == 'zh' ? '发现新版本！' : 'New Version Available!',
+                style: TextStyle(color: ShadTheme.of(context).foreground),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.locale.languageCode == 'zh' ? '最新版本' : 'Latest version',
+              style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 13),
+            ),
+            SizedBox(height: 4),
+            Text(
+              latest,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              l10n.locale.languageCode == 'zh'
+                  ? '当前版本: $current'
+                  : 'Current: $current',
+              style: TextStyle(color: ShadTheme.of(context).mutedForeground, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              l10n.locale.languageCode == 'zh' ? '稍后' : 'Later',
+              style: TextStyle(color: ShadTheme.of(context).mutedForeground),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Process.run('cmd', ['/c', 'start', releaseUrl]);
+            },
+            icon: Icon(Icons.download, size: 18),
+            label: Text(l10n.locale.languageCode == 'zh' ? '前往下载' : 'Download'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
     Widget _logFilterChip(String label, LogLevel? level) {
     final active = level == null
