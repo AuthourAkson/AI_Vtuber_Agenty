@@ -1962,12 +1962,15 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     final logService = LogService();
     final l10n = AppLocalizations.of(context);
 
-    // Seed demo data on first open so the UI isn't empty.
-    logService.seedDemoData();
+    // Switch between demo and real mode based on connection state.
+    if (mgr.connected) {
+      logService.enterRealMode();
+    } else {
+      logService.enterDemoMode();
+    }
 
-    // Listen to log changes so the UI auto-refreshes.
-    // NOTE: this builds a listener every build — for production,
-    // register in initState / dispose. Fine for prototype.
+    // Subscribe to log changes so the UI auto-refreshes when new entries arrive.
+    // NOTE: builds a listener every build — for production, register in initState/dispose.
     final filtered = logService.filtered(query: _logSearch, levels: _logLevels);
 
     return Column(
@@ -2174,7 +2177,7 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
   Widget _buildAboutPanel(AgentManager mgr) {
     final l10n = AppLocalizations.of(context);
     final imgPath = r'D:\AiVtuber_Agent\image\auak.png';
-    final websiteUrl = 'https://authourakson.github.io/Arknights-Web/Login.html';
+    final websiteUrl = 'https://authourakson.github.io/AiVtuber_Agent-Web/';
 
     return ListView(
       padding: EdgeInsets.all(24),
