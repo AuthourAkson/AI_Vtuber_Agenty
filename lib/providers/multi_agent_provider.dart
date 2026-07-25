@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:wenzagent/wenzagent.dart';
+import '../services/log_service.dart';
 import '../services/wenzagent_service.dart';
 
 /// Agent model for the contacts/employee list.
@@ -214,14 +215,18 @@ class AgentManager extends ChangeNotifier {
       topic: topic,
     );
 
+    final log = LogService();
+    log.info('AgentManager', 'Initializing WenzAgent SDK — $host:$port as "$deviceName"');
     final ok = await wenzagent.initialize(config);
     if (!ok) {
       _statusMessage = 'SDK init failed';
       _connecting = false;
+      log.error('AgentManager', 'WenzAgent SDK initialization failed');
       notifyListeners();
       return;
     }
 
+    log.info('AgentManager', 'WenzAgent SDK initialized — subscribing to events');
     _msgSub = wenzagent.onMessage.listen(_onMessage);
     _statusSub = wenzagent.onStatusChange.listen(_onStatusChange);
     _connSub = wenzagent.onConnectionChange.listen(_onConnectionChange);
@@ -239,10 +244,17 @@ class AgentManager extends ChangeNotifier {
     _statusMessage = 'Connecting...';
     notifyListeners();
 
+    final log = LogService();
+    log.info('AgentManager', 'Connecting to WenzAgent LAN — $_host:$_port');
     final ok = await wenzagent.connect();
     _connected = ok;
     _connecting = false;
     _statusMessage = ok ? 'Connected' : 'Connection failed';
+    if (ok) {
+      log.info('AgentManager', 'WenzAgent LAN connected — $_host:$_port');
+    } else {
+      log.error('AgentManager', 'WenzAgent LAN connection failed — $_host:$_port');
+    }
     notifyListeners();
 
     if (ok) await refreshAll();
@@ -255,6 +267,7 @@ class AgentManager extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    LogService().info('AgentManager', 'Disconnecting from WenzAgent LAN');
     await wenzagent.disconnect();
     _connected = false;
     _statusMessage = 'Disconnected';
@@ -670,6 +683,9 @@ class AgentManager extends ChangeNotifier {
   Future<void> sendMessage(String text) async {
     if (_activeEmployeeId == null || text.trim().isEmpty) return;
 
+    final log = LogService();
+    log.info('AgentManager', 'Sending message to "${_activeEmployeeName ?? _activeEmployeeId}"');
+
     _activeMessages.add({
       'role': 'user',
       'content': text,
@@ -751,6 +767,12 @@ class AgentManager extends ChangeNotifier {
   void _onStatusChange(Map<String, dynamic> event) {
     if (event['employeeId'] == _activeEmployeeId) {
       final status = event['status'] as String?;
+      final name = _activeEmployeeName ?? event['employeeId'];
+      if (status == 'idle') {
+        LogService().info('AgentManager', 'Agent "$name" is idle');
+      } else if (status == 'processing' || status == 'streaming') {
+        LogService().info('AgentManager', 'Agent "$name" started processing');
+      }
       // Start/stop streaming poll
       if (status == 'streaming' || status == 'processing') {
         _startStreamingPoll();
@@ -777,7 +799,10 @@ class AgentManager extends ChangeNotifier {
   void _onConnectionChange(bool connected) {
     _connected = connected;
     _statusMessage = connected ? 'Connected' : 'Disconnected';
-    if (!connected) {
+    if (connected) {
+      LogService().info('AgentManager', 'Connection state: online');
+    } else {
+      LogService().warn('AgentManager', 'Connection state: offline');
       _onlineDevices = [];
       _agentSummaries = [];
     }
