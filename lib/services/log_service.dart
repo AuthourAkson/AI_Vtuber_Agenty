@@ -122,6 +122,29 @@ class LogService {
     }
   }
 
+  // ── Demo / Real mode ────────────────────────────────────
+
+  bool _demoMode = false;
+
+  /// Whether demo entries are currently shown (MultiAgent not connected).
+  bool get isDemoMode => _demoMode;
+
+  /// Switch to demo mode: clear real logs, seed demo entries.
+  void enterDemoMode() {
+    if (_demoMode) return;
+    _demoMode = true;
+    _logs.clear();
+    _seedDemoData();
+  }
+
+  /// Switch to real mode: clear demo entries, ready for real logs.
+  void enterRealMode() {
+    if (!_demoMode) return;
+    _demoMode = false;
+    _logs.clear();
+    _notify();
+  }
+
   // ── Internal ────────────────────────────────────────────
 
   void _add(LogLevel level, String module, String message,
@@ -134,16 +157,17 @@ class LogService {
       message: message,
       stackTrace: stack?.toString(),
     ));
+    // Keep at most 500 entries to bound memory
+    while (_logs.length > 500) {
+      _logs.removeAt(0);
+    }
     _notify();
   }
 
-  /// Seed demo entries for UI preview — remove when real logging is wired.
-  void seedDemoData() {
-    if (_logs.isNotEmpty) return; // only seed once
-
+  void _seedDemoData() {
     // Simulate startup sequence
     info('WenzAgentService', 'Initializing WenzAgent service on 127.0.0.1:9090');
-    debug('WenzAgentService', 'Loading device registry from D:\\AiVtuber_Agent_profile\\wenzagent\\devices.json');
+    debug('WenzAgentService', r'Loading device registry from D:\AiVtuber_Agent_profile\wenzagent\devices.json');
     info('WenzAgentService', 'WenzAgent LAN server connected — 3 peers online');
     warn('ChatProvider', 'Session history file truncated: unexpected EOF at offset 142');
     info('LLMService', 'Connected to API endpoint: https://api.openai.com/v1');
@@ -171,7 +195,5 @@ class LogService {
     info('AppearanceProvider', 'Theme preset changed to "Dracula"');
     debug('SessionManager', 'Autosaved session 2026-05-21-001.json (14 messages)');
     info('AppShell', 'Application started — v1.4.1, Flutter 3.32, Dart 3.11.0');
-
-    _notify();
   }
 }
