@@ -479,6 +479,33 @@ class AppLocalizations {
   String get dataStorageManage => _t('dataStorageManage');
   String get dataStorageOpen => _t('dataStorageOpen');
   String get sync => _t('sync');
+  // Sync panel
+  String get syncTitle => _t('syncTitle');
+  String get syncSubtitle => _t('syncSubtitle');
+  String get syncBackend => _t('syncBackend');
+  String get syncWebdav => _t('syncWebdav');
+  String get syncLocalFolder => _t('syncLocalFolder');
+  String get syncUrl => _t('syncUrl');
+  String get syncUsername => _t('syncUsername');
+  String get syncPassword => _t('syncPassword');
+  String get syncTestConnection => _t('syncTestConnection');
+  String get syncTesting => _t('syncTesting');
+  String get syncTestSuccess => _t('syncTestSuccess');
+  String get syncTestFailed => _t('syncTestFailed');
+  String get syncAutoSync => _t('syncAutoSync');
+  String get syncAutoSyncDesc => _t('syncAutoSyncDesc');
+  String get syncInterval => _t('syncInterval');
+  String get syncNow => _t('syncNow');
+  String get syncReDownload => _t('syncReDownload');
+  String get syncLastSync => _t('syncLastSync');
+  String get syncNever => _t('syncNever');
+  String get syncInProgress => _t('syncInProgress');
+  String get syncSuccess => _t('syncSuccess');
+  String get syncFailed => _t('syncFailed');
+  String get syncNotConfigured => _t('syncNotConfigured');
+  String get syncUploaded => _t('syncUploaded');
+  String get syncDownloaded => _t('syncDownloaded');
+  String get syncStatus => _t('syncStatus');
   String get storage => _t('storage');
   String get files => _t('files');
   String get comingSoon => _t('comingSoon');
@@ -962,6 +989,34 @@ class AppLocalizations {
     'skillUpdatedAt':   {'en': 'Updated',                            'zh': '更新时间'},
     'skillNoSkills':    {'en': 'No skills yet.\\nClick + to add a skill.', 'zh': '暂无技能。\\n点击 + 添加技能。'},
     'skillConfirm':     {'en': 'Confirm',                            'zh': '确认'},
+
+    // ── Sync panel ──
+    'syncTitle':        {'en': 'Sync',                              'zh': '数据同步'},
+    'syncSubtitle':     {'en': 'Sync profile data across devices',  'zh': '跨设备同步配置文件和数据'},
+    'syncBackend':      {'en': 'Backend',                           'zh': '存储后端'},
+    'syncWebdav':       {'en': 'WebDAV',                            'zh': 'WebDAV'},
+    'syncLocalFolder':  {'en': 'Local Folder',                      'zh': '本地文件夹'},
+    'syncUrl':          {'en': 'Server URL',                        'zh': '服务器地址'},
+    'syncUsername':     {'en': 'Username',                          'zh': '用户名'},
+    'syncPassword':     {'en': 'Password',                          'zh': '密码'},
+    'syncTestConnection': {'en': 'Test Connection',                  'zh': '测试连接'},
+    'syncTesting':      {'en': 'Testing...',                        'zh': '测试中...'},
+    'syncTestSuccess':  {'en': 'Connection successful!',            'zh': '连接成功！'},
+    'syncTestFailed':   {'en': 'Connection failed',                 'zh': '连接失败'},
+    'syncAutoSync':     {'en': 'Auto Sync',                         'zh': '自动同步'},
+    'syncAutoSyncDesc': {'en': 'Automatically sync on a schedule',  'zh': '定时自动同步数据'},
+    'syncInterval':     {'en': 'Interval (minutes)',                 'zh': '间隔（分钟）'},
+    'syncNow':          {'en': 'Sync Now',                          'zh': '立即同步'},
+    'syncReDownload':   {'en': 'Re-download All',                   'zh': '重新下载全部'},
+    'syncLastSync':     {'en': 'Last sync',                         'zh': '上次同步'},
+    'syncNever':        {'en': 'Never',                             'zh': '从未'},
+    'syncInProgress':   {'en': 'Syncing...',                        'zh': '同步中...'},
+    'syncSuccess':      {'en': 'Sync complete',                     'zh': '同步完成'},
+    'syncFailed':       {'en': 'Sync failed',                       'zh': '同步失败'},
+    'syncNotConfigured':{'en': 'Sync is not configured yet.',       'zh': '尚未配置同步。'},
+    'syncUploaded':     {'en': 'Uploaded',                          'zh': '已上传'},
+    'syncDownloaded':   {'en': 'Downloaded',                        'zh': '已下载'},
+    'syncStatus':       {'en': 'Status',                            'zh': '状态'},
   };
 }
 
