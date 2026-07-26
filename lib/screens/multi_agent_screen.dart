@@ -12,6 +12,7 @@ import '../providers/appearance_provider.dart';
 import 'package:flutter/services.dart';
 import '../services/wenzagent_service.dart';
 import '../services/log_service.dart';
+import '../services/sync_service.dart';
 import '../l10n/app_localizations.dart';
 import 'multi_agent_appearance.dart';
 
@@ -36,17 +37,26 @@ bool _showSettings = false;
 String _searchQuery = '';
 String? _selectedSkillId; // Track selected skill for detail view
 int _lastMsgCount = 0; // Track to auto-scroll only on new messages
+final SyncService _syncService = SyncService();
 
 @override
 void initState() {
-super.initState();
-_searchCtrl.addListener(() => setState(() => _searchQuery = _searchCtrl.text.toLowerCase()));
-WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+  super.initState();
+  _syncService.init();
+  _syncService.addListener(_onSyncChanged);
+  _searchCtrl.addListener(() => setState(() => _searchQuery = _searchCtrl.text.toLowerCase()));
+  WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+}
+
+void _onSyncChanged() {
+  if (mounted) setState(() {});
 }
 
 @override
 void dispose() {
-_msgCtrl.dispose();
+  _syncService.removeListener(_onSyncChanged);
+  _syncService.dispose();
+  _msgCtrl.dispose();
 _scrollCtrl.dispose();
 _searchCtrl.dispose();
 _waHostCtrl.dispose();
@@ -791,6 +801,8 @@ return _buildGeneralPanel();
         return _buildMcpConfigPanel(mgr);
       case 'ai_permissions':
         return _buildPermissionsPanel(mgr);
+      case 'data_sync':
+        return _buildSyncPanel(mgr);
       case 'data_files':
         return _buildDataFilesPanel(mgr);
       case 'data_storage':
@@ -2173,6 +2185,413 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     ),
     );
     }
+
+  // ─── Sync Panel ─────────────────────────────────────────
+
+  Widget _buildSyncPanel(AgentManager mgr) {
+    final l10n = AppLocalizations.of(context);
+    final backend = _syncService.config.backend;
+    final isConfigured = _syncService.config.isConfigured;
+    final status = _syncService.status;
+    final lastResult = _syncService.lastResult;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──
+          Row(
+            children: [
+              Icon(Icons.sync, size: 22, color: ShadTheme.of(context).primary),
+              SizedBox(width: 10),
+              Text(l10n.syncTitle, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+            ],
+          ),
+          SizedBox(height: 4),
+          Text(l10n.syncSubtitle, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+          SizedBox(height: 24),
+
+          // ── Backend Selection ──
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: ShadTheme.of(context).card,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: ShadTheme.of(context).border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.cloud_outlined, size: 20, color: ShadTheme.of(context).primary),
+                    SizedBox(width: 8),
+                    Text(l10n.syncBackend, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+                  ],
+                ),
+                SizedBox(height: 12),
+                // Backend selector
+                Row(
+                  children: [
+                    Expanded(
+                      child: _syncBackendOption(
+                        SyncBackend.webdav,
+                        l10n.syncWebdav,
+                        'WebDAV (Nutstore, Nextcloud...)',
+                        backend == SyncBackend.webdav,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: _syncBackendOption(
+                        SyncBackend.localFolder,
+                        l10n.syncLocalFolder,
+                        'External drive / cloud sync',
+                        backend == SyncBackend.localFolder,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ── WebDAV Config ──
+                if (backend == SyncBackend.webdav) ...[
+                  SizedBox(height: 16),
+                  Divider(color: ShadTheme.of(context).border),
+                  SizedBox(height: 12),
+                  _syncTextField(l10n.syncUrl, _syncService.config.webdavUrl,
+                    hint: 'https://dav.jianguoyun.com/dav/', onChanged: (v) {
+                    _syncService.config.webdavUrl = v;
+                    _syncService.config.save();
+                    _onSyncChanged();
+                  }),
+                  SizedBox(height: 10),
+                  _syncTextField(l10n.syncUsername, _syncService.config.webdavUsername,
+                    hint: 'your@email.com', onChanged: (v) {
+                    _syncService.config.webdavUsername = v;
+                    _syncService.config.save();
+                    _onSyncChanged();
+                  }),
+                  SizedBox(height: 10),
+                  _syncTextField(l10n.syncPassword, _syncService.config.webdavPassword,
+                    hint: '••••••••', obscure: true, onChanged: (v) {
+                    _syncService.config.webdavPassword = v;
+                    _syncService.config.save();
+                    _onSyncChanged();
+                  }),
+                  SizedBox(height: 12),
+                  // Test connection button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: status == SyncStatus.syncing ? null : () async {
+                        setState(() => _syncService.status = SyncStatus.syncing);
+                        final result = await _syncService.testConnection();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(result.success ? l10n.syncTestSuccess : '${l10n.syncTestFailed}: ${result.message}'),
+                            backgroundColor: ShadTheme.of(context).card,
+                          ));
+                          _onSyncChanged();
+                        }
+                      },
+                      icon: status == SyncStatus.syncing
+                        ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Icon(Icons.wifi_tethering, size: 18),
+                      label: Text(status == SyncStatus.syncing ? l10n.syncTesting : l10n.syncTestConnection),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ShadTheme.of(context).primary,
+                        side: BorderSide(color: ShadTheme.of(context).primary),
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+
+                // ── Local Folder Config ──
+                if (backend == SyncBackend.localFolder) ...[
+                  SizedBox(height: 16),
+                  Divider(color: ShadTheme.of(context).border),
+                  SizedBox(height: 12),
+                  _syncTextField(l10n.syncLocalFolder, _syncService.config.localFolderPath,
+                    hint: r'D:\AiVtuber_Agent_profile_backup', onChanged: (v) {
+                    _syncService.config.localFolderPath = v;
+                    _syncService.config.save();
+                    _onSyncChanged();
+                  }),
+                ],
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+
+          // ── Auto Sync ──
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: ShadTheme.of(context).card,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: ShadTheme.of(context).border),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.timer_outlined, size: 22, color: ShadTheme.of(context).foreground),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(l10n.syncAutoSync, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+                          SizedBox(height: 2),
+                          Text(l10n.syncAutoSyncDesc, style: TextStyle(fontSize: 12, color: ShadTheme.of(context).mutedForeground)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _syncService.config.autoSync,
+                      onChanged: isConfigured ? (v) {
+                        _syncService.config.autoSync = v;
+                        _syncService.config.save();
+                        if (v) {
+                          _syncService.stopAutoSync();
+                          // restart with new setting via syncNow triggers
+                          _syncService.config.save();
+                        } else {
+                          _syncService.stopAutoSync();
+                        }
+                        _onSyncChanged();
+                      } : null,
+                      activeColor: ShadTheme.of(context).primary,
+                    ),
+                  ],
+                ),
+                if (_syncService.config.autoSync) ...[
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(l10n.syncInterval, style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderThemeData(
+                            activeTrackColor: ShadTheme.of(context).primary,
+                            thumbColor: ShadTheme.of(context).primary,
+                          ),
+                          child: Slider(
+                            value: _syncService.config.intervalMinutes.toDouble(),
+                            min: 1, max: 60, divisions: 59,
+                            label: '${_syncService.config.intervalMinutes} min',
+                            onChanged: (v) {
+                              _syncService.config.intervalMinutes = v.round();
+                              _syncService.config.save();
+                              _onSyncChanged();
+                            },
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: ShadTheme.of(context).primary.withAlpha(25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text('${_syncService.config.intervalMinutes} min',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ShadTheme.of(context).primary)),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+
+          // ── Manual Actions ──
+          if (isConfigured) ...[
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: ShadTheme.of(context).card,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: ShadTheme.of(context).border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.syncStatus, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ShadTheme.of(context).foreground)),
+                  SizedBox(height: 12),
+                  // Status indicator
+                  Row(
+                    children: [
+                      _syncStatusIcon(status),
+                      SizedBox(width: 8),
+                      Text(_syncStatusText(l10n, status, lastResult),
+                        style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+                    ],
+                  ),
+                  if (lastResult != null) ...[
+                    SizedBox(height: 4),
+                    Text(
+                      '${l10n.syncLastSync}: ${_syncFormatTime(lastResult.timestamp)}',
+                      style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground),
+                    ),
+                    if (lastResult.message.isNotEmpty) ...[
+                      SizedBox(height: 2),
+                      Text(lastResult.message,
+                        style: TextStyle(fontSize: 11, color: ShadTheme.of(context).mutedForeground)),
+                    ],
+                  ],
+                  SizedBox(height: 12),
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: status == SyncStatus.syncing ? null : () => _syncService.syncNow(),
+                          icon: Icon(Icons.sync, size: 18),
+                          label: Text(l10n.syncNow),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: ShadTheme.of(context).primary,
+                            side: BorderSide(color: ShadTheme.of(context).primary),
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: status == SyncStatus.syncing ? null : () => _syncService.syncReDownload(),
+                          icon: Icon(Icons.download, size: 18),
+                          label: Text(l10n.syncReDownload),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: ShadTheme.of(context).foreground,
+                            side: BorderSide(color: ShadTheme.of(context).border),
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Not configured hint
+            Container(
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: ShadTheme.of(context).card,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: ShadTheme.of(context).border),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 20, color: Color(0xFFF59E0B)),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(l10n.syncNotConfigured,
+                      style: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _syncBackendOption(SyncBackend backend, String title, String subtitle, bool selected) {
+    return GestureDetector(
+      onTap: () {
+        _syncService.config.backend = backend;
+        _syncService.config.save();
+        _onSyncChanged();
+      },
+      child: Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? ShadTheme.of(context).primary.withAlpha(15) : ShadTheme.of(context).secondary,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? ShadTheme.of(context).primary : ShadTheme.of(context).border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w600,
+              color: selected ? ShadTheme.of(context).primary : ShadTheme.of(context).foreground,
+            )),
+            SizedBox(height: 2),
+            Text(subtitle, style: TextStyle(fontSize: 10, color: ShadTheme.of(context).mutedForeground)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _syncTextField(String label, String value, {String? hint, bool obscure = false, required ValueChanged<String> onChanged}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: ShadTheme.of(context).foreground)),
+        SizedBox(height: 4),
+        TextField(
+          controller: TextEditingController(text: value)..selection = TextSelection.collapsed(offset: value.length),
+          obscureText: obscure,
+          onChanged: onChanged,
+          style: TextStyle(fontSize: 13, color: ShadTheme.of(context).foreground),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(fontSize: 13, color: ShadTheme.of(context).mutedForeground),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            isDense: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _syncStatusIcon(SyncStatus status) {
+    switch (status) {
+      case SyncStatus.syncing:
+        return SizedBox(
+          width: 16, height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(ShadTheme.of(context).primary)),
+        );
+      case SyncStatus.success:
+        return Icon(Icons.check_circle, size: 16, color: Color(0xFF22C55E));
+      case SyncStatus.failed:
+        return Icon(Icons.error, size: 16, color: ShadTheme.of(context).destructive);
+      case SyncStatus.idle:
+        return Icon(Icons.cloud_done_outlined, size: 16, color: ShadTheme.of(context).mutedForeground);
+    }
+  }
+
+  String _syncStatusText(AppLocalizations l10n, SyncStatus status, SyncResult? last) {
+    switch (status) {
+      case SyncStatus.syncing: return l10n.syncInProgress;
+      case SyncStatus.success: return l10n.syncSuccess;
+      case SyncStatus.failed: return l10n.syncFailed;
+      case SyncStatus.idle:
+        if (last == null) return l10n.syncNever;
+        return '${l10n.syncSuccess} — ${_syncFormatTime(last.timestamp)}';
+    }
+  }
+
+  String _syncFormatTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes} min ago';
+    if (diff.inDays < 1) return '${diff.inHours} h ago';
+    return '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
 
   Widget _buildAboutPanel(AgentManager mgr) {
     final l10n = AppLocalizations.of(context);
