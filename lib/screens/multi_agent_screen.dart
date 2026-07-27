@@ -672,7 +672,6 @@ final Set<LogLevel> _logLevels = LogLevel.values.toSet();
 int? _expandedLogId;
 
 // ── MCP Config state ──
-bool _mcpRunning = false;
 String _mcpHost = 'localhost';
 int _mcpPort = 9898;
 String _mcpConfigJson = '{\n  "mcpServers": {\n    "filesystem": {\n      "command": "npx",\n      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]\n    }\n  }\n}';
@@ -1085,12 +1084,11 @@ Widget _mcpServerCard(Map<String, String> srv, AppLocalizations l10n) {
         Row(
           children: [
             _mcpActionBtn(
-              running ? Icons.stop : Icons.play_arrow,
-              running ? l10n.mcpStop : l10n.mcpStart,
-              running ? ShadTheme.of(context).destructive : Color(0xFF4CAF50),
+              running ? Icons.toggle_on : Icons.toggle_off,
+              running ? l10n.mcpEnabled : l10n.mcpDisabled,
+              running ? Color(0xFF4CAF50) : ShadTheme.of(context).mutedForeground,
               () => setState(() {
                 srv['status'] = running ? 'stopped' : 'running';
-                _mcpRunning = srv['status'] == 'running';
               }),
             ),
             SizedBox(width: 8),
@@ -2355,9 +2353,7 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         _syncService.config.autoSync = v;
                         _syncService.config.save();
                         if (v) {
-                          _syncService.stopAutoSync();
-                          // restart with new setting via syncNow triggers
-                          _syncService.config.save();
+                          _syncService.startAutoSync();
                         } else {
                           _syncService.stopAutoSync();
                         }
@@ -2655,7 +2651,7 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  l10n.aboutVersion,
+                  l10n.aboutVersion.replaceAll(r'$version', kAppVersion),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -2713,7 +2709,7 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
 
   Future<void> _checkForUpdate(AgentManager mgr) async {
     final l10n = AppLocalizations.of(context);
-    const currentVersion = 'v1.0.0';
+    final currentVersion = 'v$kAppVersion';
     const repoApi = 'https://api.github.com/repos/AuthourAkson/AI_Vtuber_Agenty/releases/latest';
 
     // Show checking indicator
@@ -3119,17 +3115,35 @@ contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     }
 
     void _exportLogs(AppLocalizations l10n, LogService logService) {
-    // For now, just notify — file save dialog would require file_picker package.
-    // Output is available via LogService.exportJson().
-    final json = logService.exportJson();
-    debugPrint('=== LOG EXPORT ===\n$json');
-    ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-    content: Text(l10n.logExported),
-    backgroundColor: ShadTheme.of(context).card,
-    duration: const Duration(seconds: 2),
-    ),
-    );
+    final exportDir = r'D:\AiVtuber_Agent_profile\exports';
+    final dir = Directory(exportDir);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.')[0];
+    final exportPath = '$exportDir\\logs_$timestamp.json';
+    try {
+      final json = logService.exportJson();
+      File(exportPath).writeAsStringSync(json);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.logExported),
+            backgroundColor: ShadTheme.of(context).card,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        Process.run('explorer', ['/select,', exportPath]);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${l10n.logExport} failed: $e'),
+            backgroundColor: ShadTheme.of(context).destructive,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
     }
 
     void _confirmClearLogs(AppLocalizations l10n, LogService logService) {
