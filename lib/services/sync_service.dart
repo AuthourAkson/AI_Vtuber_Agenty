@@ -121,11 +121,11 @@ class SyncService {
   Future<void> init() async {
     await config.load();
     if (config.autoSync && config.isConfigured) {
-      _startAutoSync();
+      startAutoSync();
     }
   }
 
-  void _startAutoSync() {
+  void startAutoSync() {
     _autoSyncTimer?.cancel();
     _autoSyncTimer = Timer.periodic(
       Duration(minutes: config.intervalMinutes),
