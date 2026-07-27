@@ -421,8 +421,8 @@ class AppLocalizations {
   String get mcpSubtitle => _t('mcpSubtitle');
   String get mcpRunning => _t('mcpRunning');
   String get mcpStopped => _t('mcpStopped');
-  String get mcpStart => _t('mcpStart');
-  String get mcpStop => _t('mcpStop');
+  String get mcpEnabled => _t('mcpEnabled');
+  String get mcpDisabled => _t('mcpDisabled');
   String get mcpEditConfig => _t('mcpEditConfig');
   String get mcpHost => _t('mcpHost');
   String get mcpPort => _t('mcpPort');
@@ -877,7 +877,7 @@ class AppLocalizations {
     'logs':         {'en': 'Logs',         'zh': '日志'},
     'about':        {'en': 'About',        'zh': '关于'},
     'aboutAppName': {'en': 'AUAK AIVtuberAgent', 'zh': 'AUAK AIVtuberAgent'},
-    'aboutVersion': {'en': 'Version v1.0.0', 'zh': '版本 v1.0.0'},
+    'aboutVersion': {'en': r'Version v$version', 'zh': r'版本 v$version'},
     'aboutCheckUpdate': {'en': 'Check for Updates', 'zh': '检查更新'},
     'aboutOfficialWebsite': {'en': 'Official Website', 'zh': '官方网站'},
     'aboutOpenWebsite': {'en': 'Visit Official Website', 'zh': '访问官方网站'},
@@ -906,8 +906,8 @@ class AppLocalizations {
     'mcpSubtitle':      {'en': 'Manage MCP (Model Context Protocol) server connections and tools.', 'zh': '管理 MCP（模型上下文协议）服务器连接和工具。'},
     'mcpRunning':       {'en': 'Running',                            'zh': '运行中'},
     'mcpStopped':       {'en': 'Stopped',                            'zh': '已停止'},
-    'mcpStart':         {'en': 'Start Service',                      'zh': '启动服务'},
-    'mcpStop':          {'en': 'Stop Service',                       'zh': '停止服务'},
+    'mcpEnabled':       {'en': 'Enabled',                            'zh': '已启用'},
+    'mcpDisabled':      {'en': 'Disabled',                           'zh': '已禁用'},
     'mcpEditConfig':    {'en': 'Edit Config',                        'zh': '编辑配置'},
     'mcpHost':          {'en': 'Host',                               'zh': '主机'},
     'mcpPort':          {'en': 'Port',                               'zh': '端口'},
