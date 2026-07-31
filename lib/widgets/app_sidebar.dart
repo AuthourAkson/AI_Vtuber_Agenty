@@ -24,7 +24,7 @@ class _AppSidebarState extends State<AppSidebar> {
 bool _expanded = true;
 
 // Match LAV2 page-mapping sections exactly
-static final _testPipeline = ['home', 'character', 'memory', 'agents'];
+static final _testPipeline = ['home', 'character', 'memory', 'agents', 'markdownText'];
 static final _footer = [
 'input',
 'vision',
@@ -39,6 +39,7 @@ static final _icons = {
 'character': Icons.person,
 'memory': Icons.storage_rounded,
 'agents': Icons.hub,
+'markdownText': Icons.article_outlined,
 'input': Icons.mic,
 'vision': Icons.remove_red_eye,
 'tts': Icons.record_voice_over,
@@ -54,6 +55,7 @@ case 'home': return l10n.sidebarHome;
 case 'character': return l10n.sidebarCharacter;
 case 'memory': return l10n.sidebarMemory;
 case 'agents': return l10n.sidebarAgents;
+case 'markdownText': return l10n.sidebarMarkdownText;
 case 'input': return l10n.sidebarInput;
 case 'vision': return l10n.sidebarVision;
 case 'tts': return l10n.sidebarTTS;
