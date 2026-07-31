@@ -68,6 +68,40 @@ class AppLocalizations {
   String get mdOpenProject => _t('mdOpenProject');
   String get mdNoProject => _t('mdNoProject');
   String get mdProjectPath => _t('mdProjectPath');
+  // wenzmark IDE 界面文案
+  String get mdMenuFile => _t('mdMenuFile');
+  String get mdMenuEdit => _t('mdMenuEdit');
+  String get mdMenuView => _t('mdMenuView');
+  String get mdMenuWindow => _t('mdMenuWindow');
+  String get mdMenuHelp => _t('mdMenuHelp');
+  String get mdAiButton => _t('mdAiButton');
+  String get mdDocsButton => _t('mdDocsButton');
+  String get mdClose => _t('mdClose');
+  String get mdPickProjectHint => _t('mdPickProjectHint');
+  String get mdSearchFiles => _t('mdSearchFiles');
+  String get mdRefresh => _t('mdRefresh');
+  String get mdEmptyDocs => _t('mdEmptyDocs');
+  String get mdEmptyEditor => _t('mdEmptyEditor');
+  String get mdSearchTasks => _t('mdSearchTasks');
+  String get mdFilterAll => _t('mdFilterAll');
+  String get mdFilterQueue => _t('mdFilterQueue');
+  String get mdFilterError => _t('mdFilterError');
+  String get mdFilterPending => _t('mdFilterPending');
+  String get mdFilterCompleted => _t('mdFilterCompleted');
+  String get mdNoTasks => _t('mdNoTasks');
+  String get mdNoMatch => _t('mdNoMatch');
+  String get mdPromptHint => _t('mdPromptHint');
+  String get mdStatusWaiting => _t('mdStatusWaiting');
+  String get mdStatusRunning => _t('mdStatusRunning');
+  String get mdStatusFailed => _t('mdStatusFailed');
+  String get mdStatusCompleted => _t('mdStatusCompleted');
+  String get mdRetry => _t('mdRetry');
+  String get mdAllAttachments => _t('mdAllAttachments');
+  String get mdTasksSuffix => _t('mdTasksSuffix');
+  String get mdLinesWordsChars => _t('mdLinesWordsChars');
+  String get mdNoEmployeeToast => _t('mdNoEmployeeToast');
+  String get mdSaveFailed => _t('mdSaveFailed');
+  String get mdNoReadme => _t('mdNoReadme');
   String get testPipeline => _t('testPipeline');
   String get chatNewSession => _t('chatNewSession');
   String get chatSessions => _t('chatSessions');
@@ -1085,6 +1119,41 @@ class AppLocalizations {
     'mdOpenProject':        {'en': 'Open Project Folder',              'zh': '打开项目文件夹'},
     'mdNoProject':          {'en': 'No project selected. Open a folder to get started.', 'zh': '尚未选择项目，请打开一个文件夹开始。'},
     'mdProjectPath':        {'en': 'Project path',                     'zh': '项目路径'},
+
+    // ── wenzmark IDE 界面文案 ──
+    'mdMenuFile':           {'en': 'File',                             'zh': '文件'},
+    'mdMenuEdit':           {'en': 'Edit',                             'zh': '编辑'},
+    'mdMenuView':           {'en': 'View',                             'zh': '视图'},
+    'mdMenuWindow':         {'en': 'Window',                           'zh': '窗口'},
+    'mdMenuHelp':           {'en': 'Help',                             'zh': '帮助'},
+    'mdAiButton':           {'en': 'AI',                               'zh': 'AI'},
+    'mdDocsButton':         {'en': 'Docs',                             'zh': '文档'},
+    'mdClose':              {'en': 'Close',                            'zh': '关闭'},
+    'mdPickProjectHint':    {'en': 'Click to pick a project folder',   'zh': '点击选择项目文件夹'},
+    'mdSearchFiles':        {'en': 'Search all files...',              'zh': '搜索所有文件...'},
+    'mdRefresh':            {'en': 'Refresh',                          'zh': '刷新'},
+    'mdEmptyDocs':          {'en': 'No docs yet\nClick + to create a file', 'zh': '暂无文档\n点击 + 新建文件开始'},
+    'mdEmptyEditor':        {'en': 'Select a file from the left to edit', 'zh': '从左侧选择文件开始编辑'},
+    'mdSearchTasks':        {'en': 'Search tasks...',                  'zh': '搜索任务...'},
+    'mdFilterAll':          {'en': 'All',                              'zh': '全部'},
+    'mdFilterQueue':        {'en': 'Queue',                            'zh': '执行队列'},
+    'mdFilterError':        {'en': 'Errors',                           'zh': '执行错误'},
+    'mdFilterPending':      {'en': 'Pending',                          'zh': '待验收'},
+    'mdFilterCompleted':    {'en': 'Completed',                        'zh': '已完成'},
+    'mdNoTasks':            {'en': 'No tasks\nType a prompt to create','zh': '暂无任务\n输入提示词创建'},
+    'mdNoMatch':            {'en': 'No matching tasks',                'zh': '无匹配任务'},
+    'mdPromptHint':         {'en': 'Type a prompt, press Enter to create & run...', 'zh': '输入提示词，回车创建并执行...'},
+    'mdStatusWaiting':      {'en': 'Waiting',                          'zh': '等待执行'},
+    'mdStatusRunning':      {'en': 'Running',                          'zh': '执行中'},
+    'mdStatusFailed':       {'en': 'Failed',                           'zh': '执行错误'},
+    'mdStatusCompleted':    {'en': 'Completed',                        'zh': '已完成'},
+    'mdRetry':              {'en': 'Retry',                            'zh': '重试'},
+    'mdAllAttachments':     {'en': 'All attachments',                  'zh': '所有附件'},
+    'mdTasksSuffix':        {'en': 'tasks',                            'zh': '任务'},
+    'mdLinesWordsChars':    {'en': r'${lines} lines ${words} words ${chars} chars', 'zh': r'${lines}行 ${words}词 ${chars}字符'},
+    'mdNoEmployeeToast':    {'en': 'No employees available. Create one in MultiAgent first.', 'zh': '暂无可用员工，请先在 MultiAgent 中创建'},
+    'mdSaveFailed':         {'en': 'Save failed',                      'zh': '保存失败'},
+    'mdNoReadme':           {'en': 'This project has no README.md yet','zh': '项目还没有 README.md'},
   };
 }
 
