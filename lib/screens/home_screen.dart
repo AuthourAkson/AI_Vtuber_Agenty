@@ -16,6 +16,7 @@ import 'stream_screen.dart';
 import 'settings_screen.dart';
 import 'pipeline_monitor_screen.dart';
 import 'multi_agent_screen.dart';
+import 'markdown_text_screen.dart';
 
 /// Top-level layout matching LocalAIVtuber2's Mainpage.
 /// Only builds the active page — not all at once.
@@ -52,6 +53,8 @@ case 'settings':
 return SettingsScreen();
 case 'agents':
 return MultiAgentScreen();
+case 'markdownText':
+return MarkdownTextScreen();
 default:
 return ChatScreen();
 }
