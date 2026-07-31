@@ -36,6 +36,38 @@ class AppLocalizations {
   String get sidebarPipeline => _t('sidebarPipeline');
   String get sidebarSettings => _t('sidebarSettings');
   String get sidebarAgents => _t('sidebarAgents');
+  String get sidebarMarkdownText => _t('sidebarMarkdownText');
+  String get mdTitle => _t('mdTitle');
+  String get mdSubtitle => _t('mdSubtitle');
+  String get mdTreeTitle => _t('mdTreeTitle');
+  String get mdNewFile => _t('mdNewFile');
+  String get mdNewFolder => _t('mdNewFolder');
+  String get mdFileNameHint => _t('mdFileNameHint');
+  String get mdFolderNameHint => _t('mdFolderNameHint');
+  String get mdDelete => _t('mdDelete');
+  String get mdDeleteConfirm => _t('mdDeleteConfirm');
+  String get mdSave => _t('mdSave');
+  String get mdSaved => _t('mdSaved');
+  String get mdUnsaved => _t('mdUnsaved');
+  String get mdEdit => _t('mdEdit');
+  String get mdPreview => _t('mdPreview');
+  String get mdNoFileSelected => _t('mdNoFileSelected');
+  String get mdRequirements => _t('mdRequirements');
+  String get mdRequirementsHint => _t('mdRequirementsHint');
+  String get mdSendToEmployee => _t('mdSendToEmployee');
+  String get mdSelectEmployee => _t('mdSelectEmployee');
+  String get mdNoEmployee => _t('mdNoEmployee');
+  String get mdEmployeeStatus => _t('mdEmployeeStatus');
+  String get mdSending => _t('mdSending');
+  String get mdSent => _t('mdSent');
+  String get mdSendFailed => _t('mdSendFailed');
+  String get mdIdle => _t('mdIdle');
+  String get mdWorking => _t('mdWorking');
+  String get mdRefreshing => _t('mdRefreshing');
+  String get mdSelectProject => _t('mdSelectProject');
+  String get mdOpenProject => _t('mdOpenProject');
+  String get mdNoProject => _t('mdNoProject');
+  String get mdProjectPath => _t('mdProjectPath');
   String get testPipeline => _t('testPipeline');
   String get chatNewSession => _t('chatNewSession');
   String get chatSessions => _t('chatSessions');
@@ -1017,6 +1049,42 @@ class AppLocalizations {
     'syncUploaded':     {'en': 'Uploaded',                          'zh': '已上传'},
     'syncDownloaded':   {'en': 'Downloaded',                        'zh': '已下载'},
     'syncStatus':       {'en': 'Status',                            'zh': '状态'},
+
+    // ── MarkdownText panel ──
+    'sidebarMarkdownText':  {'en': 'MarkdownText',                    'zh': '文档编辑'},
+    'mdTitle':              {'en': 'Project Docs',                    'zh': '项目文档'},
+    'mdSubtitle':           {'en': 'Browse, edit, and manage project documentation.', 'zh': '浏览、编辑和管理项目文档。'},
+    'mdTreeTitle':          {'en': 'Directory',                       'zh': '目录结构'},
+    'mdNewFile':            {'en': 'New File',                        'zh': '新建文件'},
+    'mdNewFolder':          {'en': 'New Folder',                      'zh': '新建文件夹'},
+    'mdFileNameHint':       {'en': 'File name (e.g. overview.md)',    'zh': '文件名（如 overview.md）'},
+    'mdFolderNameHint':     {'en': 'Folder name',                     'zh': '文件夹名'},
+    'mdDelete':             {'en': 'Delete',                          'zh': '删除'},
+    'mdDeleteConfirm':      {'en': r'Delete "${name}"? This cannot be undone.', 'zh': r'删除"${name}"？此操作不可撤销。'},
+    'mdSave':               {'en': 'Save',                            'zh': '保存'},
+    'mdSaved':              {'en': 'Saved.',                          'zh': '已保存。'},
+    'mdUnsaved':            {'en': 'Unsaved changes',                 'zh': '有未保存的更改'},
+    'mdEdit':               {'en': 'Edit',                            'zh': '编辑'},
+    'mdPreview':            {'en': 'Preview',                         'zh': '预览'},
+    'mdNoFileSelected':     {'en': 'Select a file from the tree to view or edit.', 'zh': '从左侧目录选择文件进行查看或编辑。'},
+    'mdRequirements':       {'en': 'Requirements',                    'zh': '修改要求'},
+    'mdRequirementsHint':   {'en': 'Describe what changes you want the AI to make to this document...', 'zh': '描述你希望 AI 对本文档做出的修改...'},
+    'mdSendToEmployee':     {'en': 'Send to Employee',                'zh': '发送给员工'},
+    'mdSelectEmployee':     {'en': 'Select an employee...',           'zh': '选择员工...'},
+    'mdNoEmployee':         {'en': 'No employees available. Create one in MultiAgent first.', 'zh': '暂无可用员工，请先在 MultiAgent 中创建。'},
+    'mdEmployeeStatus':     {'en': 'Employee Status',                 'zh': '员工工作状态'},
+    'mdSending':            {'en': 'Sending...',                      'zh': '发送中...'},
+    'mdSent':               {'en': 'Request sent!',                   'zh': '已发送请求！'},
+    'mdSendFailed':         {'en': 'Send failed.',                    'zh': '发送失败。'},
+    'mdIdle':               {'en': 'Idle',                            'zh': '空闲'},
+    'mdWorking':            {'en': 'Working',                         'zh': '工作中'},
+    'mdRefreshing':         {'en': 'Refreshing tree...',              'zh': '刷新目录...'},
+
+    // ── MarkdownText project selector ──
+    'mdSelectProject':      {'en': 'Select Project',                   'zh': '选择项目'},
+    'mdOpenProject':        {'en': 'Open Project Folder',              'zh': '打开项目文件夹'},
+    'mdNoProject':          {'en': 'No project selected. Open a folder to get started.', 'zh': '尚未选择项目，请打开一个文件夹开始。'},
+    'mdProjectPath':        {'en': 'Project path',                     'zh': '项目路径'},
   };
 }
 
