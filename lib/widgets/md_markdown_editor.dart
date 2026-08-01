@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../l10n/app_localizations.dart';
 import '../models/md_task.dart';
 
 /// 打开的文件 Tab 数据。
 class MdOpenTab {
-  final String path; // 相对 project-summary/ 的路径
+  final String path; // 相对项目根的路径
   final String title; // 文件名
+  /// 绝对 file:// URI（HTML 预览用，可选）。
+  final String? fileUri;
   String content;
   String original;
   bool dirty;
@@ -16,16 +19,41 @@ class MdOpenTab {
     required this.title,
     required this.content,
     required this.original,
+    this.fileUri,
     this.dirty = false,
   });
 
   bool get isDirty => content != original;
 }
 
-/// wenzmark 风格中间 Markdown 编辑区。
+/// 文件扩展名小写（不含点，如 'html'、'md'、''）。
+String _extOf(String path) {
+  final name = path.split('/').last;
+  final idx = name.lastIndexOf('.');
+  if (idx <= 0) return '';
+  return name.substring(idx + 1).toLowerCase();
+}
+
+bool _isMarkdown(String path) {
+  final e = _extOf(path);
+  return e == 'md' || e == 'markdown';
+}
+
+bool _isHtml(String path) {
+  final e = _extOf(path);
+  return e == 'html' || e == 'htm';
+}
+
+bool _canPreview(String path) => _isMarkdown(path) || _isHtml(path);
+
+/// wenzmark 风格中间编辑区（通用 IDE）。
 ///
 /// 结构：Tab 栏（40px，当前 Tab 底部青绿线）→ Notion 风格编辑器（padding 40px）
-/// 支持编辑/预览切换。
+/// 预览按文件类型分流：
+/// - .md → flutter_markdown 渲染
+/// - .html/.htm → InAppWebView 加载磁盘文件（file://，等同浏览器双击效果，
+///   相对引用的 css/js/图片正常；显示已保存版本，保存后自动刷新）
+/// - 其他 → 无预览按钮
 class MdMarkdownEditor extends StatelessWidget {
   final List<MdOpenTab> tabs;
   final String? activeTabPath;
@@ -35,6 +63,8 @@ class MdMarkdownEditor extends StatelessWidget {
   final ValueChanged<String> onCloseTab;
   final VoidCallback onTogglePreview;
   final VoidCallback? onSave;
+  /// HTML 预览刷新信号：保存成功后 +1，触发 WebView 重新加载。
+  final int htmlReloadTick;
 
   const MdMarkdownEditor({
     super.key,
@@ -46,6 +76,7 @@ class MdMarkdownEditor extends StatelessWidget {
     required this.onCloseTab,
     required this.onTogglePreview,
     this.onSave,
+    this.htmlReloadTick = 0,
   });
 
   @override
@@ -102,28 +133,29 @@ class MdMarkdownEditor extends StatelessWidget {
                       ),
                     ),
                   ],
-                  // Preview toggle
-                  GestureDetector(
-                    onTap: onTogglePreview,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        color: previewMode ? theme.accentDim : theme.card,
-                        border: Border.all(
-                          color: previewMode
-                              ? theme.accent.withAlpha(90)
-                              : theme.borderSubtle,
+                  // Preview toggle（仅可预览类型显示）
+                  if (_canPreview(active.path))
+                    GestureDetector(
+                      onTap: onTogglePreview,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: previewMode ? theme.accentDim : theme.card,
+                          border: Border.all(
+                            color: previewMode
+                                ? theme.accent.withAlpha(90)
+                                : theme.borderSubtle,
+                          ),
+                        ),
+                        child: Icon(
+                          previewMode ? Icons.edit_outlined : Icons.visibility_outlined,
+                          size: 13,
+                          color: previewMode ? theme.accent : theme.muted,
                         ),
                       ),
-                      child: Icon(
-                        previewMode ? Icons.edit_outlined : Icons.visibility_outlined,
-                        size: 13,
-                        color: previewMode ? theme.accent : theme.muted,
-                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -134,7 +166,16 @@ class MdMarkdownEditor extends StatelessWidget {
             child: tabs.isEmpty
                 ? _EmptyEditor(theme: theme, l10n: l10n)
                 : previewMode
-                    ? _PreviewPane(content: active.content, theme: theme)
+                    ? (_isHtml(active.path)
+                        ? _HtmlPreviewPane(
+                            key: ValueKey('html-${active.path}-$htmlReloadTick'),
+                            fileUri: active.fileUri,
+                            isDirty: active.isDirty,
+                            onSave: onSave,
+                            theme: theme,
+                            l10n: l10n,
+                          )
+                        : _PreviewPane(content: active.content, theme: theme))
                     : _EditorPane(
                         controller: controller,
                         theme: theme,
@@ -269,6 +310,7 @@ class _EditorPane extends StatelessWidget {
   }
 }
 
+/// Markdown 预览（flutter_markdown 渲染）。
 class _PreviewPane extends StatelessWidget {
   final String content;
   final MdIdeTheme theme;
@@ -319,6 +361,135 @@ class _PreviewPane extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// HTML 预览：InAppWebView 加载磁盘文件（file://），效果等同浏览器双击打开。
+///
+/// 显示已保存版本；有未保存修改时顶部显示提示条（点击即保存）。
+/// key 由调用方带 [MdMarkdownEditor.htmlReloadTick]，保存成功后重建重载。
+class _HtmlPreviewPane extends StatefulWidget {
+  final String? fileUri;
+  final bool isDirty;
+  final VoidCallback? onSave;
+  final MdIdeTheme theme;
+  final AppLocalizations l10n;
+
+  const _HtmlPreviewPane({
+    super.key,
+    this.fileUri,
+    required this.isDirty,
+    this.onSave,
+    required this.theme,
+    required this.l10n,
+  });
+
+  @override
+  State<_HtmlPreviewPane> createState() => _HtmlPreviewPaneState();
+}
+
+class _HtmlPreviewPaneState extends State<_HtmlPreviewPane> {
+  bool _loading = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = widget.fileUri;
+    if (uri == null) {
+      return Center(
+        child: Text(
+          widget.l10n.mdNoPreview,
+          style: TextStyle(fontSize: 12, color: widget.theme.faint),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: InAppWebView(
+            initialUrlRequest: URLRequest(url: WebUri(uri)),
+            initialSettings: InAppWebViewSettings(
+              javaScriptEnabled: true,
+              allowFileAccess: true,
+              allowContentAccess: true,
+            ),
+            onLoadStart: (_, __) {
+              if (mounted) setState(() => _loading = true);
+            },
+            onLoadStop: (_, __) {
+              if (mounted) setState(() => _loading = false);
+            },
+            onReceivedError: (_, __, ___) {
+              if (mounted) setState(() => _loading = false);
+            },
+          ),
+        ),
+        // 加载指示（仅首次/重载瞬间）
+        if (_loading)
+          Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: widget.theme.accent,
+              ),
+            ),
+          ),
+        // 未保存修改提示条（点击保存并刷新）
+        if (widget.isDirty && widget.onSave != null)
+          Positioned(
+            top: 10,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: widget.onSave,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: widget.theme.card.withAlpha(0xE6),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: widget.theme.warning.withAlpha(140),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(30),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.info_outline, size: 13, color: widget.theme.warning),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.l10n.mdPreviewSavedOnly,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: widget.theme.foreground,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.l10n.save,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: widget.theme.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
