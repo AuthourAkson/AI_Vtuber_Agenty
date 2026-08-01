@@ -60,6 +60,8 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
   static const _middleMin = 360.0;
   double _leftWidth = 350;
   double _rightWidth = 440;
+  // AI 右侧面板显隐（标题栏 AI 按钮切换）
+  bool _showAiPanel = true;
 
   @override
   void initState() {
@@ -370,7 +372,19 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
 
   /// 标题栏"文档"按钮：打开项目 README.md（存在时）。
   Future<void> _openReadme() async {
-    if (_projectRoot == null) return;
+    if (_projectRoot == null) {
+      // 还没选项目：提示并直接拉起项目选择器
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).mdNoProjectToast),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      await _pickProjectFolder();
+      return;
+    }
     try {
       if (await _svc.exists('README.md')) {
         await _openFile('README.md');
@@ -574,9 +588,10 @@ Rules:
             canForward: _tabIndex < _tabs.length - 1,
             onBack: () => _goTab(-1),
             onForward: () => _goTab(1),
-            onOpenAi: () => {},
+            onOpenAi: () => setState(() => _showAiPanel = !_showAiPanel),
             onOpenDocs: _openReadme,
             onToggleTheme: () {},
+            aiActive: _showAiPanel,
           ),
           // 主体三栏（左右面板可拖拽调宽）
           Expanded(
@@ -592,12 +607,15 @@ Rules:
                     builder: (context, constraints) {
                       final total = constraints.maxWidth;
                       // 中间区域至少保留 _middleMin；按剩余空间约束左右面板上限
-                      final leftMaxEff =
-                          (total - _rightWidth - _middleMin).clamp(_leftMin, _leftMax);
+                      // （AI 面板隐藏时，右面板宽度视为 0，中间区域可占满）
+                      final leftMaxEff = _showAiPanel
+                          ? (total - _rightWidth - _middleMin).clamp(_leftMin, _leftMax)
+                          : (total - _middleMin).clamp(_leftMin, _leftMax);
                       final rightMaxEff =
                           (total - _leftWidth - _middleMin).clamp(_rightMin, _rightMax);
                       final leftW = _leftWidth.clamp(_leftMin, leftMaxEff);
-                      final rightW = _rightWidth.clamp(_rightMin, rightMaxEff);
+                      final rightW =
+                          _showAiPanel ? _rightWidth.clamp(_rightMin, rightMaxEff) : 0.0;
 
                       return Row(
                         children: [
@@ -636,26 +654,28 @@ Rules:
                               onSave: _saveActiveTab,
                             ),
                           ),
-                          _DragHandle(
-                            onDrag: (dx) {
-                              setState(() => _rightWidth = (rightW - dx).clamp(_rightMin, rightMaxEff));
-                            },
-                            onDragEnd: _savePanelWidths,
-                          ),
-                          // 右侧：AI 任务中心
-                          SizedBox(
-                            width: rightW,
-                            child: MdAiTaskPanel(
-                              tasks: _tasks,
-                              selectedEmployeeName: employeeName,
-                              onPromptSubmitted: _submitTask,
-                              onSearchChanged: (_) {},
-                              onFilterChanged: (_) {},
-                              onDeleteTask: _deleteTask,
-                              onRetryTask: _retryTask,
-                              onPickEmployee: _pickEmployee,
+                          // 右侧：AI 任务中心（可被标题栏 AI 按钮隐藏）
+                          if (_showAiPanel) ...[
+                            _DragHandle(
+                              onDrag: (dx) {
+                                setState(() => _rightWidth = (rightW - dx).clamp(_rightMin, rightMaxEff));
+                              },
+                              onDragEnd: _savePanelWidths,
                             ),
-                          ),
+                            SizedBox(
+                              width: rightW,
+                              child: MdAiTaskPanel(
+                                tasks: _tasks,
+                                selectedEmployeeName: employeeName,
+                                onPromptSubmitted: _submitTask,
+                                onSearchChanged: (_) {},
+                                onFilterChanged: (_) {},
+                                onDeleteTask: _deleteTask,
+                                onRetryTask: _retryTask,
+                                onPickEmployee: _pickEmployee,
+                              ),
+                            ),
+                          ],
                         ],
                       );
                     },
