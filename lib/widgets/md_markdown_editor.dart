@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -280,34 +281,300 @@ class _EmptyEditor extends StatelessWidget {
   }
 }
 
-class _EditorPane extends StatelessWidget {
+/// VSCode 风格源码编辑区。
+///
+/// 左侧行号列（gutter）+ 当前行高亮 + 不折行（长行水平滚动）。
+/// 行号与逻辑行严格一一对应（不软换行），跟随垂直滚动同步位移。
+class _EditorPane extends StatefulWidget {
   final TextEditingController controller;
   final MdIdeTheme theme;
 
   const _EditorPane({required this.controller, required this.theme});
 
   @override
+  State<_EditorPane> createState() => _EditorPaneState();
+}
+
+class _EditorPaneState extends State<_EditorPane> {
+  final ScrollController _vScroll = ScrollController();
+  final ScrollController _hScroll = ScrollController();
+  int _cursorLine = 0;
+
+  // 全文 TextPainter 缓存（文本变化时重算），用于内容宽度 + 每行实测位置
+  TextPainter? _cachedTp;
+  String _cachedTpText = '';
+  List<LineMetrics>? _cachedMetrics;
+
+  static const _padTop = 12.0, _padBottom = 12.0;
+  static const _padLeft = 16.0, _padRight = 16.0;
+  static const _gutterLeftPad = 10.0, _gutterRightGap = 8.0;
+
+  TextStyle get _textStyle => TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 13,
+        color: widget.theme.foreground,
+        height: 1.6,
+      );
+
+  int get _lineCount => '\n'.allMatches(widget.controller.text).length + 1;
+
+  double get _gutterWidth {
+    final digits = _lineCount.toString().length;
+    return _gutterLeftPad + digits * 6.6 + _gutterRightGap;
+  }
+
+  /// 全文 TextPainter（已 layout），与 TextField 用相同 style/引擎，
+  /// 保证行号/高亮与文本渲染严格对齐。缓存到文本变化为止。
+  TextPainter _fullTp() {
+    final text = widget.controller.text;
+    if (_cachedTp != null && _cachedTpText == text) return _cachedTp!;
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: _textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    _cachedTp = tp;
+    _cachedTpText = text;
+    _cachedMetrics = tp.computeLineMetrics();
+    return tp;
+  }
+
+  /// 文本内容宽度（最长行宽 + 左右 padding）。
+  double _contentWidth() => _fullTp().width + _padLeft + _padRight;
+
+  List<LineMetrics> get _metrics => _cachedMetrics ?? const [];
+
+  /// 逻辑行 i 相对文本内容区顶部的 y（实测行顶；末尾空行按最后行高推算）。
+  double _lineTop(int i) {
+    final m = _metrics;
+    if (m.isEmpty) return i * 20.8;
+    if (i < m.length) return m[i].baseline - m[i].ascent;
+    final last = m.last;
+    return (last.baseline - last.ascent) + last.height * (i - m.length + 1);
+  }
+
+  /// 逻辑行 i 的实际行高（末尾空行用最后一行行高）。
+  double _lineHeightAt(int i) {
+    final m = _metrics;
+    if (m.isEmpty) return 20.8;
+    if (i < m.length) return m[i].height;
+    return m.last.height;
+  }
+
+  /// 垂直滚动偏移（未 attach 时返回 0——首次 build 时 TextField 内部的
+  /// Scrollable 尚未挂载，直接读 .offset 会抛 "not attached" 断言）。
+  double get _vOffset => _vScroll.hasClients ? _vScroll.offset : 0;
+
+  void _updateCursorLine() {
+    final sel = widget.controller.selection;
+    final text = widget.controller.text;
+    int line = 0;
+    final end = sel.baseOffset.clamp(0, text.length);
+    for (var i = 0; i < end; i++) {
+      if (text.codeUnitAt(i) == 0x0A) line++;
+    }
+    if (line != _cursorLine && mounted) {
+      setState(() => _cursorLine = line);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_updateCursorLine);
+    // 行号列/当前行高亮需要跟随垂直滚动重绘
+    _vScroll.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _updateCursorLine();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_updateCursorLine);
+    _vScroll.dispose();
+    _hScroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      color: theme.editor,
-      child: TextField(
-        controller: controller,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.top,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 13,
-          color: theme.foreground,
-          height: 1.6,
-        ),
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(40),
-        ),
-      ),
+    final theme = widget.theme;
+    final gutterW = _gutterWidth;
+    // 当前行位置/高度用全文实测（与 TextField 渲染严格对齐，滚动不错位）
+    final cursorTop = _padTop + _lineTop(_cursorLine) - _vOffset;
+    final cursorH = _lineHeightAt(_cursorLine);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final contentW =
+            math.max(_contentWidth(), constraints.maxWidth - gutterW);
+        final lineTops = List<double>.generate(_lineCount, _lineTop);
+        final lineHeights = List<double>.generate(_lineCount, _lineHeightAt);
+        return Container(
+          color: theme.editor,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── 行号列（gutter）──
+              SizedBox(
+                width: gutterW,
+                child: ClipRect(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _LineNumberPainter(
+                            lineCount: _lineCount,
+                            cursorLine: _cursorLine,
+                            scrollOffset: _vOffset,
+                            lineTops: lineTops,
+                            lineHeights: lineHeights,
+                            padTop: _padTop,
+                            padRight: _gutterRightGap,
+                            theme: theme,
+                          ),
+                        ),
+                      ),
+                      // gutter 侧当前行高亮
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: cursorTop,
+                        height: cursorH,
+                        child: Container(color: theme.accent.withAlpha(0x14)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // ── 编辑区（不折行，长行水平滚动）──
+              Expanded(
+                child: ClipRect(
+                  child: Stack(
+                    children: [
+                      // 当前行高亮（横贯编辑区，不随水平滚动）
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: cursorTop,
+                        height: cursorH,
+                        child: Container(color: theme.accent.withAlpha(0x10)),
+                      ),
+                      // 水平滚动条 + 文本（不折行，长行水平滚动）
+                      // 注意：Scrollbar 无 scrollDirection 参数（方向自动跟随
+                      // 滚动视图），传了会报 GC6690633 编译错误。
+                      Scrollbar(
+                        controller: _hScroll,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _hScroll,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: contentW,
+                            height: constraints.maxHeight,
+                            child: TextField(
+                              controller: widget.controller,
+                              scrollController: _vScroll,
+                              maxLines: null,
+                              expands: true,
+                              textAlignVertical: TextAlignVertical.top,
+                              style: _textStyle,
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                // 显式关闭全局 InputDecorationTheme 的 filled
+                                // （app.dart 全局 filled:true 会让编辑区被 secondary 色填充）
+                                filled: false,
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  _padLeft, _padTop, _padRight, _padBottom,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 垂直滚动条（视口右侧 overlay，VSCode 风格常显）
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        width: 12,
+                        child: Scrollbar(
+                          controller: _vScroll,
+                          thumbVisibility: true,
+                          child: SizedBox(width: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
+}
+
+/// 行号列绘制器：右对齐数字，当前行高亮色，视口外行跳过。
+/// 每行位置/高度来自调用方实测（与 TextField 渲染一致）。
+class _LineNumberPainter extends CustomPainter {
+  final int lineCount;
+  final int cursorLine;
+  final double scrollOffset;
+  final List<double> lineTops; // 每行相对文本内容区顶部的 y
+  final List<double> lineHeights;
+  final double padTop;
+  final double padRight;
+  final MdIdeTheme theme;
+
+  const _LineNumberPainter({
+    required this.lineCount,
+    required this.cursorLine,
+    required this.scrollOffset,
+    required this.lineTops,
+    required this.lineHeights,
+    required this.padTop,
+    required this.padRight,
+    required this.theme,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+    for (var i = 0; i < lineCount; i++) {
+      final top = i < lineTops.length ? lineTops[i] : i * 20.8;
+      final h = i < lineHeights.length ? lineHeights[i] : 20.8;
+      final y = padTop + top - scrollOffset;
+      if (y + h < 0 || y > size.height) continue; // 视口外
+      final isCursor = i == cursorLine;
+      tp.text = TextSpan(
+        text: '${i + 1}',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 11,
+          color: isCursor ? theme.foreground : theme.faint,
+        ),
+      );
+      tp.layout();
+      tp.paint(
+        canvas,
+        Offset(
+          size.width - padRight - tp.width,
+          y + (h - tp.height) / 2,
+        ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineNumberPainter old) =>
+      old.lineCount != lineCount ||
+      old.cursorLine != cursorLine ||
+      old.scrollOffset != scrollOffset ||
+      old.lineTops != lineTops ||
+      old.lineHeights != lineHeights ||
+      old.theme != theme;
 }
 
 /// Markdown 预览（flutter_markdown 渲染）。
