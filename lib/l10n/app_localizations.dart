@@ -103,6 +103,8 @@ class AppLocalizations {
   String get mdSaveFailed => _t('mdSaveFailed');
   String get mdNoReadme => _t('mdNoReadme');
   String get mdNoProjectToast => _t('mdNoProjectToast');
+  String get mdPreviewSavedOnly => _t('mdPreviewSavedOnly');
+  String get mdNoPreview => _t('mdNoPreview');
   String get testPipeline => _t('testPipeline');
   String get chatNewSession => _t('chatNewSession');
   String get chatSessions => _t('chatSessions');
@@ -1156,6 +1158,8 @@ class AppLocalizations {
     'mdSaveFailed':         {'en': 'Save failed',                      'zh': '保存失败'},
     'mdNoReadme':           {'en': 'This project has no README.md yet','zh': '项目还没有 README.md'},
     'mdNoProjectToast':     {'en': 'Pick a project folder first',      'zh': '请先选择项目文件夹'},
+    'mdPreviewSavedOnly':   {'en': 'Preview shows the saved file. Save to refresh', 'zh': '预览为已保存版本，点击保存并刷新'},
+    'mdNoPreview':          {'en': 'No preview available',             'zh': '无法预览'},
   };
 }
 
