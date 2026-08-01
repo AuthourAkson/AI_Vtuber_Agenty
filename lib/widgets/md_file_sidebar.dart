@@ -280,7 +280,7 @@ class _TreeNodeState extends State<_TreeNode> {
                 Icon(
                   isDir
                       ? (_expanded ? Icons.folder_open : Icons.folder)
-                      : Icons.description_outlined,
+                      : _fileIcon(node.name),
                   size: 14,
                   color: isDir ? theme.info : theme.muted,
                 ),
@@ -314,4 +314,29 @@ class _TreeNodeState extends State<_TreeNode> {
       ],
     );
   }
+}
+
+/// 按文件类型返回图标（IDE 观感）。
+IconData _fileIcon(String name) {
+  final lower = name.toLowerCase();
+  if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
+    return Icons.description_outlined;
+  }
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) {
+    return Icons.html;
+  }
+  if (lower.endsWith('.dart')) return Icons.data_object;
+  if (lower.endsWith('.json')) return Icons.data_object;
+  if (lower.endsWith('.css') || lower.endsWith('.scss') || lower.endsWith('.less')) {
+    return Icons.palette_outlined;
+  }
+  if (lower.endsWith('.js') ||
+      lower.endsWith('.mjs') ||
+      lower.endsWith('.ts') ||
+      lower.endsWith('.jsx') ||
+      lower.endsWith('.tsx')) {
+    return Icons.javascript;
+  }
+  if (lower.endsWith('.py')) return Icons.terminal;
+  return Icons.code;
 }
