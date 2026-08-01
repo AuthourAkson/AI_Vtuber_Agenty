@@ -62,6 +62,8 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
   double _rightWidth = 440;
   // AI 右侧面板显隐（标题栏 AI 按钮切换）
   bool _showAiPanel = true;
+  // HTML 预览刷新信号（保存成功后 +1，触发 WebView 重载）
+  int _htmlReloadTick = 0;
 
   @override
   void initState() {
@@ -224,6 +226,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       title: relativePath.split('/').last,
       content: content,
       original: content,
+      fileUri: _svc.absoluteFileUri(relativePath),
     );
     if (mounted) {
       setState(() {
@@ -267,7 +270,9 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       await _svc.writeFile(tab.path, tab.content);
       tab.original = tab.content;
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _htmlReloadTick++; // HTML 预览模式下保存后自动刷新
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context).mdSaved), duration: const Duration(seconds: 1)),
         );
@@ -468,7 +473,7 @@ Rules:
 
     final tab = _activeTab;
     if (tab != null) {
-      buffer.writeln('Current file: project-summary/${tab.path}');
+      buffer.writeln('Current file: ${tab.path}');
       buffer.writeln();
       buffer.writeln('```markdown');
       buffer.writeln(tab.content);
@@ -652,6 +657,7 @@ Rules:
                               onCloseTab: _closeTab,
                               onTogglePreview: () => setState(() => _previewMode = !_previewMode),
                               onSave: _saveActiveTab,
+                              htmlReloadTick: _htmlReloadTick,
                             ),
                           ),
                           // 右侧：AI 任务中心（可被标题栏 AI 按钮隐藏）
