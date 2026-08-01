@@ -102,6 +102,7 @@ class AppLocalizations {
   String get mdNoEmployeeToast => _t('mdNoEmployeeToast');
   String get mdSaveFailed => _t('mdSaveFailed');
   String get mdNoReadme => _t('mdNoReadme');
+  String get mdNoProjectToast => _t('mdNoProjectToast');
   String get testPipeline => _t('testPipeline');
   String get chatNewSession => _t('chatNewSession');
   String get chatSessions => _t('chatSessions');
@@ -1154,6 +1155,7 @@ class AppLocalizations {
     'mdNoEmployeeToast':    {'en': 'No employees available. Create one in MultiAgent first.', 'zh': '暂无可用员工，请先在 MultiAgent 中创建'},
     'mdSaveFailed':         {'en': 'Save failed',                      'zh': '保存失败'},
     'mdNoReadme':           {'en': 'This project has no README.md yet','zh': '项目还没有 README.md'},
+    'mdNoProjectToast':     {'en': 'Pick a project folder first',      'zh': '请先选择项目文件夹'},
   };
 }
 
