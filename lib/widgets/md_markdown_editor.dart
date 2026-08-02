@@ -95,71 +95,18 @@ class MdMarkdownEditor extends StatelessWidget {
       child: Column(
         children: [
           // ── Tab 栏（40px）──
-          SizedBox(
-            height: 40,
-            child: Container(
-              color: theme.sidebar,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        for (final tab in tabs)
-                          _TabItem(
-                            tab: tab,
-                            isActive: tab.path == activeTabPath,
-                            onTap: () => onSelectTab(tab.path),
-                            onClose: () => onCloseTab(tab.path),
-                            closeLabel: l10n.mdClose,
-                            theme: theme,
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  // 保存按钮（有未保存修改时高亮）
-                  if (onSave != null && active.isDirty) ...[
-                    GestureDetector(
-                      onTap: onSave,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        margin: const EdgeInsets.only(right: 4),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          color: theme.accentDim,
-                          border: Border.all(color: theme.accent.withAlpha(90)),
-                        ),
-                        child: Icon(Icons.save_outlined, size: 13, color: theme.accent),
-                      ),
-                    ),
-                  ],
-                  // Preview toggle（仅可预览类型显示）
-                  if (_canPreview(active.path))
-                    GestureDetector(
-                      onTap: onTogglePreview,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          color: previewMode ? theme.accentDim : theme.card,
-                          border: Border.all(
-                            color: previewMode
-                                ? theme.accent.withAlpha(90)
-                                : theme.borderSubtle,
-                          ),
-                        ),
-                        child: Icon(
-                          previewMode ? Icons.edit_outlined : Icons.visibility_outlined,
-                          size: 13,
-                          color: previewMode ? theme.accent : theme.muted,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+          _TabStrip(
+            tabs: tabs,
+            activeTabPath: activeTabPath,
+            onSelectTab: onSelectTab,
+            onCloseTab: onCloseTab,
+            closeLabel: l10n.mdClose,
+            theme: theme,
+            showSave: onSave != null && active.isDirty,
+            onSave: onSave,
+            showPreview: _canPreview(active.path),
+            previewMode: previewMode,
+            onTogglePreview: onTogglePreview,
           ),
           const Divider(height: 1),
           // ── 编辑 / 预览区 ──
@@ -188,6 +135,201 @@ class MdMarkdownEditor extends StatelessWidget {
   }
 }
 
+/// 编辑区 / Tab 栏滚动条开关：桌面平台（Windows）MaterialScrollBehavior 会
+/// 自动给所有 Scrollable 包 RawScrollbar——编辑区 TextField 因此出现"系统
+/// 自动滑块 + 自绘 _VScrollThumb"双滑块（用户实测两个都能拖）。
+/// 禁用方式：`ScrollConfiguration.of(context).copyWith(scrollbars: false)`
+/// （本 Flutter 版本官方 API，Dart 3.11 无 ScrollbarFactory 类型）。
+
+/// Tab 栏（40px）：横向滚动 Tab 列表 + 保存/预览按钮。
+///
+/// StatefulWidget 持有 Tab 列表的 ScrollController，提供 VSCode 风格
+/// 常显水平滚动条——文件多时提示可横向滚动，避免 Tab 被误认为
+/// "被右侧面板遮挡"。
+class _TabStrip extends StatefulWidget {
+  final List<MdOpenTab> tabs;
+  final String? activeTabPath;
+  final ValueChanged<String> onSelectTab;
+  final ValueChanged<String> onCloseTab;
+  final String closeLabel;
+  final MdIdeTheme theme;
+  final bool showSave;
+  final VoidCallback? onSave;
+  final bool showPreview;
+  final bool previewMode;
+  final VoidCallback onTogglePreview;
+
+  const _TabStrip({
+    required this.tabs,
+    required this.activeTabPath,
+    required this.onSelectTab,
+    required this.onCloseTab,
+    required this.closeLabel,
+    required this.theme,
+    required this.showSave,
+    this.onSave,
+    required this.showPreview,
+    required this.previewMode,
+    required this.onTogglePreview,
+  });
+
+  @override
+  State<_TabStrip> createState() => _TabStripState();
+}
+
+class _TabStripState extends State<_TabStrip> {
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TabStrip old) {
+    super.didUpdateWidget(old);
+    // 新打开的 Tab 追加到列表末尾，自动滚动到可见——
+    // 否则新 Tab 在视口外（裁剪边缘紧贴右侧面板），看起来像"被挡住"。
+    if (widget.tabs.length > old.tabs.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    return SizedBox(
+      height: 40,
+      child: Container(
+        color: theme.sidebar,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // ── 右侧固定按钮区（保存/预览）──
+            final rightBtns = <Widget>[
+              const SizedBox(width: 6),
+              // 保存按钮（有未保存修改时高亮）
+              if (widget.showSave && widget.onSave != null) ...[
+                GestureDetector(
+                  onTap: widget.onSave,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: theme.accentDim,
+                      border: Border.all(color: theme.accent.withAlpha(90)),
+                    ),
+                    child: Icon(Icons.save_outlined, size: 13, color: theme.accent),
+                  ),
+                ),
+              ],
+              // Preview toggle（仅可预览类型显示）
+              if (widget.showPreview)
+                GestureDetector(
+                  onTap: widget.onTogglePreview,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      color: widget.previewMode ? theme.accentDim : theme.card,
+                      border: Border.all(
+                        color: widget.previewMode
+                            ? theme.accent.withAlpha(90)
+                            : theme.borderSubtle,
+                      ),
+                    ),
+                    child: Icon(
+                      widget.previewMode ? Icons.edit_outlined : Icons.visibility_outlined,
+                      size: 13,
+                      color: widget.previewMode ? theme.accent : theme.muted,
+                    ),
+                  ),
+                ),
+            ];
+            // 右侧按钮区宽度（与上面渲染一致：margin+padding+icon）
+            final rightW = 6.0 +
+                (widget.showSave && widget.onSave != null ? 33.0 : 0.0) +
+                (widget.showPreview ? 37.0 : 0.0);
+            final availW = constraints.maxWidth - rightW;
+
+            final count = widget.tabs.length;
+            if (count == 0) {
+              return Row(children: rightBtns);
+            }
+
+            // ── VSCode 式 Tab 宽度策略（editor.tabSizing: fit）──
+            // 平铺模式：每个 Tab 包 Flexible（自然宽，超宽时自动均匀收缩，
+            // 标题 ellipsis + hover tooltip 看全名）——不依赖宽度估算，
+            // 由布局引擎吸收超宽，绝不溢出（曾因估算偏差溢出 2.0px）。
+            // 每个 Tab 平均空间 < 最小宽度时退回横向滚动模式（20+ Tab 极端）。
+            // （rightW/availW 见上方声明）
+            const minTabW = 72.0; // 固定项：padding24+dirty12+gap6+close20=62 + 文本
+            final tooMany = availW / count < minTabW;
+
+            Widget tabItem(MdOpenTab t) => _TabItem(
+                  tab: t,
+                  isActive: t.path == widget.activeTabPath,
+                  onTap: () => widget.onSelectTab(t.path),
+                  onClose: () => widget.onCloseTab(t.path),
+                  closeLabel: widget.closeLabel,
+                  theme: theme,
+                );
+
+            if (!tooMany) {
+              // 平铺模式：所有 Tab 可见；超宽时 Flexible 自动收缩
+              return Row(
+                children: [
+                  for (final t in widget.tabs)
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: minTabW),
+                        child: tabItem(t),
+                      ),
+                    ),
+                  ...rightBtns,
+                ],
+              );
+            }
+
+            // 极端：Tab 太多 → 横向滚动模式（常显滚动条 + 新 Tab 自动滚动）
+            return Row(
+              children: [
+                Expanded(
+                  child: Scrollbar(
+                    controller: _scroll,
+                    thumbVisibility: true,
+                    // 方向由 Scrollbar 自动检测（无 scrollDirection 参数，
+                    // 传了会报 GC6690633）。
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context)
+                          .copyWith(scrollbars: false),
+                      child: ListView(
+                        controller: _scroll,
+                        scrollDirection: Axis.horizontal,
+                        children: [for (final t in widget.tabs) tabItem(t)],
+                      ),
+                    ),
+                  ),
+                ),
+                ...rightBtns,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _TabItem extends StatelessWidget {
   final MdOpenTab tab;
   final bool isActive;
@@ -209,49 +351,60 @@ class _TabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: isActive ? theme.editor : Colors.transparent,
-          border: Border(
-            bottom: BorderSide(
-              color: isActive ? theme.accent : Colors.transparent,
-              width: 2,
+      child: Tooltip(
+        message: tab.title,
+        // 桌面平台 hover 即显示 tooltip（默认 triggerMode: longPress 时
+        // hover 生效）；不要传 TooltipTriggerMode.hover——该枚举值不存在
+        // （G75B77105），只有 longPress/tap/manual 三个值。
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: isActive ? theme.editor : Colors.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: isActive ? theme.accent : Colors.transparent,
+                width: 2,
+              ),
             ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (tab.isDirty)
-              Container(
-                width: 6,
-                height: 6,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.warning,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (tab.isDirty)
+                Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: theme.warning,
+                  ),
+                ),
+              // fit 收缩模式下标题可截断（ellipsis），hover tooltip 看全名
+              Flexible(
+                child: Text(
+                  tab.title,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isActive ? theme.foreground : theme.muted,
+                  ),
                 ),
               ),
-            Text(
-              tab.title,
-              style: TextStyle(
-                fontSize: 12,
-                color: isActive ? theme.foreground : theme.muted,
+              const SizedBox(width: 6),
+              // 关闭按钮：用 IconButton 独立手势，避免与外层 onTap 冲突
+              IconButton(
+                onPressed: onClose,
+                icon: Icon(Icons.close, size: 12, color: theme.faint),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                visualDensity: VisualDensity.compact,
+                tooltip: closeLabel,
               ),
-            ),
-            const SizedBox(width: 6),
-            // 关闭按钮：用 IconButton 独立手势，避免与外层 onTap 冲突
-            IconButton(
-              onPressed: onClose,
-              icon: Icon(Icons.close, size: 12, color: theme.faint),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-              visualDensity: VisualDensity.compact,
-              tooltip: closeLabel,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -472,36 +625,44 @@ class _EditorPaneState extends State<_EditorPane> {
                           child: SizedBox(
                             width: contentW,
                             height: constraints.maxHeight,
-                            child: TextField(
-                              controller: widget.controller,
-                              scrollController: _vScroll,
-                              maxLines: null,
-                              expands: true,
-                              textAlignVertical: TextAlignVertical.top,
-                              style: _textStyle,
-                              decoration: InputDecoration(
-                                border: InputBorder.none,
-                                // 显式关闭全局 InputDecorationTheme 的 filled
-                                // （app.dart 全局 filled:true 会让编辑区被 secondary 色填充）
-                                filled: false,
-                                contentPadding: const EdgeInsets.fromLTRB(
-                                  _padLeft, _padTop, _padRight, _padBottom,
+                            // 禁用系统自动 Scrollbar（桌面平台默认会给
+                            // Scrollable 包 RawScrollbar），滚动条由自绘
+                            // _VScrollThumb 提供，避免双滑块。
+                            child: ScrollConfiguration(
+                              behavior: ScrollConfiguration.of(context)
+                                  .copyWith(scrollbars: false),
+                              child: TextField(
+                                controller: widget.controller,
+                                scrollController: _vScroll,
+                                maxLines: null,
+                                expands: true,
+                                textAlignVertical: TextAlignVertical.top,
+                                style: _textStyle,
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  // 显式关闭全局 InputDecorationTheme 的 filled
+                                  // （app.dart 全局 filled:true 会让编辑区被 secondary 色填充）
+                                  filled: false,
+                                  contentPadding: const EdgeInsets.fromLTRB(
+                                    _padLeft, _padTop, _padRight, _padBottom,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                      // 垂直滚动条（视口右侧 overlay，VSCode 风格常显）
+                      // 垂直滚动条（视口右侧 overlay，VSCode 风格常显，可拖拽）。
+                      // 自绘 thumb + 手势：thumb 渲染稳定常显，拖拽/点击轨道
+                      // 直接驱动 _vScroll（jumpTo），不依赖 Scrollbar widget。
                       Positioned(
                         top: 0,
                         right: 0,
                         bottom: 0,
                         width: 12,
-                        child: Scrollbar(
+                        child: _VScrollThumb(
                           controller: _vScroll,
-                          thumbVisibility: true,
-                          child: SizedBox(width: 12),
+                          theme: theme,
                         ),
                       ),
                     ],
@@ -575,6 +736,119 @@ class _LineNumberPainter extends CustomPainter {
       old.lineTops != lineTops ||
       old.lineHeights != lineHeights ||
       old.theme != theme;
+}
+
+/// 可拖拽的垂直滚动条（自绘 thumb + 手势）。
+///
+/// 几何与绘制复用 [_VScrollThumbPainter]；手势：
+/// - 拖拽 thumb → 按比例换算 scroll offset（jumpTo）
+/// - 点击 thumb 外的轨道 → 跳到对应位置
+class _VScrollThumb extends StatefulWidget {
+  final ScrollController controller;
+  final MdIdeTheme theme;
+
+  const _VScrollThumb({required this.controller, required this.theme});
+
+  @override
+  State<_VScrollThumb> createState() => _VScrollThumbState();
+}
+
+class _VScrollThumbState extends State<_VScrollThumb> {
+  double? _dragStartY; // 拖拽开始时指针在槽内的 y
+  double? _dragStartPx; // 拖拽开始时的 scroll offset
+
+  ScrollPosition? get _pos =>
+      widget.controller.hasClients ? widget.controller.position : null;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = constraints.maxHeight;
+        final pos = _pos;
+        final maxExtent = pos?.maxScrollExtent ?? 0.0;
+        final contentH = viewport + maxExtent;
+        final thumbH =
+            math.max(24.0, viewport * viewport / contentH).clamp(24.0, viewport);
+        final thumbTop = (pos == null || maxExtent <= 0)
+            ? 0.0
+            : (pos.pixels / maxExtent) * (viewport - thumbH);
+
+        void jump(double target) {
+          final p = _pos;
+          if (p == null || maxExtent <= 0) return;
+          p.jumpTo(target.clamp(0.0, maxExtent));
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragStart: (d) {
+            _dragStartY = d.localPosition.dy;
+            _dragStartPx = _pos?.pixels;
+          },
+          onVerticalDragUpdate: (d) {
+            if (_dragStartY == null) return;
+            final delta = d.localPosition.dy - _dragStartY!;
+            final px = _dragStartPx ?? 0.0;
+            jump(px + (delta / (viewport - thumbH)) * maxExtent);
+          },
+          onTapUp: (d) {
+            // 点击 thumb 上的点不跳转；点击轨道空白处跳到对应位置
+            if (d.localPosition.dy >= thumbTop - 1 &&
+                d.localPosition.dy <= thumbTop + thumbH + 1) {
+              return;
+            }
+            jump((d.localPosition.dy / viewport) * maxExtent);
+          },
+          child: CustomPaint(
+            painter: _VScrollThumbPainter(position: pos, theme: widget.theme),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 编辑区垂直滚动条 thumb（自绘，VSCode 风格常显）。
+///
+/// 几何直接来自 [ScrollPosition]：thumb 高度按视口/内容比例，
+/// 位置按 scroll offset 比例。不依赖 Scrollbar widget 的渲染条件，
+/// 保证任何情况下都绘制（`position` 为 null 时留空——首次 build
+/// 时 TextField 内部 Scrollable 尚未挂载，属正常）。
+class _VScrollThumbPainter extends CustomPainter {
+  final ScrollPosition? position;
+  final MdIdeTheme theme;
+
+  const _VScrollThumbPainter({required this.position, required this.theme});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pos = position;
+    if (pos == null) return;
+    final viewport = pos.viewportDimension;
+    if (viewport <= 0) return;
+    final maxExtent = pos.maxScrollExtent;
+    final contentH = viewport + maxExtent;
+    // thumb 高度：内容越长 thumb 越短，最小 24
+    final thumbH = math.max(24.0, viewport * viewport / contentH);
+    final thumbTop =
+        maxExtent > 0 ? (pos.pixels / maxExtent) * (viewport - thumbH) : 0.0;
+    final rect = Rect.fromLTWH(
+      size.width - 9, // 12px 槽内右侧 3px 边距 → thumb 宽 6
+      thumbTop + 2,
+      6,
+      thumbH - 4,
+    );
+    if (rect.height <= 0 || rect.width <= 0) return;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+      Paint()..color = theme.faint.withAlpha(150),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _VScrollThumbPainter old) =>
+      old.position != position || old.theme != theme;
 }
 
 /// Markdown 预览（flutter_markdown 渲染）。
