@@ -60,6 +60,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
   static const _middleMin = 360.0;
   double _leftWidth = 350;
   double _rightWidth = 440;
+
   // AI 右侧面板显隐（标题栏 AI 按钮切换）
   bool _showAiPanel = true;
   // HTML 预览刷新信号（保存成功后 +1，触发 WebView 重载）
@@ -70,6 +71,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
     super.initState();
     _loadProjectRoot();
     _loadPanelWidths();
+    _loadPersistedUiState();
     _editorCtrl.addListener(_onEditorChanged);
   }
 
@@ -78,6 +80,75 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
     _editorCtrl.removeListener(_onEditorChanged);
     _editorCtrl.dispose();
     super.dispose();
+  }
+
+  // ─── 状态持久化（切页后 State 销毁重建，靠 SharedPreferences 恢复）───
+  //
+  // 根因：home_screen._buildPage 每次切页都 new MarkdownTextScreen()，
+  // 离开页面时 State 销毁，_showAiPanel/_tabs/_previewMode 全部重置。
+  // 这里把 UI 开关与打开的 Tab 列表持久化，重新进入自动恢复。
+
+  /// 恢复与项目根无关的 UI 开关（AI 面板、预览模式）。
+  Future<void> _loadPersistedUiState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _showAiPanel = prefs.getBool('md_ai_panel_visible') ?? true;
+      _previewMode = prefs.getBool('md_preview_mode') ?? false;
+    });
+  }
+
+  /// 项目根就绪后恢复上次打开的 Tab 列表与激活 Tab。
+  Future<void> _restoreTabs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedTabs = prefs.getStringList('md_open_tabs') ?? const [];
+    if (savedTabs.isEmpty || !mounted) return;
+
+    // 并行读文件内容；失败（文件已被删）的跳过
+    final results = await Future.wait<({String path, String? content})>(
+      savedTabs.map((p) async {
+        try {
+          return (path: p, content: await _svc.readFile(p));
+        } catch (_) {
+          return (path: p, content: null as String?);
+        }
+      }),
+    );
+    if (!mounted) return;
+    setState(() {
+      for (final r in results) {
+        if (r.content == null) continue;
+        _tabs.add(MdOpenTab(
+          path: r.path,
+          title: r.path.split('/').last,
+          content: r.content!,
+          original: r.content!,
+          fileUri: _svc.absoluteFileUri(r.path),
+        ));
+      }
+    });
+
+    // 恢复激活 Tab
+    final active = prefs.getString('md_active_tab') ?? '';
+    if (mounted && active.isNotEmpty) {
+      final idx = _tabs.indexWhere((t) => t.path == active);
+      if (idx >= 0) {
+        setState(() {
+          _activeTabPath = active;
+          _tabIndex = idx;
+        });
+        _editorCtrl.text = _tabs[idx].content;
+      }
+    }
+  }
+
+  /// 持久化当前 UI 状态（AI 面板开关/预览模式/打开的 Tab/激活 Tab）。
+  Future<void> _persistState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('md_ai_panel_visible', _showAiPanel);
+    await prefs.setBool('md_preview_mode', _previewMode);
+    await prefs.setStringList('md_open_tabs', [for (final t in _tabs) t.path]);
+    await prefs.setString('md_active_tab', _activeTabPath ?? '');
   }
 
   void _onEditorChanged() {
@@ -103,6 +174,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
           _projectLoading = false;
         });
         await _loadTree();
+        await _restoreTabs(); // 项目根就绪后恢复上次打开的 Tab
       }
     } else {
       if (mounted) setState(() => _projectLoading = false);
@@ -150,6 +222,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('markdown_project_root', result);
     await _loadTree();
+    await _persistState(); // 切换项目后清空旧 Tab 持久化
   }
 
   // ─── 文件树 ───────────────────────────────────────
@@ -216,6 +289,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
         setState(() => _activeTabPath = relativePath);
         _editorCtrl.text = t.content;
         _editorCtrl.selection = TextSelection.collapsed(offset: 0);
+        _persistState(); // 激活 Tab 变化
         return;
       }
     }
@@ -236,6 +310,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       });
       _editorCtrl.text = content;
     }
+    _persistState(); // Tab 列表变化
   }
 
   void _closeTab(String path) async {
@@ -261,6 +336,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       final tab = _activeTab;
       _editorCtrl.text = tab?.content ?? '';
     }
+    _persistState(); // Tab 列表变化
   }
 
   Future<void> _saveActiveTab() async {
@@ -593,7 +669,10 @@ Rules:
             canForward: _tabIndex < _tabs.length - 1,
             onBack: () => _goTab(-1),
             onForward: () => _goTab(1),
-            onOpenAi: () => setState(() => _showAiPanel = !_showAiPanel),
+            onOpenAi: () {
+              setState(() => _showAiPanel = !_showAiPanel);
+              _persistState(); // AI 面板开关持久化
+            },
             onOpenDocs: _openReadme,
             onToggleTheme: () {},
             aiActive: _showAiPanel,
@@ -655,7 +734,10 @@ Rules:
                               controller: _editorCtrl,
                               onSelectTab: (path) => _openFile(path),
                               onCloseTab: _closeTab,
-                              onTogglePreview: () => setState(() => _previewMode = !_previewMode),
+                              onTogglePreview: () {
+                                setState(() => _previewMode = !_previewMode);
+                                _persistState(); // 预览模式持久化
+                              },
                               onSave: _saveActiveTab,
                               htmlReloadTick: _htmlReloadTick,
                             ),
