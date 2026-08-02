@@ -219,51 +219,67 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(Icons.attach_file, size: 14, color: theme.faint),
-              const SizedBox(width: 8),
-              // 员工选择（点击切换）
-              GestureDetector(
-                onTap: widget.onPickEmployee,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: theme.card,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: theme.borderSubtle),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.smart_toy_outlined, size: 11, color: theme.accent),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.selectedEmployeeName ?? l10n.mdSelectEmployee,
-                        style: TextStyle(fontSize: 11, color: theme.foreground),
-                      ),
-                      const SizedBox(width: 2),
-                      Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: theme.card,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: theme.borderSubtle),
-                ),
+              // 左侧组（附件 + 员工 + 速度）：可整体收缩，
+              // 防止长员工名把行撑爆（曾溢出 7.3px 到发送按钮上）
+              Flexible(
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.speed, size: 11, color: theme.muted),
-                    const SizedBox(width: 4),
-                    Text('high', style: TextStyle(fontSize: 11, color: theme.foreground)),
-                    const SizedBox(width: 2),
-                    Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
+                    Icon(Icons.attach_file, size: 14, color: theme.faint),
+                    const SizedBox(width: 8),
+                    // 员工选择（点击切换；文本可收缩 + ellipsis）
+                    Flexible(
+                      child: GestureDetector(
+                        onTap: widget.onPickEmployee,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: theme.card,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: theme.borderSubtle),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.smart_toy_outlined, size: 11, color: theme.accent),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  widget.selectedEmployeeName ?? l10n.mdSelectEmployee,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(fontSize: 11, color: theme.foreground),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: theme.card,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: theme.borderSubtle),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.speed, size: 11, color: theme.muted),
+                          const SizedBox(width: 4),
+                          Text('high', style: TextStyle(fontSize: 11, color: theme.foreground)),
+                          const SizedBox(width: 2),
+                          Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: _submit,
                 child: Container(
