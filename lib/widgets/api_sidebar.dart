@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import '../app.dart';
+import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../providers/settings_provider.dart';
 
