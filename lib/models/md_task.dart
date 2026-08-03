@@ -18,15 +18,35 @@ enum MdTaskStatus {
           orElse: () => MdTaskStatus.waiting);
 }
 
+/// 任务执行器：发送给 MultiAgent 员工，或外接独立 CLI（Claude Code / Codex）。
+enum MdTaskExecutor {
+  employee('employee'),
+  claudeCli('claudeCli'),
+  codexCli('codexCli'); // Codex CLI 预留（后续添加）
+
+  final String key;
+  const MdTaskExecutor(this.key);
+
+  static MdTaskExecutor fromKey(String key) =>
+      MdTaskExecutor.values.firstWhere((e) => e.key == key,
+          orElse: () => MdTaskExecutor.employee);
+}
+
 class MdTask {
   final String id;
-  final String title;
+  String title;
   MdTaskStatus status;
   final String projectPath;
   final String model;
   final String? employeeId;
+  final MdTaskExecutor executor;
+  final String? providerName;
+  String? prompt;
   final DateTime createdAt;
   String? error;
+
+  /// CLI 运行时的实时会话输出（逐行追加，展示在任务卡片上）。
+  String transcript = '';
 
   MdTask({
     required this.id,
@@ -35,6 +55,9 @@ class MdTask {
     required this.projectPath,
     this.model = 'Codex',
     this.employeeId,
+    this.executor = MdTaskExecutor.employee,
+    this.providerName,
+    this.prompt,
     DateTime? createdAt,
     this.error,
   }) : createdAt = createdAt ?? DateTime.now();
