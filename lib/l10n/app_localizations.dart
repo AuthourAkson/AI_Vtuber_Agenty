@@ -103,6 +103,22 @@ class AppLocalizations {
   String get mdSaveFailed => _t('mdSaveFailed');
   String get mdNoReadme => _t('mdNoReadme');
   String get mdNoProjectToast => _t('mdNoProjectToast');
+  String get mdExecutorEmployee => _t('mdExecutorEmployee');
+  String get mdExecutorClaudeCli => _t('mdExecutorClaudeCli');
+  String get mdExecutorCodexCli => _t('mdExecutorCodexCli');
+  String get mdSelectProvider => _t('mdSelectProvider');
+  String get mdNoProviderToast => _t('mdNoProviderToast');
+  String get mdNoProviderMenu => _t('mdNoProviderMenu');
+  String get mdSessionLog => _t('mdSessionLog');
+  String get mdCliExited => _t('mdCliExited');
+  String get mdCliStartFailed => _t('mdCliStartFailed');
+  String get mdEditTask => _t('mdEditTask');
+  String get mdSaveAndRerun => _t('mdSaveAndRerun');
+  String get mdEditWhileRunning => _t('mdEditWhileRunning');
+  String get mdViewLog => _t('mdViewLog');
+  String get mdCopy => _t('mdCopy');
+  String get mdCopied => _t('mdCopied');
+  String get mdNoOutput => _t('mdNoOutput');
   String get mdPreviewSavedOnly => _t('mdPreviewSavedOnly');
   String get mdNoPreview => _t('mdNoPreview');
   String get testPipeline => _t('testPipeline');
@@ -1157,7 +1173,23 @@ class AppLocalizations {
     'mdNoEmployeeToast':    {'en': 'No employees available. Create one in MultiAgent first.', 'zh': '暂无可用员工，请先在 MultiAgent 中创建'},
     'mdSaveFailed':         {'en': 'Save failed',                      'zh': '保存失败'},
     'mdNoReadme':           {'en': 'This project has no README.md yet','zh': '项目还没有 README.md'},
-    'mdNoProjectToast':     {'en': 'Pick a project folder first',      'zh': '请先选择项目文件夹'},
+    'mdNoProjectToast':    {'en': 'Pick a project folder first',      'zh': '请先选择项目文件夹'},
+    'mdExecutorEmployee':  {'en': 'Employee',                          'zh': '员工'},
+    'mdExecutorClaudeCli': {'en': 'Claude Code CLI',                   'zh': 'Claude Code CLI'},
+    'mdExecutorCodexCli':  {'en': 'Codex CLI',                         'zh': 'Codex CLI'},
+    'mdSelectProvider':    {'en': 'Select AI provider...',             'zh': '选择AI服务商...'},
+    'mdNoProviderToast':   {'en': 'No AI provider configured. Add one in MultiAgent → Settings → AI first.', 'zh': '暂无AI服务商，请先在 MultiAgent → 设置 → AI 中添加'},
+    'mdNoProviderMenu':    {'en': 'No AI provider configured',         'zh': '未配置AI服务商'},
+    'mdSessionLog':        {'en': 'Session log',                       'zh': '运行日志'},
+    'mdCliExited':         {'en': 'CLI exited with code',              'zh': 'CLI 退出码'},
+    'mdCliStartFailed':    {'en': 'Failed to start CLI',               'zh': 'CLI 启动失败'},
+    'mdEditTask':          {'en': 'Edit task prompt',                  'zh': '编辑任务提示词'},
+    'mdSaveAndRerun':      {'en': 'Save & Re-run',                     'zh': '保存并重新执行'},
+    'mdEditWhileRunning':  {'en': 'Task is running, wait for it to finish', 'zh': '任务执行中，请等待完成'},
+    'mdViewLog':           {'en': 'View session',                      'zh': '查看会话'},
+    'mdCopy':              {'en': 'Copy',                              'zh': '复制'},
+    'mdCopied':            {'en': 'Copied',                            'zh': '已复制'},
+    'mdNoOutput':          {'en': 'No output yet',                     'zh': '暂无输出'},
     'mdPreviewSavedOnly':   {'en': 'Preview shows the saved file. Save to refresh', 'zh': '预览为已保存版本，点击保存并刷新'},
     'mdNoPreview':          {'en': 'No preview available',             'zh': '无法预览'},
   };
