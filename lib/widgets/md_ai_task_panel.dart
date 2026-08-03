@@ -8,22 +8,36 @@ import '../models/md_task.dart';
 class MdAiTaskPanel extends StatefulWidget {
   final List<MdTask> tasks;
   final String? selectedEmployeeName;
+  final MdTaskExecutor executor;
+  final String? providerName;
+  final List<String> providerNames;
   final ValueChanged<String> onPromptSubmitted;
+  final ValueChanged<MdTaskExecutor> onExecutorChanged;
+  final ValueChanged<String> onProviderChanged;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<MdTaskStatus?> onFilterChanged;
   final ValueChanged<MdTask> onDeleteTask;
   final ValueChanged<MdTask> onRetryTask;
+  final ValueChanged<MdTask> onEditTask;
+  final ValueChanged<MdTask> onViewTask;
   final VoidCallback onPickEmployee;
 
   const MdAiTaskPanel({
     super.key,
     required this.tasks,
     required this.selectedEmployeeName,
+    required this.executor,
+    required this.providerName,
+    required this.providerNames,
     required this.onPromptSubmitted,
+    required this.onExecutorChanged,
+    required this.onProviderChanged,
     required this.onSearchChanged,
     required this.onFilterChanged,
     required this.onDeleteTask,
     required this.onRetryTask,
+    required this.onEditTask,
+    required this.onViewTask,
     required this.onPickEmployee,
   });
 
@@ -57,6 +71,54 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
     if (text.isEmpty) return;
     widget.onPromptSubmitted(text);
     _promptCtrl.clear();
+  }
+
+  String _executorLabel(AppLocalizations l10n) {
+    switch (widget.executor) {
+      case MdTaskExecutor.employee:
+        return l10n.mdExecutorEmployee;
+      case MdTaskExecutor.claudeCli:
+        return l10n.mdExecutorClaudeCli;
+      case MdTaskExecutor.codexCli:
+        return l10n.mdExecutorCodexCli;
+    }
+  }
+
+  /// 构造带图标 + 选中勾选的 PopupMenuItem。
+  PopupMenuItem<T> _menuItem<T>(
+    T value,
+    IconData icon,
+    String label,
+    MdIdeTheme theme,
+  ) {
+    final selected = value == widget.executor ||
+        (value is String && value == widget.providerName);
+    return PopupMenuItem<T>(
+      value: value,
+      height: 30,
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: selected ? theme.accent : theme.muted),
+          const SizedBox(width: 8),
+          // ⚠️ 不用 Expanded：PopupMenuItem 宽度约束可能无界（布局崩溃）
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 240),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: selected ? theme.accent : theme.foreground,
+              ),
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.check, size: 12, color: theme.accent),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -165,6 +227,8 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
                       task: tasks[i],
                       onDelete: () => widget.onDeleteTask(tasks[i]),
                       onRetry: () => widget.onRetryTask(tasks[i]),
+                      onEdit: () => widget.onEditTask(tasks[i]),
+                      onView: () => widget.onViewTask(tasks[i]),
                       l10n: l10n,
                       theme: theme,
                     ),
@@ -219,63 +283,97 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
           const SizedBox(height: 6),
           Row(
             children: [
-              // 左侧组（附件 + 员工 + 速度）：可整体收缩，
-              // 防止长员工名把行撑爆（曾溢出 7.3px 到发送按钮上）
+              // 左侧组（附件 + 执行器 + 员工/服务商）：可整体收缩，
+              // 防止长名称把行撑爆（曾溢出 7.3px 到发送按钮上）
               Flexible(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.attach_file, size: 14, color: theme.faint),
                     const SizedBox(width: 8),
-                    // 员工选择（点击切换；文本可收缩 + ellipsis）
+                    // 执行器选择（员工 / Claude Code CLI / Codex CLI 预留）
                     Flexible(
-                      child: GestureDetector(
-                        onTap: widget.onPickEmployee,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: theme.card,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: theme.borderSubtle),
+                      child: _SelectorChip<MdTaskExecutor>(
+                        icon: widget.executor == MdTaskExecutor.employee
+                            ? Icons.smart_toy_outlined
+                            : Icons.terminal,
+                        iconColor: theme.accent,
+                        label: _executorLabel(l10n),
+                        theme: theme,
+                        items: () => [
+                          _menuItem(
+                            MdTaskExecutor.employee,
+                            Icons.smart_toy_outlined,
+                            l10n.mdExecutorEmployee,
+                            theme,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.smart_toy_outlined, size: 11, color: theme.accent),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  widget.selectedEmployeeName ?? l10n.mdSelectEmployee,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: TextStyle(fontSize: 11, color: theme.foreground),
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
-                            ],
+                          _menuItem(
+                            MdTaskExecutor.claudeCli,
+                            Icons.terminal,
+                            l10n.mdExecutorClaudeCli,
+                            theme,
                           ),
-                        ),
+                        ],
+                        onSelected: widget.onExecutorChanged,
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: theme.card,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: theme.borderSubtle),
+                    // 员工模式：显示员工选择；CLI 模式：显示 AI 服务商选择
+                    if (widget.executor == MdTaskExecutor.employee)
+                      Flexible(
+                        child: GestureDetector(
+                          onTap: widget.onPickEmployee,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: theme.card,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: theme.borderSubtle),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_outline, size: 11, color: theme.muted),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    widget.selectedEmployeeName ?? l10n.mdSelectEmployee,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: TextStyle(fontSize: 11, color: theme.foreground),
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: _SelectorChip<String>(
+                          icon: Icons.cloud_outlined,
+                          iconColor: theme.muted,
+                          label: widget.providerName ?? l10n.mdSelectProvider,
+                          theme: theme,
+                          items: () => widget.providerNames.isEmpty
+                              ? [
+                                  PopupMenuItem<String>(
+                                    enabled: false,
+                                    child: Text(
+                                      l10n.mdNoProviderMenu,
+                                      style: TextStyle(fontSize: 12, color: theme.faint),
+                                    ),
+                                  ),
+                                ]
+                              : [
+                                  for (final name in widget.providerNames)
+                                    _menuItem(name, Icons.cloud_outlined, name, theme),
+                                ],
+                          onSelected: widget.onProviderChanged,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.speed, size: 11, color: theme.muted),
-                          const SizedBox(width: 4),
-                          Text('high', style: TextStyle(fontSize: 11, color: theme.foreground)),
-                          const SizedBox(width: 2),
-                          Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -289,7 +387,7 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
                     color: theme.accent,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Icon(Icons.add, size: 18, color: theme.background),
+                  child: Icon(Icons.arrow_upward, size: 16, color: theme.background),
                 ),
               ),
             ],
@@ -303,6 +401,76 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
 class _TaskCounts {
   final int total, queue, failed, pending, completed;
   const _TaskCounts(this.total, this.queue, this.failed, this.pending, this.completed);
+}
+
+/// 输入框行的可点击胶囊选择器（执行器 / AI 服务商）。
+///
+/// 点击后在芯片下方弹出 [showMenu]；文本可收缩 + ellipsis，防止长名称撑爆行。
+class _SelectorChip<T> extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final MdIdeTheme theme;
+  final List<PopupMenuEntry<T>> Function() items;
+  final ValueChanged<T> onSelected;
+
+  const _SelectorChip({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.theme,
+    required this.items,
+    required this.onSelected,
+  });
+
+  Future<void> _open(BuildContext context) async {
+    final box = context.findRenderObject() as RenderBox?;
+    final pos = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final selected = await showMenu<T>(
+      context: context,
+      position: RelativeRect.fromLTRB(pos.dx, pos.dy + 26, pos.dx, pos.dy + 26),
+      color: theme.card,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.borderSubtle),
+      ),
+      items: items(),
+    );
+    if (selected != null && context.mounted) onSelected(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _open(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: theme.card,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: theme.borderSubtle),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 11, color: iconColor),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: TextStyle(fontSize: 11, color: theme.foreground),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, size: 14, color: theme.muted),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _FilterChip extends StatelessWidget {
@@ -351,6 +519,8 @@ class _TaskCard extends StatelessWidget {
   final MdTask task;
   final VoidCallback onDelete;
   final VoidCallback onRetry;
+  final VoidCallback onEdit;
+  final VoidCallback onView;
   final AppLocalizations l10n;
   final MdIdeTheme theme;
 
@@ -358,6 +528,8 @@ class _TaskCard extends StatelessWidget {
     required this.task,
     required this.onDelete,
     required this.onRetry,
+    required this.onEdit,
+    required this.onView,
     required this.l10n,
     required this.theme,
   });
@@ -414,14 +586,25 @@ class _TaskCard extends StatelessWidget {
             children: [
               Icon(Icons.model_training, size: 11, color: theme.faint),
               const SizedBox(width: 4),
-              Text(
-                task.model,
-                style: TextStyle(fontSize: 10, color: theme.muted),
+              Flexible(
+                child: Text(
+                  task.executor == MdTaskExecutor.employee
+                      ? '${task.model} · high'
+                      : task.model,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: theme.muted),
+                ),
               ),
-              Text(
-                ' · high',
-                style: TextStyle(fontSize: 10, color: theme.faint),
-              ),
+              if (task.providerName != null) ...[
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    '· ${task.providerName}',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 10, color: theme.faint),
+                  ),
+                ),
+              ],
               const Spacer(),
               if (task.status == MdTaskStatus.failed)
                 _CardAction(
@@ -431,10 +614,27 @@ class _TaskCard extends StatelessWidget {
                   color: theme.accent,
                   theme: theme,
                 ),
-              _CardAction(icon: Icons.edit_outlined, tooltip: l10n.mdEdit, onTap: () {}, theme: theme),
+              _CardAction(
+                icon: Icons.visibility_outlined,
+                tooltip: l10n.mdViewLog,
+                onTap: onView,
+                color: theme.info,
+                theme: theme,
+              ),
+              _CardAction(
+                icon: Icons.edit_outlined,
+                tooltip: l10n.mdEdit,
+                onTap: onEdit,
+                theme: theme,
+              ),
               _CardAction(icon: Icons.delete_outline, tooltip: l10n.mdDelete, onTap: onDelete, color: theme.error, theme: theme),
             ],
           ),
+          // CLI 任务：实时会话日志（运行中自动贴底滚动）
+          if (task.transcript.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _TaskLogBox(task: task, l10n: l10n, theme: theme),
+          ],
         ],
       ),
     );
@@ -496,6 +696,79 @@ class _CardAction extends StatelessWidget {
         ),
         child: Icon(icon, size: 12, color: color ?? theme.muted),
       ),
+    );
+  }
+}
+
+/// 任务卡片内的实时会话日志（CLI 任务运行时逐行追加）。
+///
+/// reverse ListView：新内容在底部，自动贴底展示最新输出；
+/// 超长行按 240 字符切块，避免单个 Text 布局开销过大。
+class _TaskLogBox extends StatelessWidget {
+  final MdTask task;
+  final AppLocalizations l10n;
+  final MdIdeTheme theme;
+
+  const _TaskLogBox({required this.task, required this.l10n, required this.theme});
+
+  List<String> _lines() {
+    final out = <String>[];
+    for (final line in task.transcript.split('\n')) {
+      if (line.length <= 240) {
+        out.add(line);
+      } else {
+        for (var i = 0; i < line.length; i += 240) {
+          out.add(line.substring(i, i + 240 > line.length ? line.length : i + 240));
+        }
+      }
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = _lines();
+    final running = task.status == MdTaskStatus.running;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.terminal, size: 10, color: theme.faint),
+            const SizedBox(width: 4),
+            Text(l10n.mdSessionLog, style: TextStyle(fontSize: 10, color: theme.faint)),
+            const SizedBox(width: 6),
+            Text('${lines.length} lines', style: TextStyle(fontSize: 10, color: theme.faint)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: running ? 110 : 90,
+          width: double.infinity,
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: theme.sidebar,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: theme.borderSubtle),
+          ),
+          child: lines.isEmpty
+              ? Text(l10n.mdStatusRunning, style: TextStyle(fontSize: 10, color: theme.faint))
+              : ListView.builder(
+                  reverse: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: lines.length,
+                  itemBuilder: (context, i) => Text(
+                    lines[lines.length - 1 - i],
+                    style: TextStyle(
+                      fontSize: 10,
+                      height: 1.35,
+                      color: theme.muted,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }
