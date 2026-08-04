@@ -32,6 +32,70 @@ enum MdTaskExecutor {
           orElse: () => MdTaskExecutor.employee);
 }
 
+/// CLI 会话事件类型：文本块（Markdown 渲染）/ 工具调用（进度卡片）/ 最终结果。
+enum MdEventType { text, tool, result }
+
+/// CLI 会话的结构化事件。
+///
+/// 与 [MdTask.transcript] 并存：events 驱动富渲染（Markdown 文本块 +
+/// 🔧 工具进度行 + 耗时），transcript 保留纯文本供复制/旧数据回退。
+class MdTaskEvent {
+  final MdEventType type;
+
+  /// 文本/结果内容，或工具参数摘要（content_block_start 时可能为空，
+  /// assistant 聚合消息到达后用完整 input 更新）。
+  String content;
+
+  /// 工具名（Bash / Read / Patch / Glob …），仅 tool 事件。
+  final String? toolName;
+
+  /// 工具调用 ID（匹配 tool_result 计算耗时）。
+  final String? toolId;
+  final int? startMs;
+
+  /// 工具完成时间（tool_result 到达时写入；null = 仍在执行）。
+  int? endMs;
+
+  MdTaskEvent({
+    required this.type,
+    required this.content,
+    this.toolName,
+    this.toolId,
+    this.startMs,
+    this.endMs,
+  });
+
+  /// 工具是否仍在执行（进行中显示 spinner，完成显示耗时）。
+  bool get toolRunning => type == MdEventType.tool && endMs == null;
+
+  /// 工具执行耗时（完成时）。
+  Duration? get duration {
+    if (startMs == null || endMs == null || endMs! < startMs!) return null;
+    return Duration(milliseconds: endMs! - startMs!);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'type': type.name,
+    'content': content,
+    'toolName': toolName,
+    'toolId': toolId,
+    'startMs': startMs,
+    'endMs': endMs,
+  };
+
+  factory MdTaskEvent.fromJson(Map<String, dynamic> json) => MdTaskEvent(
+    type: MdEventType.values.firstWhere(
+      (e) => e.name == json['type'],
+      orElse: () => MdEventType.text,
+    ),
+    content: json['content'] as String? ?? '',
+    toolName: json['toolName'] as String?,
+    toolId: json['toolId'] as String?,
+    startMs: (json['startMs'] as num?)?.toInt(),
+    endMs: (json['endMs'] as num?)?.toInt(),
+  );
+}
+
 class MdTask {
   final String id;
   String title;
@@ -48,6 +112,14 @@ class MdTask {
   /// CLI 运行时的实时会话输出（逐行追加，展示在任务卡片上）。
   String transcript = '';
 
+  /// CLI 会话的结构化事件（工具进度 + Markdown 文本块 + 结果）。
+  /// 为空（旧数据/员工任务）时 UI 回退到 [transcript] 纯文本渲染。
+  final List<MdTaskEvent> events;
+
+  /// 流式文本累积缓冲：text_delta 先暂存，遇到工具/结果时 flush 成 text 事件。
+  /// 不持久化：运行中任务切页恢复即标记 failed，缓冲丢弃无碍。
+  String pendingText = '';
+
   MdTask({
     required this.id,
     required this.title,
@@ -60,7 +132,43 @@ class MdTask {
     this.prompt,
     DateTime? createdAt,
     this.error,
-  }) : createdAt = createdAt ?? DateTime.now();
+    List<MdTaskEvent>? events,
+  }) : createdAt = createdAt ?? DateTime.now(),
+       events = events ?? [];
+
+  /// 序列化为 JSON（用于任务列表持久化：切页后 State 销毁重建可恢复）。
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'status': status.key,
+    'projectPath': projectPath,
+    'model': model,
+    'employeeId': employeeId,
+    'executor': executor.key,
+    'providerName': providerName,
+    'prompt': prompt,
+    'createdAt': createdAt.toIso8601String(),
+    'error': error,
+    'transcript': transcript,
+    'events': [for (final e in events) e.toJson()],
+  };
+
+  factory MdTask.fromJson(Map<String, dynamic> json) => MdTask(
+    id: json['id'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    status: MdTaskStatus.fromKey(json['status'] as String? ?? 'waiting'),
+    projectPath: json['projectPath'] as String? ?? '',
+    model: json['model'] as String? ?? 'Codex',
+    employeeId: json['employeeId'] as String?,
+    executor: MdTaskExecutor.fromKey(json['executor'] as String? ?? 'employee'),
+    providerName: json['providerName'] as String?,
+    prompt: json['prompt'] as String?,
+    createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    error: json['error'] as String?,
+    events: (json['events'] as List?)
+        ?.map((e) => MdTaskEvent.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  )..transcript = json['transcript'] as String? ?? '';
 }
 
 /// wenzmark 风格 IDE 动态主题。
