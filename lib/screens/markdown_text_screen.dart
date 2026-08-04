@@ -16,6 +16,7 @@ import '../widgets/md_file_sidebar.dart';
 import '../widgets/md_markdown_editor.dart';
 import '../widgets/md_ai_task_panel.dart';
 import '../widgets/md_bottom_status_bar.dart';
+import '../widgets/md_task_session_view.dart';
 
 /// wenzmark 风格 MarkdownText IDE（AppShell）。
 ///
@@ -107,6 +108,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       _executor = MdTaskExecutor.fromKey(prefs.getString('md_executor') ?? '');
       _selectedProviderName = prefs.getString('md_provider_name');
     });
+    await _loadTasks(); // 恢复 AI 任务列表（会话记录）
   }
 
   /// 项目根就绪后恢复上次打开的 Tab 列表与激活 Tab。
@@ -162,6 +164,64 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
     await prefs.setString('md_active_tab', _activeTabPath ?? '');
     await prefs.setString('md_executor', _executor.key);
     await prefs.setString('md_provider_name', _selectedProviderName ?? '');
+  }
+
+  // ─── AI 任务列表持久化 ─────────────────────────────
+  //
+  // 根因同 UI 开关：home_screen 切页时 State 销毁，_tasks 清空。
+  // 任务卡片（含 transcript 会话记录）是用户资产，单独持久化到
+  // D:\AiVtuber_Agent_profile\markdown_tasks.json，重进页面自动恢复。
+  // 运行中的任务在页面离开后无法继续刷新 UI，恢复时标记为 failed（中断）。
+
+  static const _tasksPath = r'D:\AiVtuber_Agent_profile\markdown_tasks.json';
+
+  /// 串行化写链，避免并发写同一文件（日志节流 + 状态变化可能密集触发）。
+  Future<void>? _taskPersistChain;
+
+  void _schedulePersistTasks() {
+    _taskPersistChain = (_taskPersistChain ?? Future.value())
+        .then((_) => _persistTasks());
+  }
+
+  Future<void> _persistTasks() async {
+    try {
+      final file = File(_tasksPath);
+      file.parent.createSync(recursive: true);
+      await file.writeAsString(jsonEncode({
+        'tasks': [for (final t in _tasks) t.toJson()],
+      }));
+    } catch (e) {
+      print('[MarkdownText] persist tasks failed: $e');
+    }
+  }
+
+  Future<void> _loadTasks() async {
+    try {
+      final file = File(_tasksPath);
+      if (!file.existsSync()) return;
+      final raw = jsonDecode(file.readAsStringSync());
+      final list = (raw is Map<String, dynamic> ? raw['tasks'] : null) as List?;
+      if (list == null || list.isEmpty) return;
+      final restored = <MdTask>[];
+      for (final e in list) {
+        if (e is! Map<String, dynamic>) continue;
+        final t = MdTask.fromJson(e);
+        // 页面离开导致的中断任务：恢复为 failed 并标记，避免卡在 running
+        if (t.status == MdTaskStatus.running) {
+          t.status = MdTaskStatus.failed;
+          t.error = 'Interrupted (page left)';
+        }
+        restored.add(t);
+      }
+      if (!mounted || restored.isEmpty) return;
+      setState(() {
+        _tasks
+          ..clear()
+          ..addAll(restored);
+      });
+    } catch (e) {
+      print('[MarkdownText] load tasks failed: $e');
+    }
   }
 
   void _onEditorChanged() {
@@ -540,6 +600,7 @@ Rules:
         prompt: prompt,
       );
       setState(() => _tasks.insert(0, task));
+      _schedulePersistTasks(); // 新任务持久化
       _runCliTask(task, prompt, profile);
       return;
     }
@@ -574,6 +635,7 @@ Rules:
       prompt: prompt,
     );
     setState(() => _tasks.insert(0, task));
+    _schedulePersistTasks(); // 新任务持久化
 
     // 执行任务
     _runTask(task, prompt, employee);
@@ -602,6 +664,7 @@ Rules:
 
   Future<void> _runTask(MdTask task, String prompt, AgentModel employee) async {
     setState(() => task.status = MdTaskStatus.running);
+    _schedulePersistTasks(); // 状态变化持久化
 
     // 构造上下文 prompt
     final buffer = StringBuffer();
@@ -637,6 +700,7 @@ Rules:
           task.error = null;
         });
       }
+      _schedulePersistTasks(); // 员工任务完成持久化（mounted 与否都落盘）
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -644,6 +708,7 @@ Rules:
           task.error = '$e';
         });
       }
+      _schedulePersistTasks(); // 员工任务失败持久化
     }
   }
 
@@ -685,6 +750,7 @@ Rules:
       task.status = MdTaskStatus.running;
       task.transcript = '▶ ${task.model} · ${profile.name}\n';
     });
+    _schedulePersistTasks(); // 状态变化持久化
 
     final contextPrompt = _buildTaskPrompt(task, prompt);
     final tmpFile = File('${Directory.systemTemp.path}/md_cli_prompt_${task.id}.txt');
@@ -764,8 +830,10 @@ Rules:
     if (task.status != MdTaskStatus.running) return;
     final ok = exitCode == 0;
     if (!mounted) {
-      // State 已销毁：只落状态字段，不再 setState（避免 deactivated 崩溃）
+      // State 已销毁：只落状态字段，不再 setState（避免 deactivated 崩溃）。
+      // 任务对象仍被回调闭包持有，持久化照常进行，重进页面可见最终结果。
       task.status = ok ? MdTaskStatus.completed : MdTaskStatus.failed;
+      _schedulePersistTasks();
       return;
     }
     final l10n = AppLocalizations.of(context);
@@ -779,9 +847,19 @@ Rules:
             : '${l10n.mdCliExited} $exitCode';
       }
     });
+    _schedulePersistTasks(); // 最终状态持久化
   }
 
-  /// 解析 claude stream-json 单行事件，追加到任务 transcript。
+  /// 解析 claude stream-json 单行事件，写入结构化会话（events + transcript）。
+  ///
+  /// Claude Code stream-json（--verbose）事件映射：
+  /// - stream_event.content_block_start → 工具调用开始（真实开始时间）
+  /// - stream_event.text_delta          → 文本累积（遇工具/结果时 flush）
+  /// - assistant 聚合消息                → tool_use 完整参数（更新事件摘要）
+  /// - user 聚合消息（content 含 tool_result）→ 工具完成（写耗时）
+  ///   ⚠️ 关键：Anthropic 语义中工具结果以 user 角色回传，之前误以为在
+  ///   stream_event 里，导致 endMs 永不写入、工具 spinner 永远转。
+  /// - result                           → 最终结果事件（✅/❌ 前缀）
   void _handleCliLine(MdTask task, String line) {
     final trimmed = line.trim();
     if (trimmed.isEmpty) return;
@@ -798,44 +876,112 @@ Rules:
         return; // init/status 噪音
       case 'stream_event':
         final event = obj['event'] as Map<String, dynamic>?;
-        if (event?['type'] == 'text_delta') {
-          final delta = event?['delta'] as Map<String, dynamic>?;
-          final text = delta?['text'] as String?;
-          if (text != null && text.isNotEmpty) _appendTaskLog(task, text);
+        if (event == null) return;
+        switch (event['type'] as String?) {
+          case 'text_delta':
+            final text = (event['delta'] as Map<String, dynamic>?)?['text'] as String?;
+            if (text != null && text.isNotEmpty) {
+              task.pendingText += text; // 暂存，遇工具/结果时 flush
+              _appendTaskLog(task, text);
+            }
+          case 'content_block_start':
+            // 工具调用开始：创建 tool 事件（记录真实开始时间）
+            final block = event['content_block'] as Map<String, dynamic>?;
+            if (block != null && block['type'] == 'tool_use') {
+              _addToolEvent(task, block);
+            }
+          case 'tool_result':
+            // 兼容备用路径（实际 tool_result 在顶层 user 消息里）
+            _completeTool(task, event['tool_use_id'] as String?);
+            _notifyTaskChanged();
         }
       case 'assistant':
       case 'assistant_message':
-        // 只提取工具调用块（文本已由 text_delta 实时流式追加，避免重复）
+        // 完整 assistant 消息：tool_use 带最终 input，更新事件参数摘要
         final message = obj['message'] as Map<String, dynamic>?;
         final content = message?['content'];
         if (content is List) {
           for (final block in content) {
             if (block is Map<String, dynamic> && block['type'] == 'tool_use') {
-              final name = block['name'] as String? ?? 'tool';
-              final input = block['input'];
-              final inputStr = input == null ? '' : jsonEncode(input);
-              final shown = inputStr.length > 160
-                  ? '${inputStr.substring(0, 160)}…'
-                  : inputStr;
-              _appendTaskLog(task, '\n⚙ $name $shown');
+              _addToolEvent(task, block);
             }
           }
+        }
+      case 'user':
+        // 工具执行完成（Anthropic 语义：工具结果以 user 角色回传）
+        final message = obj['message'] as Map<String, dynamic>?;
+        final content = message?['content'];
+        if (content is List) {
+          var completed = false;
+          for (final block in content) {
+            if (block is Map<String, dynamic> && block['type'] == 'tool_result') {
+              _completeTool(task, block['tool_use_id'] as String?);
+              completed = true;
+            }
+          }
+          if (completed) _notifyTaskChanged();
         }
       case 'result':
         final isError = obj['is_error'] == true;
         final result = obj['result'];
         if (result is String && result.isNotEmpty) {
-          _appendTaskLog(task, '\n${isError ? '❌' : '✅'} $result');
+          _flushPendingText(task);
+          final text = '${isError ? '❌' : '✅'} $result';
+          task.events.add(MdTaskEvent(type: MdEventType.result, content: text));
+          _appendTaskLog(task, '\n$text');
         }
     }
   }
 
-  /// 追加一行 CLI 输出到任务卡片；setState 节流到 ~80ms 一次。
-  void _appendTaskLog(MdTask task, String chunk) {
-    task.transcript += chunk;
-    if (task.transcript.length > 40000) {
-      task.transcript = task.transcript.substring(task.transcript.length - 40000);
+  /// 记录一个工具调用：content_block_start 创建事件（真实开始时间），
+  /// assistant 聚合消息到达时更新同 id 事件的完整参数摘要。
+  /// 摘要同步到 transcript 纯文本层（仅创建时，避免重复行）。
+  void _addToolEvent(MdTask task, Map<String, dynamic> block) {
+    final name = block['name'] as String? ?? 'tool';
+    final id = block['id'] as String?;
+    final input = block['input'];
+    final inputStr = input == null ? '' : jsonEncode(input);
+    final shown = inputStr.length > 160
+        ? '${inputStr.substring(0, 160)}…'
+        : inputStr;
+
+    // 同 id 事件已存在（content_block_start 先创建，assistant 后到）：更新摘要
+    if (id != null) {
+      for (final e in task.events.reversed) {
+        if (e.type == MdEventType.tool && e.toolId == id) {
+          e.content = shown;
+          _notifyTaskChanged();
+          return;
+        }
+      }
     }
+
+    _flushPendingText(task);
+    task.events.add(MdTaskEvent(
+      type: MdEventType.tool,
+      toolName: name,
+      toolId: id,
+      content: shown,
+      startMs: DateTime.now().millisecondsSinceEpoch,
+    ));
+    // 纯文本层同步（复制/旧数据回退用）
+    _appendTaskLog(task, '\n⚙ $name $shown');
+  }
+
+  /// 标记工具完成：匹配进行中的 tool 事件写入完成时间（显示耗时、停 spinner）。
+  void _completeTool(MdTask task, String? toolUseId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final e in task.events.reversed) {
+      if (e.type == MdEventType.tool && e.endMs == null &&
+          (toolUseId == null || e.toolId == null || e.toolId == toolUseId)) {
+        e.endMs = now;
+        break;
+      }
+    }
+  }
+
+  /// setState + 持久化节流（~80ms），CLI 输出密集时防卡顿。
+  void _notifyTaskChanged() {
     if (!mounted) return;
     final now = DateTime.now();
     if (_lastCliLogFlush != null &&
@@ -844,10 +990,29 @@ Rules:
     }
     _lastCliLogFlush = now;
     setState(() {});
+    _schedulePersistTasks(); // 状态变化持久化（与 setState 同节流）
+  }
+
+  /// 追加一行 CLI 纯文本到 transcript（复制/回退层），并节流刷新 UI。
+  void _appendTaskLog(MdTask task, String chunk) {
+    task.transcript += chunk;
+    if (task.transcript.length > 40000) {
+      task.transcript = task.transcript.substring(task.transcript.length - 40000);
+    }
+    _notifyTaskChanged();
+  }
+
+  /// 把累积的流式文本 flush 成 text 事件（遇到工具/结果事件前调用）。
+  void _flushPendingText(MdTask task) {
+    final t = task.pendingText.trim();
+    task.pendingText = '';
+    if (t.isEmpty) return;
+    task.events.add(MdTaskEvent(type: MdEventType.text, content: t));
   }
 
   void _deleteTask(MdTask task) {
     setState(() => _tasks.removeWhere((t) => t.id == task.id));
+    _schedulePersistTasks(); // 删除后持久化
   }
 
   void _retryTask(MdTask task) {
@@ -874,6 +1039,8 @@ Rules:
       }
       task.transcript = '';
       task.error = null;
+      task.events.clear();
+      task.pendingText = '';
       _runCliTask(task, task.prompt ?? task.title, profile);
       return;
     }
@@ -940,6 +1107,9 @@ Rules:
     task.title = result.length > 40 ? '${result.substring(0, 40)}...' : result;
     task.error = null;
     task.transcript = '';
+    task.events.clear();
+    task.pendingText = '';
+    _schedulePersistTasks(); // 编辑后的 prompt 持久化
 
     // 按原执行器重新执行
     if (task.executor != MdTaskExecutor.employee) {
@@ -991,6 +1161,7 @@ Rules:
         final content = task.transcript.isEmpty
             ? l10n.mdNoOutput
             : task.transcript;
+        final hasEvents = task.events.isNotEmpty || task.pendingText.isNotEmpty;
         return AlertDialog(
           backgroundColor: theme.card,
           title: Row(
@@ -1034,7 +1205,8 @@ Rules:
                   style: TextStyle(fontSize: 11, color: theme.muted),
                 ),
                 const SizedBox(height: 8),
-                // 完整会话输出（等宽字体 + 可选中复制）
+                // 完整会话：结构化事件（Markdown 文本 + 🔧 工具进度），
+                // 旧数据（无 events）回退为等宽纯文本
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -1044,15 +1216,27 @@ Rules:
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: theme.borderSubtle),
                     ),
-                    child: SelectableText(
-                      content,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.5,
-                        color: theme.foreground,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
+                    child: hasEvents
+                        ? SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: buildSessionItems(
+                                events: task.events,
+                                pendingText: task.pendingText,
+                                theme: theme,
+                                fontSize: 12,
+                              ),
+                            ),
+                          )
+                        : SelectableText(
+                            content,
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.5,
+                              color: theme.foreground,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
                   ),
                 ),
               ],
