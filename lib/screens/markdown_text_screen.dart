@@ -701,6 +701,10 @@ Rules:
         });
       }
       _schedulePersistTasks(); // 员工任务完成持久化（mounted 与否都落盘）
+      // 员工在后台异步执行文件操作，无法精确感知完成时机，延迟刷新文件树
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _loadTree();
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -848,6 +852,7 @@ Rules:
       }
     });
     _schedulePersistTasks(); // 最终状态持久化
+    _loadTree(); // AI 可能创建/删除/修改了项目文件，任务结束即刷新文件树
   }
 
   /// 解析 claude stream-json 单行事件，写入结构化会话（events + transcript）。
