@@ -62,6 +62,13 @@ class ProviderProfile {
 class AgentManager extends ChangeNotifier {
   final WenzAgentService wenzagent = WenzAgentService();
 
+  AgentManager() {
+    // ⚠️ 服务商列表必须与应用启动同步加载，而不是等 MultiAgent 页面初始化：
+    // MarkdownText 等其它页面直接读 providerProfiles，若只在 initIfEnabled()
+    // 里 _loadProfiles()，用户没进过 MultiAgent 页时手动添加的服务商就不显示。
+    _loadProfiles();
+  }
+
   // ─── LAN Connection State ───────────────────
 
   bool _initialized = false;
