@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/md_task.dart';
+import 'md_task_session_view.dart';
 
 /// wenzmark 风格右侧 AI 任务中心。
 ///
@@ -702,8 +703,9 @@ class _CardAction extends StatelessWidget {
 
 /// 任务卡片内的实时会话日志（CLI 任务运行时逐行追加）。
 ///
-/// reverse ListView：新内容在底部，自动贴底展示最新输出；
-/// 超长行按 240 字符切块，避免单个 Text 布局开销过大。
+/// 有结构化事件（events）时渲染富视图：Markdown 文本块 + 🔧 工具进度行；
+/// 旧数据（无 events）回退为纯文本行。reverse ListView：新内容在底部，
+/// 自动贴底展示最新输出；超长纯文本行按 240 字符切块，避免布局开销过大。
 class _TaskLogBox extends StatelessWidget {
   final MdTask task;
   final AppLocalizations l10n;
@@ -727,8 +729,40 @@ class _TaskLogBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lines = _lines();
     final running = task.status == MdTaskStatus.running;
+    final hasEvents = task.events.isNotEmpty || task.pendingText.isNotEmpty;
+    final items = hasEvents
+        ? buildSessionItems(
+            events: task.events,
+            pendingText: task.pendingText,
+            theme: theme,
+          )
+        : null;
+    final lines = hasEvents ? null : _lines();
+
+    // 非运行且无内容：不渲染日志区（避免空白框）
+    if (!running && (items ?? const []).isEmpty && (lines ?? const []).isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // 展开内容：结构化事件（md 块 + 工具行）或旧数据纯文本行
+    final expanded = <Widget>[];
+    if (hasEvents) {
+      expanded.addAll(items!);
+    } else if (lines != null && lines.isNotEmpty) {
+      for (final line in lines) {
+        expanded.add(Text(
+          line,
+          style: TextStyle(
+            fontSize: 10,
+            height: 1.35,
+            color: theme.muted,
+            fontFamily: 'monospace',
+          ),
+        ));
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -738,12 +772,16 @@ class _TaskLogBox extends StatelessWidget {
             const SizedBox(width: 4),
             Text(l10n.mdSessionLog, style: TextStyle(fontSize: 10, color: theme.faint)),
             const SizedBox(width: 6),
-            Text('${lines.length} lines', style: TextStyle(fontSize: 10, color: theme.faint)),
+            Text(
+              hasEvents
+                  ? '${task.events.length} events'
+                  : '${lines!.length} lines',
+              style: TextStyle(fontSize: 10, color: theme.faint),
+            ),
           ],
         ),
         const SizedBox(height: 4),
         Container(
-          height: running ? 110 : 90,
           width: double.infinity,
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -751,21 +789,23 @@ class _TaskLogBox extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: theme.borderSubtle),
           ),
-          child: lines.isEmpty
-              ? Text(l10n.mdStatusRunning, style: TextStyle(fontSize: 10, color: theme.faint))
-              : ListView.builder(
-                  reverse: true,
-                  padding: EdgeInsets.zero,
-                  itemCount: lines.length,
-                  itemBuilder: (context, i) => Text(
-                    lines[lines.length - 1 - i],
-                    style: TextStyle(
-                      fontSize: 10,
-                      height: 1.35,
-                      color: theme.muted,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
+          // 运行中：固定高度滚动框（reverse 贴底看最新输出，防卡片跳动）；
+          // 完成后：默认展开完整内容（高度自适应，随任务卡片列表滚动）
+          child: running
+              ? SizedBox(
+                  height: 110,
+                  child: expanded.isEmpty
+                      ? Text(l10n.mdStatusRunning, style: TextStyle(fontSize: 10, color: theme.faint))
+                      : ListView.builder(
+                          reverse: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: expanded.length,
+                          itemBuilder: (context, i) => expanded[expanded.length - 1 - i],
+                        ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: expanded,
                 ),
         ),
       ],
