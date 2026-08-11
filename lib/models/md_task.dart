@@ -120,6 +120,17 @@ class MdTask {
   /// 不持久化：运行中任务切页恢复即标记 failed，缓冲丢弃无碍。
   String pendingText = '';
 
+  /// 只读会话查看卡片（选中历史 Claude Code 会话时插入，非用户提交的任务）：
+  /// 不持久化（_persistTasks 过滤），切页后消失。
+  final bool viewOnly;
+
+  /// 所属会话分组 id：历史 Claude Code 会话 = jsonl uuid；新会话 = 'newsession-<ts>'；
+  /// null = 无分组（员工任务/旧任务平铺显示）。
+  final String? sessionId;
+
+  /// 本轮实际使用的 Claude Code 会话 id（result 事件提取；组内下一轮 --resume 用）。
+  String? cliSessionId;
+
   MdTask({
     required this.id,
     required this.title,
@@ -132,6 +143,9 @@ class MdTask {
     this.prompt,
     DateTime? createdAt,
     this.error,
+    this.viewOnly = false,
+    this.sessionId,
+    this.cliSessionId,
     List<MdTaskEvent>? events,
   }) : createdAt = createdAt ?? DateTime.now(),
        events = events ?? [];
@@ -151,6 +165,9 @@ class MdTask {
     'error': error,
     'transcript': transcript,
     'events': [for (final e in events) e.toJson()],
+    'viewOnly': viewOnly,
+    'sessionId': sessionId,
+    'cliSessionId': cliSessionId,
   };
 
   factory MdTask.fromJson(Map<String, dynamic> json) => MdTask(
@@ -165,6 +182,9 @@ class MdTask {
     prompt: json['prompt'] as String?,
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
     error: json['error'] as String?,
+    viewOnly: json['viewOnly'] as bool? ?? false,
+    sessionId: json['sessionId'] as String?,
+    cliSessionId: json['cliSessionId'] as String?,
     events: (json['events'] as List?)
         ?.map((e) => MdTaskEvent.fromJson(e as Map<String, dynamic>))
         .toList(),
