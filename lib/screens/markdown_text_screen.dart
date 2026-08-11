@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_localizations.dart';
 import '../models/md_task.dart';
 import '../providers/multi_agent_provider.dart';
+import '../services/claude_session_service.dart';
 import '../services/project_summary_service.dart';
 import '../widgets/md_title_bar.dart';
 import '../widgets/md_file_sidebar.dart';
@@ -61,6 +62,11 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
   MdTaskExecutor _executor = MdTaskExecutor.employee;
   String? _selectedProviderName;
 
+  // Claude Code CLI 历史会话（resume 用）
+  List<ClaudeSessionInfo> _claudeSessions = [];
+  // 当前活跃会话组 id（提交的任务归属该组；历史会话=uuid，新会话='newsession-*'）
+  String? _activeSessionId;
+
   // CLI 任务日志 setState 节流（text_delta 每秒可达几十次）
   DateTime? _lastCliLogFlush;
 
@@ -107,6 +113,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       _previewMode = prefs.getBool('md_preview_mode') ?? false;
       _executor = MdTaskExecutor.fromKey(prefs.getString('md_executor') ?? '');
       _selectedProviderName = prefs.getString('md_provider_name');
+      _activeSessionId = prefs.getString('md_active_session');
     });
     await _loadTasks(); // 恢复 AI 任务列表（会话记录）
   }
@@ -164,6 +171,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
     await prefs.setString('md_active_tab', _activeTabPath ?? '');
     await prefs.setString('md_executor', _executor.key);
     await prefs.setString('md_provider_name', _selectedProviderName ?? '');
+    await prefs.setString('md_active_session', _activeSessionId ?? '');
   }
 
   // ─── AI 任务列表持久化 ─────────────────────────────
@@ -188,7 +196,11 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       final file = File(_tasksPath);
       file.parent.createSync(recursive: true);
       await file.writeAsString(jsonEncode({
-        'tasks': [for (final t in _tasks) t.toJson()],
+        // viewOnly 卡片（会话查看）不持久化：切页后自然消失
+        'tasks': [
+          for (final t in _tasks)
+            if (!t.viewOnly) t.toJson(),
+        ],
       }));
     } catch (e) {
       print('[MarkdownText] persist tasks failed: $e');
@@ -248,6 +260,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
         });
         await _loadTree();
         await _restoreTabs(); // 项目根就绪后恢复上次打开的 Tab
+        _loadClaudeSessions(); // 加载该项目的历史 Claude Code 会话
       }
     } else {
       if (mounted) setState(() => _projectLoading = false);
@@ -289,6 +302,9 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       _tabs.clear();
       _activeTabPath = null;
       _editorCtrl.clear();
+      // 切换项目后旧会话 id 无意义，回到「新会话」
+      _activeSessionId = null;
+      _claudeSessions = [];
     });
 
     _svc.setProjectRoot(result);
@@ -296,6 +312,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
     await prefs.setString('markdown_project_root', result);
     await _loadTree();
     await _persistState(); // 切换项目后清空旧 Tab 持久化
+    _loadClaudeSessions(); // 加载新项目的历史 Claude Code 会话
   }
 
   // ─── 文件树 ───────────────────────────────────────
@@ -589,19 +606,37 @@ Rules:
         }
         return;
       }
-      final task = MdTask(
-        id: 'task-${DateTime.now().millisecondsSinceEpoch}',
-        title: prompt.length > 40 ? '${prompt.substring(0, 40)}...' : prompt,
-        status: MdTaskStatus.waiting,
-        projectPath: _projectRoot!,
-        executor: _executor,
-        providerName: profile.name,
-        model: _executor == MdTaskExecutor.claudeCli ? 'Claude Code CLI' : 'Codex CLI',
-        prompt: prompt,
-      );
-      setState(() => _tasks.insert(0, task));
-      _schedulePersistTasks(); // 新任务持久化
-      _runCliTask(task, prompt, profile);
+      // 复用「新会话」草稿卡片（本组内 waiting + prompt=null）：标题保留
+      // 用户起的会话名，首次提交的提示词填充到该卡片上，而不是另建一张卡
+      MdTask? draft;
+      for (final t in _tasks) {
+        if (t.sessionId == _activeSessionId &&
+            t.status == MdTaskStatus.waiting &&
+            t.prompt == null) {
+          draft = t;
+          break;
+        }
+      }
+      final task = draft ??
+          MdTask(
+            id: 'task-${DateTime.now().millisecondsSinceEpoch}',
+            title: prompt.length > 40 ? '${prompt.substring(0, 40)}...' : prompt,
+            status: MdTaskStatus.waiting,
+            projectPath: _projectRoot!,
+            executor: _executor,
+            providerName: profile.name,
+            model: _executor == MdTaskExecutor.claudeCli ? 'Claude Code CLI' : 'Codex CLI',
+            sessionId: _activeSessionId, // 归属当前活跃会话组
+            prompt: prompt,
+          );
+      if (draft != null) {
+        draft.prompt = prompt; // 填充草稿（其余字段保持：标题=会话名）
+        setState(() {}); // 徽章从「新会话」→「排队中」刷新
+      } else {
+        setState(() => _tasks.insert(0, task));
+      }
+      _schedulePersistTasks(); // 新任务/草稿填充持久化
+      _runCliTask(task, prompt, profile, resumeSessionId: _resumeTarget());
       return;
     }
 
@@ -660,6 +695,140 @@ Rules:
   void _onProviderChanged(String name) {
     setState(() => _selectedProviderName = name);
     _persistState();
+  }
+
+  void _onResumeSessionChanged(String? id) {
+    if (id == null || id.isEmpty) {
+      _startNewSession(); // 新会话：输入标题 → 创建新的空会话组
+      return;
+    }
+    // 选中历史会话 → 设为活跃组；组不存在时解析 jsonl 插入历史内容卡
+    setState(() => _activeSessionId = id);
+    _persistState();
+    if (_projectRoot != null) _ensureSessionGroup(id);
+  }
+
+  /// 新会话：弹窗输入标题 → 创建新会话组（顶部插入空草稿卡片）。
+  ///
+  /// 草稿卡（waiting + prompt=null，sessionId=newsession-*）在首次提交提示词时
+  /// 被复用为真实任务，标题保留用户起的会话名。草稿持久化（切页后仍在）。
+  Future<void> _startNewSession() async {
+    if (_projectRoot == null) return;
+    final l10n = AppLocalizations.of(context);
+    final titleCtrl = TextEditingController();
+    final title = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final theme = MdIdeTheme.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.card,
+          title: Text(l10n.mdNewSessionTitle,
+              style: TextStyle(color: theme.foreground)),
+          content: SizedBox(
+            width: 360,
+            child: TextField(
+              controller: titleCtrl,
+              autofocus: true,
+              style: TextStyle(fontSize: 13, color: theme.foreground),
+              decoration: InputDecoration(
+                filled: false, // 规避全局 InputDecorationTheme filled:true 污染
+                hintText: l10n.mdSessionTitleHint,
+                hintStyle: TextStyle(fontSize: 12, color: theme.faint),
+                border: OutlineInputBorder(
+                    borderSide: BorderSide(color: theme.borderSubtle)),
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, titleCtrl.text.trim()),
+              child: Text(l10n.mdCreate),
+            ),
+          ],
+        );
+      },
+    );
+    if (title == null || title.isEmpty || !mounted) return;
+    final newId = 'newsession-${DateTime.now().millisecondsSinceEpoch}';
+    setState(() {
+      _activeSessionId = newId;
+      _tasks.insert(0, MdTask(
+        id: newId,
+        title: title,
+        status: MdTaskStatus.waiting,
+        projectPath: _projectRoot!,
+        executor: MdTaskExecutor.claudeCli,
+        model: 'Claude Code CLI',
+        sessionId: newId,
+        prompt: null, // 草稿标记：首次提交时填充并复用
+      ));
+    });
+    _persistState();
+    _schedulePersistTasks();
+  }
+
+  /// 确保历史会话组存在：组内无卡时解析 jsonl 插入历史内容卡（viewOnly）。
+  ///
+  /// 历史内容卡 id=`session-<uuid>`、sessionId=uuid（属于该会话组），
+  /// viewOnly 不持久化——切页后消失，组由后续提交的任务卡重建；
+  /// 历史内容随时可从 jsonl 重新解析。
+  Future<void> _ensureSessionGroup(String sessionId) async {
+    final root = _projectRoot;
+    if (root == null) return;
+    if (_tasks.any((t) => t.sessionId == sessionId)) return; // 组已存在
+    final parsed = await ClaudeSessionService.parseSession(root, sessionId);
+    if (!mounted || parsed == null) return;
+    if (parsed.events.isEmpty && parsed.transcript.trim().isEmpty) return;
+
+    ClaudeSessionInfo? info;
+    for (final s in _claudeSessions) {
+      if (s.id == sessionId) {
+        info = s;
+        break;
+      }
+    }
+    final task = MdTask(
+      id: 'session-$sessionId',
+      title: info?.title ?? 'Claude Session',
+      status: MdTaskStatus.completed,
+      projectPath: root,
+      executor: MdTaskExecutor.claudeCli,
+      model: 'Claude Code CLI',
+      sessionId: sessionId,
+      viewOnly: true,
+    );
+    task.events.addAll(parsed.events);
+    task.transcript = parsed.transcript;
+    setState(() => _tasks.add(task));
+    _schedulePersistTasks();
+  }
+
+  /// 当前活跃会话组的 resume 目标：组内最近一张已运行卡的 cliSessionId。
+  /// null = 该组还没跑过（如新会话第一轮）→ 不带 --resume。
+  String? _resumeTarget() {
+    final sid = _activeSessionId;
+    if (sid == null) return null;
+    MdTask? last;
+    for (final t in _tasks) {
+      if (t.sessionId == sid &&
+          t.cliSessionId != null &&
+          t.cliSessionId!.isNotEmpty) {
+        if (last == null || t.createdAt.isAfter(last.createdAt)) last = t;
+      }
+    }
+    return last?.cliSessionId;
+  }
+
+  /// 加载当前项目的 Claude Code 历史会话（供 resume 选择）。
+  Future<void> _loadClaudeSessions() async {
+    final root = _projectRoot;
+    if (root == null || root.isEmpty) return;
+    final sessions = await ClaudeSessionService.listSessions(root);
+    if (!mounted) return;
+    setState(() => _claudeSessions = sessions);
   }
 
   Future<void> _runTask(MdTask task, String prompt, AgentModel employee) async {
@@ -749,7 +918,8 @@ Rules:
   ///
   /// prompt 经 stdin 管道传入（Windows cmd 命令行有 8KB 长度限制）；
   /// 环境变量把所选 AI 服务商注入 claude（ANTHROPIC_BASE_URL/AUTH_TOKEN）。
-  Future<void> _runCliTask(MdTask task, String prompt, ProviderProfile profile) async {
+  Future<void> _runCliTask(MdTask task, String prompt, ProviderProfile profile,
+      {String? resumeSessionId}) async {
     setState(() {
       task.status = MdTaskStatus.running;
       task.transcript = '▶ ${task.model} · ${profile.name}\n';
@@ -776,6 +946,10 @@ Rules:
     env['DISABLE_TELEMETRY'] = '1';
     env['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'] = '1';
 
+    // ⚠️ collection-if 的元素不继承 condition 的类型提升（Dart flow analysis
+    // 对 collection-if 的限制）——判空后的可空变量不能直接作列表元素。
+    // 必须用语句式 if + add（statement if 的提升正常生效）。
+    final rid = resumeSessionId;
     final args = <String>[
       '-p',
       '--verbose',
@@ -785,6 +959,11 @@ Rules:
       '--permission-mode', 'bypassPermissions',
       if (profile.model.isNotEmpty) '--model', profile.model,
     ];
+    if (rid != null && rid.isNotEmpty) {
+      // 选择历史会话时恢复该会话上下文（同项目目录下 resume）
+      args.add('--resume');
+      args.add(rid);
+    }
 
     Process process;
     try {
@@ -853,6 +1032,7 @@ Rules:
     });
     _schedulePersistTasks(); // 最终状态持久化
     _loadTree(); // AI 可能创建/删除/修改了项目文件，任务结束即刷新文件树
+    _loadClaudeSessions(); // 任务可能产生新 CLI 会话，刷新 resume 列表
   }
 
   /// 解析 claude stream-json 单行事件，写入结构化会话（events + transcript）。
@@ -927,6 +1107,9 @@ Rules:
           if (completed) _notifyTaskChanged();
         }
       case 'result':
+        // 提取本轮实际会话 id（组内下一轮 --resume 用）
+        final sid = obj['session_id'] as String?;
+        if (sid != null && sid.isNotEmpty) task.cliSessionId = sid;
         final isError = obj['is_error'] == true;
         final result = obj['result'];
         if (result is String && result.isNotEmpty) {
@@ -1016,8 +1199,41 @@ Rules:
   }
 
   void _deleteTask(MdTask task) {
+    // 删除历史会话内容卡（viewOnly）＝删除整个会话组（含 jsonl 记录）
+    if (task.viewOnly && task.sessionId != null) {
+      _deleteSessionGroup(task.sessionId!);
+      return;
+    }
     setState(() => _tasks.removeWhere((t) => t.id == task.id));
     _schedulePersistTasks(); // 删除后持久化
+  }
+
+  /// 删除整个会话组：历史会话删 jsonl + 组内所有卡；新会话组删组内所有卡
+  /// 及其产生的 jsonl（各轮 cliSessionId）。重置活跃组 + 刷新会话选择器。
+  Future<void> _deleteSessionGroup(String sessionId) async {
+    final root = _projectRoot;
+    // 收集涉及的 Claude Code 会话文件：历史会话=sessionId 本身；各轮 cliSessionId
+    final ids = <String>{};
+    if (!sessionId.startsWith('newsession-')) ids.add(sessionId);
+    for (final t in _tasks) {
+      if (t.sessionId == sessionId &&
+          t.cliSessionId != null &&
+          t.cliSessionId!.isNotEmpty) {
+        ids.add(t.cliSessionId!);
+      }
+    }
+    if (root != null) {
+      for (final id in ids) {
+        ClaudeSessionService.deleteSession(root, id);
+      }
+    }
+    if (_activeSessionId == sessionId) {
+      _activeSessionId = null;
+      _persistState();
+    }
+    setState(() => _tasks.removeWhere((t) => t.sessionId == sessionId));
+    _schedulePersistTasks();
+    _loadClaudeSessions(); // 会话选择器同步消失
   }
 
   void _retryTask(MdTask task) {
@@ -1046,7 +1262,8 @@ Rules:
       task.error = null;
       task.events.clear();
       task.pendingText = '';
-      _runCliTask(task, task.prompt ?? task.title, profile);
+      _runCliTask(task, task.prompt ?? task.title, profile,
+          resumeSessionId: task.cliSessionId);
       return;
     }
 
@@ -1137,7 +1354,7 @@ Rules:
         }
         return;
       }
-      _runCliTask(task, result, profile);
+      _runCliTask(task, result, profile, resumeSessionId: task.cliSessionId);
     } else {
       final mgr = context.read<AgentManager>();
       final employee = mgr.employees.firstWhere(
@@ -1428,6 +1645,13 @@ Rules:
                                 executor: _executor,
                                 providerName: _selectedProviderName,
                                 providerNames: [for (final p in mgr.providerProfiles) p.name],
+                                claudeSessions: _claudeSessions,
+                                resumeSessionId: _activeSessionId,
+                                onResumeSessionChanged: _onResumeSessionChanged,
+                                sessionTitles: {
+                                  for (final s in _claudeSessions) s.id: s.title,
+                                },
+                                onDeleteSession: _deleteSessionGroup,
                                 onPromptSubmitted: _submitTask,
                                 onExecutorChanged: _onExecutorChanged,
                                 onProviderChanged: _onProviderChanged,
