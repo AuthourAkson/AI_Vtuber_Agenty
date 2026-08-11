@@ -107,6 +107,13 @@ class AppLocalizations {
   String get mdExecutorClaudeCli => _t('mdExecutorClaudeCli');
   String get mdExecutorCodexCli => _t('mdExecutorCodexCli');
   String get mdSelectProvider => _t('mdSelectProvider');
+  String get mdNewSession => _t('mdNewSession');
+  String get mdNoSessions => _t('mdNoSessions');
+  String get mdNewSessionTitle => _t('mdNewSessionTitle');
+  String get mdSessionTitleHint => _t('mdSessionTitleHint');
+  String get mdCreate => _t('mdCreate');
+  String get mdRounds => _t('mdRounds');
+  String get mdDeleteSession => _t('mdDeleteSession');
   String get mdNoProviderToast => _t('mdNoProviderToast');
   String get mdNoProviderMenu => _t('mdNoProviderMenu');
   String get mdSessionLog => _t('mdSessionLog');
@@ -1178,6 +1185,13 @@ class AppLocalizations {
     'mdExecutorClaudeCli': {'en': 'Claude Code CLI',                   'zh': 'Claude Code CLI'},
     'mdExecutorCodexCli':  {'en': 'Codex CLI',                         'zh': 'Codex CLI'},
     'mdSelectProvider':    {'en': 'Select AI provider...',             'zh': '选择AI服务商...'},
+    'mdNewSession':        {'en': 'New session',                       'zh': '新会话'},
+    'mdNoSessions':        {'en': 'No saved sessions',                 'zh': '暂无历史会话'},
+    'mdNewSessionTitle':   {'en': 'New session',                       'zh': '新会话'},
+    'mdSessionTitleHint':  {'en': 'Session title...',                  'zh': '会话标题...'},
+    'mdCreate':            {'en': 'Create',                            'zh': '创建'},
+    'mdRounds':            {'en': 'rounds',                            'zh': '轮'},
+    'mdDeleteSession':     {'en': 'Delete session',                    'zh': '删除会话'},
     'mdNoProviderToast':   {'en': 'No AI provider configured. Add one in MultiAgent → Settings → AI first.', 'zh': '暂无AI服务商，请先在 MultiAgent → 设置 → AI 中添加'},
     'mdNoProviderMenu':    {'en': 'No AI provider configured',         'zh': '未配置AI服务商'},
     'mdSessionLog':        {'en': 'Session log',                       'zh': '运行日志'},
