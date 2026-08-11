@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/md_task.dart';
+import '../services/claude_session_service.dart';
 import 'md_task_session_view.dart';
 
 /// wenzmark 风格右侧 AI 任务中心。
@@ -12,6 +13,11 @@ class MdAiTaskPanel extends StatefulWidget {
   final MdTaskExecutor executor;
   final String? providerName;
   final List<String> providerNames;
+  final List<ClaudeSessionInfo> claudeSessions;
+  final String? resumeSessionId;
+  final ValueChanged<String?> onResumeSessionChanged;
+  final Map<String, String> sessionTitles;
+  final ValueChanged<String> onDeleteSession;
   final ValueChanged<String> onPromptSubmitted;
   final ValueChanged<MdTaskExecutor> onExecutorChanged;
   final ValueChanged<String> onProviderChanged;
@@ -30,6 +36,11 @@ class MdAiTaskPanel extends StatefulWidget {
     required this.executor,
     required this.providerName,
     required this.providerNames,
+    required this.claudeSessions,
+    required this.resumeSessionId,
+    required this.onResumeSessionChanged,
+    required this.sessionTitles,
+    required this.onDeleteSession,
     required this.onPromptSubmitted,
     required this.onExecutorChanged,
     required this.onProviderChanged,
@@ -50,6 +61,9 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
   final _searchCtrl = TextEditingController();
   final _promptCtrl = TextEditingController();
   MdTaskStatus? _filter;
+
+  /// 会话组折叠状态（groupId → 是否折叠；默认展开）。
+  final Map<String, bool> _collapsed = {};
 
   @override
   void dispose() {
@@ -128,6 +142,7 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
     final l10n = AppLocalizations.of(context);
     final tasks = _visibleTasks;
     final counts = _counts();
+    final entries = _buildEntries(tasks);
 
     return Container(
       width: double.infinity,
@@ -211,7 +226,7 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
             ),
           ),
           const SizedBox(height: 8),
-          // ── 任务卡片列表 ──
+          // ── 任务卡片列表（会话分组 + 无分组平铺）──
           Expanded(
             child: tasks.isEmpty
                 ? Center(
@@ -223,16 +238,33 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    itemCount: tasks.length,
-                    itemBuilder: (context, i) => _TaskCard(
-                      task: tasks[i],
-                      onDelete: () => widget.onDeleteTask(tasks[i]),
-                      onRetry: () => widget.onRetryTask(tasks[i]),
-                      onEdit: () => widget.onEditTask(tasks[i]),
-                      onView: () => widget.onViewTask(tasks[i]),
-                      l10n: l10n,
-                      theme: theme,
-                    ),
+                    itemCount: entries.length,
+                    itemBuilder: (context, i) {
+                      final e = entries[i];
+                      if (e.isHeader) {
+                        return _SessionHeader(
+                          title: e.groupTitle!,
+                          count: e.groupCount!,
+                          collapsed: _collapsed[e.groupId] == true,
+                          onToggle: () => setState(() {
+                            _collapsed[e.groupId!] = !(_collapsed[e.groupId!] == true);
+                          }),
+                          onDelete: () => widget.onDeleteSession(e.groupId!),
+                          l10n: l10n,
+                          theme: theme,
+                        );
+                      }
+                      final t = e.task!;
+                      return _TaskCard(
+                        task: t,
+                        onDelete: () => widget.onDeleteTask(t),
+                        onRetry: () => widget.onRetryTask(t),
+                        onEdit: () => widget.onEditTask(t),
+                        onView: () => widget.onViewTask(t),
+                        l10n: l10n,
+                        theme: theme,
+                      );
+                    },
                   ),
           ),
           // ── AI 输入框（100px）──
@@ -254,6 +286,56 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
       }
     }
     return _TaskCounts(total, queue, failed, pending, completed);
+  }
+
+  /// 任务列表分组结构：有 sessionId 的按会话组折叠（组头 + 展开的组内卡），
+  /// 无分组任务平铺。组排序按组内最新卡时间倒序（活跃组在前）；组内历史
+  /// 内容卡（viewOnly）强制排最前，其余按时间正序（对话顺序）。
+  List<_ListEntry> _buildEntries(List<MdTask> tasks) {
+    final groups = <String, List<MdTask>>{};
+    final order = <String>[];
+    final orphans = <MdTask>[];
+    for (final t in tasks) {
+      final sid = t.sessionId;
+      if (sid == null || sid.isEmpty) {
+        orphans.add(t);
+        continue;
+      }
+      if (!groups.containsKey(sid)) order.add(sid);
+      groups.putIfAbsent(sid, () => []).add(t);
+    }
+    order.sort((a, b) => _latestIn(groups[b]!).compareTo(_latestIn(groups[a]!)));
+    final entries = <_ListEntry>[];
+    for (final sid in order) {
+      final g = groups[sid]!;
+      g.sort((a, b) {
+        if (a.viewOnly != b.viewOnly) return a.viewOnly ? -1 : 1;
+        return a.createdAt.compareTo(b.createdAt);
+      });
+      entries.add(_ListEntry.header(
+        sid,
+        widget.sessionTitles[sid] ?? g.first.title,
+        g.length,
+      ));
+      if (_collapsed[sid] != true) {
+        for (final t in g) {
+          entries.add(_ListEntry.task(t));
+        }
+      }
+    }
+    orphans.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    for (final t in orphans) {
+      entries.add(_ListEntry.task(t));
+    }
+    return entries;
+  }
+
+  static DateTime _latestIn(List<MdTask> tasks) {
+    var latest = tasks.first.createdAt;
+    for (final t in tasks) {
+      if (t.createdAt.isAfter(latest)) latest = t.createdAt;
+    }
+    return latest;
   }
 
   Widget _buildPromptBox(MdIdeTheme theme, AppLocalizations l10n) {
@@ -351,7 +433,7 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
                           ),
                         ),
                       )
-                    else
+                    else ...[
                       Flexible(
                         child: _SelectorChip<String>(
                           icon: Icons.cloud_outlined,
@@ -375,6 +457,12 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
                           onSelected: widget.onProviderChanged,
                         ),
                       ),
+                      // Claude Code CLI：会话选择（resume 历史会话）
+                      if (widget.executor == MdTaskExecutor.claudeCli) ...[
+                        const SizedBox(width: 6),
+                        Flexible(child: _sessionSelector(theme, l10n)),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -397,11 +485,218 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
       ),
     );
   }
+
+  // ── Claude Code CLI 会话选择（resume 历史会话）──
+
+  Widget _sessionSelector(MdIdeTheme theme, AppLocalizations l10n) {
+    ClaudeSessionInfo? selected;
+    for (final s in widget.claudeSessions) {
+      if (s.id == widget.resumeSessionId) {
+        selected = s;
+        break;
+      }
+    }
+    // ⚠️ 哨兵值 '' 表示「新会话」：不能用 null（showMenu 返回 null = 取消）
+    return _SelectorChip<String>(
+      icon: Icons.history,
+      iconColor: selected != null ? theme.accent : theme.muted,
+      label: selected?.title ?? l10n.mdNewSession,
+      theme: theme,
+      items: () => [
+        _newSessionItem(theme, l10n),
+        if (widget.claudeSessions.isEmpty)
+          PopupMenuItem<String>(
+            enabled: false,
+            child: Text(
+              l10n.mdNoSessions,
+              style: TextStyle(fontSize: 12, color: theme.faint),
+            ),
+          )
+        else
+          for (final s in widget.claudeSessions) _sessionMenuItem(s, theme),
+      ],
+      onSelected: (v) => widget.onResumeSessionChanged(v.isEmpty ? null : v),
+    );
+  }
+
+  PopupMenuItem<String> _newSessionItem(MdIdeTheme theme, AppLocalizations l10n) {
+    final selected = widget.resumeSessionId == null;
+    return PopupMenuItem<String>(
+      value: '',
+      height: 30,
+      child: Row(
+        children: [
+          Icon(Icons.add_comment_outlined,
+              size: 12, color: selected ? theme.accent : theme.muted),
+          const SizedBox(width: 8),
+          Text(
+            l10n.mdNewSession,
+            style: TextStyle(
+              fontSize: 12,
+              color: selected ? theme.accent : theme.foreground,
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.check, size: 12, color: theme.accent),
+          ],
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _sessionMenuItem(ClaudeSessionInfo s, MdIdeTheme theme) {
+    final selected = s.id == widget.resumeSessionId;
+    return PopupMenuItem<String>(
+      value: s.id,
+      height: 34,
+      child: Row(
+        children: [
+          Icon(Icons.history, size: 12, color: selected ? theme.accent : theme.muted),
+          const SizedBox(width: 8),
+          // ⚠️ 不用 Expanded：PopupMenuItem 宽度约束可能无界（布局崩溃）
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.title,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: selected ? theme.accent : theme.foreground,
+                  ),
+                ),
+                Text(
+                  _fmtSessionMeta(s),
+                  style: TextStyle(fontSize: 10, color: theme.faint),
+                ),
+              ],
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.check, size: 12, color: theme.accent),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 会话元信息：`MM-dd HH:mm · 行数`（纯数字，无 i18n 负担）。
+  static String _fmtSessionMeta(ClaudeSessionInfo s) {
+    final t = s.modified.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)} · ${s.lineCount}';
+  }
 }
 
 class _TaskCounts {
   final int total, queue, failed, pending, completed;
   const _TaskCounts(this.total, this.queue, this.failed, this.pending, this.completed);
+}
+
+/// 任务列表扁平条目：会话分组头（isHeader）或任务卡。
+class _ListEntry {
+  final bool isHeader;
+  final String? groupId;
+  final String? groupTitle;
+  final int? groupCount;
+  final MdTask? task;
+
+  const _ListEntry.header(this.groupId, this.groupTitle, this.groupCount)
+      : isHeader = true,
+        task = null;
+  const _ListEntry.task(this.task)
+      : isHeader = false,
+        groupId = null,
+        groupTitle = null,
+        groupCount = null;
+}
+
+/// 会话分组头：点击（除删除按钮）折叠/展开，右侧删除整个会话组。
+class _SessionHeader extends StatelessWidget {
+  final String title;
+  final int count;
+  final bool collapsed;
+  final VoidCallback onToggle;
+  final VoidCallback onDelete;
+  final AppLocalizations l10n;
+  final MdIdeTheme theme;
+
+  const _SessionHeader({
+    required this.title,
+    required this.count,
+    required this.collapsed,
+    required this.onToggle,
+    required this.onDelete,
+    required this.l10n,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8, top: 2),
+      padding: const EdgeInsets.only(left: 4, right: 4, top: 2, bottom: 2),
+      decoration: BoxDecoration(
+        color: theme.sidebar,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.borderSubtle),
+      ),
+      child: Row(
+        children: [
+          // 折叠/展开区（箭头 + 标题 + 计数）；删除按钮独立避免手势冲突
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onToggle,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      collapsed ? Icons.chevron_right : Icons.expand_more,
+                      size: 16,
+                      color: theme.muted,
+                    ),
+                  ),
+                  Icon(Icons.forum_outlined, size: 13, color: theme.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: theme.foreground,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count ${l10n.mdRounds}',
+                    style: TextStyle(fontSize: 10, color: theme.faint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _CardAction(
+            icon: Icons.delete_outline,
+            tooltip: l10n.mdDeleteSession,
+            onTap: onDelete,
+            color: theme.error,
+            theme: theme,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 输入框行的可点击胶囊选择器（执行器 / AI 服务商）。
@@ -642,6 +937,10 @@ class _TaskCard extends StatelessWidget {
   }
 
   (String, Color) _statusStyle(MdTaskStatus status, AppLocalizations l10n, MdIdeTheme theme) {
+    // 新会话草稿（waiting 且未填 prompt）：显示「新会话」标签而非「排队中」
+    if (status == MdTaskStatus.waiting && task.prompt == null) {
+      return (l10n.mdNewSession, theme.accent);
+    }
     switch (status) {
       case MdTaskStatus.waiting: return (l10n.mdStatusWaiting, theme.muted);
       case MdTaskStatus.running: return (l10n.mdStatusRunning, theme.info);
