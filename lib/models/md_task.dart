@@ -125,8 +125,9 @@ class MdTask {
   final bool viewOnly;
 
   /// 所属会话分组 id：历史 Claude Code 会话 = jsonl uuid；新会话 = 'newsession-<ts>'；
-  /// null = 无分组（员工任务/旧任务平铺显示）。
-  final String? sessionId;
+  /// null = 无分组（员工任务平铺显示）。⚠️ 可变：平铺 CLI 任务在 result 事件拿到
+  /// 实际 session_id 后自动归属到自己的会话组（消除孤儿卡残留）。
+  String? sessionId;
 
   /// 本轮实际使用的 Claude Code 会话 id（result 事件提取；组内下一轮 --resume 用）。
   String? cliSessionId;
