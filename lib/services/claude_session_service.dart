@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../models/md_task.dart';
 
@@ -9,6 +10,7 @@ import '../models/md_task.dart';
 class ClaudeSessionInfo {
   final String id;
   final String title;
+  final String? projectName;
   final DateTime modified;
   final int lineCount;
 
@@ -17,6 +19,7 @@ class ClaudeSessionInfo {
     required this.title,
     required this.modified,
     required this.lineCount,
+    this.projectName,
   });
 }
 
@@ -54,9 +57,15 @@ class ClaudeSessionService {
     final result = <ClaudeSessionInfo>[];
     for (final f in files.take(30)) {
       final stat = f.statSync();
+      final extracted = await _extractTitle(f);
+      // 过滤空壳 jsonl（无 user 消息也无 summary，如启动即失败的任务留下的
+      // 只有 system/init 行的文件）——它们无标题可提取（Untitled 噪音来源）、
+      // 无内容可 resume，不该出现在会话列表
+      if (!extracted.hasContent) continue;
       result.add(ClaudeSessionInfo(
         id: f.uri.pathSegments.last.replaceAll('.jsonl', ''),
-        title: await _extractTitle(f),
+        title: extracted.title,
+        projectName: extracted.projectName,
         modified: stat.modified,
         lineCount: stat.size > 0 ? _countLines(f) : 0,
       ));
@@ -64,13 +73,30 @@ class ClaudeSessionService {
     return result;
   }
 
-  /// 从 jsonl 提取会话标题：优先最后一个 summary 事件，其次首条 user 消息。
-  static Future<String> _extractTitle(File file) async {
+  /// 从 jsonl 提取会话标题 + 项目名 + 是否有内容。
+  ///
+  /// 标题：优先最后一个 summary 事件，其次首条 user 消息。⚠️ MarkdownText 产生的
+  /// 会话**没有 summary 事件**（Claude Code 只给 CLI 交互写 summary），首条 user
+  /// 消息是 `[MarkdownText Task]` 任务模板——此时提取 `User request:` 后的真实
+  /// 提示词做标题（比整段模板截断可读得多），`Project:` 行做项目名（meta 显示）。
+  /// hasContent：扫描到 user 或 summary 即为有内容；只有 system/init 行的空壳
+  /// jsonl（启动即失败的任务遗留）无标题可提取，由 listSessions 过滤。
+  ///
+  /// ⚠️ 性能：jsonl 可能数 MB，全文件 readAsLines 会在每次列表刷新时把每个
+  /// 会话文件整读一遍（30 个会话 = 30 次全读，进页面/任务完成都会卡）。
+  /// 改为分段读取：头部 64KB 找首条 user 消息（几乎总在文件开头）、尾部
+  /// 64KB 找 summary（Claude Code 的 summary 事件写到最后）。分段边界可能
+  /// 切断一行 JSON / 半个 UTF-8 字符——jsonDecode 失败跳过、utf8 允许
+  /// malformed，均安全。
+  static Future<({String title, String? projectName, bool hasContent})>
+      _extractTitle(File file) async {
     String? summary;
     String? firstUser;
-    try {
-      final lines = await file.readAsLines();
-      for (final line in lines) {
+    String? projectName;
+    var hasContent = false;
+
+    void scanText(String text) {
+      for (final line in text.split('\n')) {
         if (line.trim().isEmpty) continue;
         Object? obj;
         try {
@@ -82,20 +108,68 @@ class ClaudeSessionService {
         final type = obj['type'] as String?;
         if (type == 'summary') {
           final s = obj['summary'] as String?;
-          if (s != null && s.trim().isNotEmpty) summary = s;
-        } else if (type == 'user' && firstUser == null) {
+          if (s != null && s.trim().isNotEmpty) {
+            summary = s;
+            hasContent = true;
+          }
+        } else if (type == 'user') {
           final msg = obj['message'] as Map<String, dynamic>?;
-          firstUser = _extractUserText(msg?['content']);
+          final text = _extractUserText(msg?['content']);
+          if (text != null && text.trim().isNotEmpty) {
+            hasContent = true;
+            if (firstUser == null) {
+              firstUser = text;
+              // MarkdownText 任务模板：`Project: <path>` 行 → 项目名（取末段）
+              final m = RegExp(r'Project:\s*(\S.*)').firstMatch(text);
+              if (m != null) {
+                final p = m.group(1)!.trim();
+                final seg = p
+                    .replaceAll(RegExp(r'[/\\]+$'), '')
+                    .split(RegExp(r'[/\\]'))
+                    .last;
+                projectName ??= seg.isEmpty ? p : seg;
+              }
+            }
+          }
         }
+      }
+    }
+
+    try {
+      final raf = await file.open();
+      try {
+        final size = await raf.length();
+        const head = 64 * 1024;
+        if (size <= head) {
+          scanText(utf8.decode(await raf.read(size), allowMalformed: true));
+        } else {
+          // 头部：首条 user 消息；尾部：最后一个 summary（后扫描覆盖）
+          scanText(utf8.decode(await raf.read(head), allowMalformed: true));
+          await raf.setPosition(size - head);
+          scanText(utf8.decode(await raf.read(head), allowMalformed: true));
+        }
+      } finally {
+        await raf.close();
       }
     } catch (_) {
       // 文件损坏/读取失败 → 走兜底标题
     }
-    final raw = summary ?? firstUser;
-    if (raw == null || raw.trim().isEmpty) return 'Untitled';
+    var title = summary ?? firstUser;
+    if (title == null || title.trim().isEmpty) title = 'Untitled';
+    // MarkdownText 任务模板 → 提取 `User request:` 后的真实提示词
+    if (title.contains('[MarkdownText Task]')) {
+      final req = RegExp(r'User request:\s*([\s\S]*)').firstMatch(title!);
+      if (req != null && req.group(1)!.trim().isNotEmpty) {
+        title = req.group(1)!.trim();
+      }
+    }
     // 清洗：压平换行/制表符，截断
-    final flat = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return flat.length > 60 ? '${flat.substring(0, 60)}...' : flat;
+    final flat = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return (
+      title: flat.length > 60 ? '${flat.substring(0, 60)}...' : flat,
+      projectName: projectName,
+      hasContent: hasContent,
+    );
   }
 
   /// user 消息 content 可能是字符串或内容块数组，统一提取文本。
@@ -235,9 +309,27 @@ class ClaudeSessionService {
     }
   }
 
+  /// 统计 jsonl 行数（会话选择器元信息展示用）。
+  ///
+  /// ⚠️ 性能：不整读文件（readAsLinesSync 会为每个会话分配全部行对象），
+  /// 分块读字节流统计 `\n` 数量，大文件也只需扫一遍原始字节。
   static int _countLines(File file) {
     try {
-      return file.readAsLinesSync().length;
+      final raf = file.openSync();
+      try {
+        var count = 0;
+        final buf = Uint8List(64 * 1024);
+        while (true) {
+          final n = raf.readIntoSync(buf);
+          if (n <= 0) break;
+          for (var i = 0; i < n; i++) {
+            if (buf[i] == 0x0A) count++;
+          }
+        }
+        return count; // 行数 ≈ \n 数（末尾无换行的最后一行不计，元信息够用）
+      } finally {
+        raf.closeSync();
+      }
     } catch (_) {
       return 0;
     }
