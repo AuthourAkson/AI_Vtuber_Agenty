@@ -114,9 +114,14 @@ class AppLocalizations {
   String get mdCreate => _t('mdCreate');
   String get mdRounds => _t('mdRounds');
   String get mdDeleteSession => _t('mdDeleteSession');
+  String get mdHideSession => _t('mdHideSession');
   String get mdNoProviderToast => _t('mdNoProviderToast');
   String get mdNoProviderMenu => _t('mdNoProviderMenu');
   String get mdSessionLog => _t('mdSessionLog');
+  String get mdSessions => _t('mdSessions');
+  String get mdLocalSessions => _t('mdLocalSessions');
+  String get mdHistorySessions => _t('mdHistorySessions');
+  String get mdSessionLoadFailed => _t('mdSessionLoadFailed');
   String get mdCliExited => _t('mdCliExited');
   String get mdCliStartFailed => _t('mdCliStartFailed');
   String get mdEditTask => _t('mdEditTask');
@@ -1192,9 +1197,14 @@ class AppLocalizations {
     'mdCreate':            {'en': 'Create',                            'zh': '创建'},
     'mdRounds':            {'en': 'rounds',                            'zh': '轮'},
     'mdDeleteSession':     {'en': 'Delete session',                    'zh': '删除会话'},
+    'mdHideSession':       {'en': 'Hide session',                      'zh': '隐藏会话'},
     'mdNoProviderToast':   {'en': 'No AI provider configured. Add one in MultiAgent → Settings → AI first.', 'zh': '暂无AI服务商，请先在 MultiAgent → 设置 → AI 中添加'},
     'mdNoProviderMenu':    {'en': 'No AI provider configured',         'zh': '未配置AI服务商'},
     'mdSessionLog':        {'en': 'Session log',                       'zh': '运行日志'},
+    'mdSessions':          {'en': 'Sessions',                          'zh': '会话'},
+    'mdLocalSessions':     {'en': 'Local sessions',                    'zh': '本地会话'},
+    'mdHistorySessions':   {'en': 'Saved sessions',                    'zh': '历史会话'},
+    'mdSessionLoadFailed': {'en': 'Session file missing or corrupted', 'zh': '会话文件不存在或已损坏'},
     'mdCliExited':         {'en': 'CLI exited with code',              'zh': 'CLI 退出码'},
     'mdCliStartFailed':    {'en': 'Failed to start CLI',               'zh': 'CLI 启动失败'},
     'mdEditTask':          {'en': 'Edit task prompt',                  'zh': '编辑任务提示词'},
