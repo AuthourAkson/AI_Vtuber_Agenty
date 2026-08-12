@@ -65,6 +65,21 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
   /// 会话组折叠状态（groupId → 是否折叠；默认展开）。
   final Map<String, bool> _collapsed = {};
 
+  /// 暂时隐藏的会话组（组头 👁 隐藏按钮；数据保留，右下角选择器重新选中
+  /// 即恢复显示——didUpdateWidget 检测选中变化自动取消隐藏）。
+  /// 不持久化：切页后隐藏状态重置（「暂时关闭」语义）。
+  final Set<String> _hiddenGroups = {};
+
+  @override
+  void didUpdateWidget(MdAiTaskPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 从选择器选中某会话 → 自动取消该会话组的隐藏（恢复显示）
+    final rid = widget.resumeSessionId;
+    if (rid != null && rid.isNotEmpty && _hiddenGroups.remove(rid)) {
+      // didUpdateWidget 后必然跟随 build，无需手动 setState
+    }
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -86,6 +101,46 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
     if (text.isEmpty) return;
     widget.onPromptSubmitted(text);
     _promptCtrl.clear();
+  }
+
+  /// 点击分组头：选中该会话（切换活跃组）并展开其内容。
+  /// 折叠/展开改由箭头图标单独触发（_SessionHeader 内独立 GestureDetector）。
+  void _selectSession(String groupId) {
+    setState(() => _collapsed.remove(groupId)); // 选中即展开
+    widget.onResumeSessionChanged(groupId);
+  }
+
+  /// 删除会话前确认（防手滑误删）。确认后回调 screen 执行级联删除。
+  /// ⚠️ MdIdeTheme.of 必须在 dialog builder 内调用（build 阶段 watch 合法），
+  /// 不要在 await showDialog 之前的函数体里算主题色。
+  Future<void> _confirmDeleteSession(String groupId) async {
+    final l10n = AppLocalizations.of(context);
+    final name = widget.sessionTitles[groupId] ?? groupId;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = MdIdeTheme.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.card,
+          title: Text(l10n.mdDeleteSession,
+              style: TextStyle(fontSize: 14, color: theme.foreground)),
+          content: Text(
+            l10n.mdDeleteConfirm.replaceAll(r'${name}', name),
+            style: TextStyle(fontSize: 13, color: theme.foreground),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(l10n.cancel)),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child:
+                    Text(l10n.delete, style: TextStyle(color: theme.error))),
+          ],
+        );
+      },
+    );
+    if (ok == true && context.mounted) widget.onDeleteSession(groupId);
   }
 
   String _executorLabel(AppLocalizations l10n) {
@@ -225,6 +280,51 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
               ],
             ),
           ),
+          // ── CLI 模式：会话工具条（显眼的「新会话」入口）──
+          if (widget.executor == MdTaskExecutor.claudeCli)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.forum_outlined, size: 12, color: theme.muted),
+                  const SizedBox(width: 5),
+                  Text(
+                    l10n.mdSessions,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: theme.muted,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => widget.onResumeSessionChanged(null),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: theme.accentDim,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: theme.accent.withAlpha(90)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_comment_outlined,
+                              size: 12, color: theme.accent),
+                          const SizedBox(width: 4),
+                          Text(
+                            l10n.mdNewSession,
+                            style: TextStyle(
+                                fontSize: 11, color: theme.accent),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 8),
           // ── 任务卡片列表（会话分组 + 无分组平铺）──
           Expanded(
@@ -245,11 +345,17 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
                         return _SessionHeader(
                           title: e.groupTitle!,
                           count: e.groupCount!,
+                          lastActive: e.groupLastActive,
+                          isActive: widget.resumeSessionId == e.groupId,
                           collapsed: _collapsed[e.groupId] == true,
+                          onSelect: () => _selectSession(e.groupId!),
                           onToggle: () => setState(() {
                             _collapsed[e.groupId!] = !(_collapsed[e.groupId!] == true);
                           }),
-                          onDelete: () => widget.onDeleteSession(e.groupId!),
+                          onHide: () => setState(() {
+                            _hiddenGroups.add(e.groupId!);
+                          }),
+                          onDelete: () => _confirmDeleteSession(e.groupId!),
                           l10n: l10n,
                           theme: theme,
                         );
@@ -307,6 +413,7 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
     order.sort((a, b) => _latestIn(groups[b]!).compareTo(_latestIn(groups[a]!)));
     final entries = <_ListEntry>[];
     for (final sid in order) {
+      if (_hiddenGroups.contains(sid)) continue; // 暂时隐藏：列表消失，数据保留
       final g = groups[sid]!;
       g.sort((a, b) {
         if (a.viewOnly != b.viewOnly) return a.viewOnly ? -1 : 1;
@@ -316,6 +423,7 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
         sid,
         widget.sessionTitles[sid] ?? g.first.title,
         g.length,
+        _latestIn(g),
       ));
       if (_collapsed[sid] != true) {
         for (final t in g) {
@@ -489,33 +597,143 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
   // ── Claude Code CLI 会话选择（resume 历史会话）──
 
   Widget _sessionSelector(MdIdeTheme theme, AppLocalizations l10n) {
+    // 本地新会话组（newsession-*）：标题 = 用户起的会话名
+    final drafts = <MapEntry<String, String>>[
+      for (final e in widget.sessionTitles.entries)
+        if (e.key.startsWith('newsession-')) e,
+    ];
+    // cliSessionId → 所属本地组 id：MarkdownText 会话的 jsonl 归并到本地组，
+    // 不在历史段重复显示——同一对话只出现一次，删除联动天然一致。
+    final cliToGroup = <String, String>{};
+    for (final t in widget.tasks) {
+      final sid = t.sessionId;
+      if (sid != null &&
+          sid.startsWith('newsession-') &&
+          t.cliSessionId != null &&
+          t.cliSessionId!.isNotEmpty) {
+        cliToGroup[t.cliSessionId!] = sid;
+      }
+    }
+    // 历史段 = 未被任何本地组关联的外部 Claude Code 会话
+    final external =
+        widget.claudeSessions.where((s) => !cliToGroup.containsKey(s.id)).toList();
+
+    // 选中态标题：历史条目 → 本地条目 → 已关联 uuid（旧持久化状态）
     ClaudeSessionInfo? selected;
-    for (final s in widget.claudeSessions) {
+    for (final s in external) {
       if (s.id == widget.resumeSessionId) {
         selected = s;
         break;
       }
     }
+    String? selectedLabel;
+    if (selected == null && widget.resumeSessionId != null) {
+      final rid = widget.resumeSessionId!;
+      if (cliToGroup.containsKey(rid)) {
+        // 活跃态是已关联 jsonl 的 uuid（旧持久化状态）→ 显示所属本地组的用户标题
+        selectedLabel = widget.sessionTitles[cliToGroup[rid]!];
+      } else {
+        selectedLabel = widget.sessionTitles[rid];
+      }
+    }
     // ⚠️ 哨兵值 '' 表示「新会话」：不能用 null（showMenu 返回 null = 取消）
     return _SelectorChip<String>(
       icon: Icons.history,
-      iconColor: selected != null ? theme.accent : theme.muted,
-      label: selected?.title ?? l10n.mdNewSession,
+      iconColor:
+          selected != null || selectedLabel != null ? theme.accent : theme.muted,
+      label: selected?.title ?? selectedLabel ?? l10n.mdNewSession,
       theme: theme,
       items: () => [
         _newSessionItem(theme, l10n),
-        if (widget.claudeSessions.isEmpty)
+        if (drafts.isNotEmpty) ...[
+          _sectionLabel(l10n.mdLocalSessions, theme),
+          for (final e in drafts)
+            _draftSessionItem(e.key, e.value, cliToGroup, theme, l10n),
+        ],
+        if (external.isNotEmpty) ...[
+          _sectionLabel(l10n.mdHistorySessions, theme),
+          for (final s in external) _sessionMenuItem(s, theme),
+        ],
+        if (drafts.isEmpty && external.isEmpty)
           PopupMenuItem<String>(
             enabled: false,
             child: Text(
               l10n.mdNoSessions,
               style: TextStyle(fontSize: 12, color: theme.faint),
             ),
-          )
-        else
-          for (final s in widget.claudeSessions) _sessionMenuItem(s, theme),
+          ),
       ],
       onSelected: (v) => widget.onResumeSessionChanged(v.isEmpty ? null : v),
+    );
+  }
+
+  /// 菜单分段小标题（不可选）。
+  PopupMenuItem<String> _sectionLabel(String text, MdIdeTheme theme) {
+    return PopupMenuItem<String>(
+      enabled: false,
+      height: 24,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10,
+          color: theme.faint,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  /// 本地新会话组条目（newsession-*）：标题 = 用户起的会话名，
+  /// meta = 已运行轮数（未运行显示「新会话」）。
+  /// 选中态：组 id 本身，或组内任一 jsonl 的 uuid（旧持久化状态）。
+  PopupMenuItem<String> _draftSessionItem(String id, String title,
+      Map<String, String> cliToGroup, MdIdeTheme theme, AppLocalizations l10n) {
+    final selected = id == widget.resumeSessionId ||
+        (widget.resumeSessionId != null &&
+            cliToGroup.entries
+                .any((e) => e.value == id && e.key == widget.resumeSessionId));
+    var rounds = 0;
+    for (final t in widget.tasks) {
+      if (t.sessionId == id && t.prompt != null) rounds++;
+    }
+    return PopupMenuItem<String>(
+      value: id,
+      height: 34,
+      child: Row(
+        children: [
+          Icon(Icons.chat_bubble_outline,
+              size: 12, color: selected ? theme.accent : theme.muted),
+          const SizedBox(width: 8),
+          // ⚠️ 不用 Expanded：PopupMenuItem 宽度约束可能无界（布局崩溃）
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: selected ? theme.accent : theme.foreground,
+                  ),
+                ),
+                Text(
+                  rounds > 0 ? '$rounds ${l10n.mdRounds}' : l10n.mdNewSession,
+                  style: TextStyle(fontSize: 10, color: theme.faint),
+                ),
+              ],
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.check, size: 12, color: theme.accent),
+          ],
+        ],
+      ),
     );
   }
 
@@ -586,11 +804,15 @@ class _MdAiTaskPanelState extends State<MdAiTaskPanel> {
     );
   }
 
-  /// 会话元信息：`MM-dd HH:mm · 行数`（纯数字，无 i18n 负担）。
+  /// 会话元信息：`[项目名 · ]MM-dd HH:mm · 行数`（纯数字/路径末段，无 i18n 负担）。
   static String _fmtSessionMeta(ClaudeSessionInfo s) {
     final t = s.modified.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)} · ${s.lineCount}';
+    final time = '${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
+    final proj = (s.projectName == null || s.projectName!.isEmpty)
+        ? ''
+        : '${s.projectName} · ';
+    return '$proj$time · ${s.lineCount}';
   }
 }
 
@@ -605,24 +827,34 @@ class _ListEntry {
   final String? groupId;
   final String? groupTitle;
   final int? groupCount;
+  final DateTime? groupLastActive;
   final MdTask? task;
 
-  const _ListEntry.header(this.groupId, this.groupTitle, this.groupCount)
+  const _ListEntry.header(
+      this.groupId, this.groupTitle, this.groupCount, this.groupLastActive)
       : isHeader = true,
         task = null;
   const _ListEntry.task(this.task)
       : isHeader = false,
         groupId = null,
         groupTitle = null,
-        groupCount = null;
+        groupCount = null,
+        groupLastActive = null;
 }
 
 /// 会话分组头：点击（除删除按钮）折叠/展开，右侧删除整个会话组。
+///
+/// [isActive] 为当前活跃会话（选中续聊中）：accent 左边条 + 边框高亮，
+/// 用户在列表里一眼看出"正在继续哪个会话"。
 class _SessionHeader extends StatelessWidget {
   final String title;
   final int count;
+  final DateTime? lastActive;
+  final bool isActive;
   final bool collapsed;
+  final VoidCallback onSelect;
   final VoidCallback onToggle;
+  final VoidCallback onHide;
   final VoidCallback onDelete;
   final AppLocalizations l10n;
   final MdIdeTheme theme;
@@ -630,41 +862,70 @@ class _SessionHeader extends StatelessWidget {
   const _SessionHeader({
     required this.title,
     required this.count,
+    required this.lastActive,
+    required this.isActive,
     required this.collapsed,
+    required this.onSelect,
     required this.onToggle,
+    required this.onHide,
     required this.onDelete,
     required this.l10n,
     required this.theme,
   });
 
+  static String _fmtTime(DateTime t) {
+    final local = t.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final accent = theme.accent;
     return Container(
       margin: const EdgeInsets.only(bottom: 8, top: 2),
       padding: const EdgeInsets.only(left: 4, right: 4, top: 2, bottom: 2),
       decoration: BoxDecoration(
-        color: theme.sidebar,
+        color: isActive ? accent.withAlpha(14) : theme.sidebar,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.borderSubtle),
+        border: Border.all(
+          color: isActive ? accent.withAlpha(140) : theme.borderSubtle,
+        ),
       ),
       child: Row(
         children: [
-          // 折叠/展开区（箭头 + 标题 + 计数）；删除按钮独立避免手势冲突
+          // 活跃标记（accent 竖条）
+          Container(
+            width: 3,
+            height: 14,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(
+              color: isActive ? accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // 标题区（箭头 + 图标 + 标题 + 计数）：点击 = 选中该会话并展开；
+          // 箭头本身是独立手势，点击 = 仅折叠/展开。删除/隐藏按钮独立避免手势冲突
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: onToggle,
+              onTap: onSelect,
               child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      collapsed ? Icons.chevron_right : Icons.expand_more,
-                      size: 16,
-                      color: theme.muted,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onToggle,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        collapsed ? Icons.chevron_right : Icons.expand_more,
+                        size: 16,
+                        color: isActive ? accent : theme.muted,
+                      ),
                     ),
                   ),
-                  Icon(Icons.forum_outlined, size: 13, color: theme.accent),
+                  Icon(Icons.forum_outlined,
+                      size: 13, color: isActive ? accent : theme.accent),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -673,18 +934,26 @@ class _SessionHeader extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: theme.foreground,
+                        color: isActive ? accent : theme.foreground,
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '$count ${l10n.mdRounds}',
+                    '$count ${l10n.mdRounds}'
+                    '${lastActive != null ? ' · ${_fmtTime(lastActive!)}' : ''}',
                     style: TextStyle(fontSize: 10, color: theme.faint),
                   ),
                 ],
               ),
             ),
+          ),
+          _CardAction(
+            icon: Icons.visibility_off_outlined,
+            tooltip: l10n.mdHideSession,
+            onTap: onHide,
+            color: theme.muted,
+            theme: theme,
           ),
           _CardAction(
             icon: Icons.delete_outline,
