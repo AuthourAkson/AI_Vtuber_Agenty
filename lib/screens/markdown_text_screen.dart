@@ -196,11 +196,9 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       final file = File(_tasksPath);
       file.parent.createSync(recursive: true);
       await file.writeAsString(jsonEncode({
-        // viewOnly 卡片（会话查看）不持久化：切页后自然消失
-        'tasks': [
-          for (final t in _tasks)
-            if (!t.viewOnly) t.toJson(),
-        ],
+        // viewOnly 历史内容卡也持久化：切页后会话组保持完整，
+        // 不会出现"选中了会话但历史内容消失"；删除会话组时随组一起删。
+        'tasks': [for (final t in _tasks) t.toJson()],
       }));
     } catch (e) {
       print('[MarkdownText] persist tasks failed: $e');
@@ -218,6 +216,13 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
       for (final e in list) {
         if (e is! Map<String, dynamic>) continue;
         final t = MdTask.fromJson(e);
+        // 旧数据迁移：平铺 CLI 任务（sessionId 空但 cliSessionId 非空）→
+        // 归属到它产生的会话组（此前版本残留的孤儿卡，jsonl 还在可续聊）
+        if ((t.sessionId == null || t.sessionId!.isEmpty) &&
+            t.cliSessionId != null &&
+            t.cliSessionId!.isNotEmpty) {
+          t.sessionId = t.cliSessionId;
+        }
         // 页面离开导致的中断任务：恢复为 failed 并标记，避免卡在 running
         if (t.status == MdTaskStatus.running) {
           t.status = MdTaskStatus.failed;
@@ -231,9 +236,20 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
           ..clear()
           ..addAll(restored);
       });
+      // 活跃会话组悬空（组内无任何卡，如旧数据 viewOnly 未持久化/卡被删光）
+      // → 重新解析 jsonl 补上，避免"选择器显示选中但列表为空"
+      _ensureActiveSessionGroup();
     } catch (e) {
       print('[MarkdownText] load tasks failed: $e');
     }
+  }
+
+  /// 活跃会话组若无任何任务卡，重新解析 jsonl 插入历史内容卡。
+  void _ensureActiveSessionGroup() {
+    final sid = _activeSessionId;
+    if (sid == null || sid.isEmpty || _projectRoot == null) return;
+    if (_tasks.any((t) => t.sessionId == sid)) return; // 组已存在（含持久化卡）
+    _ensureSessionGroup(sid);
   }
 
   void _onEditorChanged() {
@@ -261,6 +277,7 @@ class _MarkdownTextScreenState extends State<MarkdownTextScreen> {
         await _loadTree();
         await _restoreTabs(); // 项目根就绪后恢复上次打开的 Tab
         _loadClaudeSessions(); // 加载该项目的历史 Claude Code 会话
+        _ensureActiveSessionGroup(); // 活跃会话组悬空时补历史内容卡（_loadTasks 可能先完成）
       }
     } else {
       if (mounted) setState(() => _projectLoading = false);
@@ -702,10 +719,11 @@ Rules:
       _startNewSession(); // 新会话：输入标题 → 创建新的空会话组
       return;
     }
-    // 选中历史会话 → 设为活跃组；组不存在时解析 jsonl 插入历史内容卡
+    // 选中历史会话 → 设为活跃组；refresh: true 强制重新解析 jsonl
+    // （组内已有旧内容卡也刷新——Claude Code 外部续聊过的内容要能看到）
     setState(() => _activeSessionId = id);
     _persistState();
-    if (_projectRoot != null) _ensureSessionGroup(id);
+    if (_projectRoot != null) _ensureSessionGroup(id, refresh: true);
   }
 
   /// 新会话：弹窗输入标题 → 创建新会话组（顶部插入空草稿卡片）。
@@ -770,18 +788,34 @@ Rules:
     _schedulePersistTasks();
   }
 
-  /// 确保历史会话组存在：组内无卡时解析 jsonl 插入历史内容卡（viewOnly）。
+  /// 确保历史会话组存在：组内无历史内容卡时解析 jsonl 插入（viewOnly），
+  /// [refresh] 为 true 时总是重新解析并更新已有卡（选中会话 = 看最新内容，
+  /// Claude Code 外部续聊过的内容也能看到）。
   ///
   /// 历史内容卡 id=`session-<uuid>`、sessionId=uuid（属于该会话组），
-  /// viewOnly 不持久化——切页后消失，组由后续提交的任务卡重建；
-  /// 历史内容随时可从 jsonl 重新解析。
-  Future<void> _ensureSessionGroup(String sessionId) async {
+  /// viewOnly 持久化——切页后组保持完整；删除会话组时随组一起删。
+  /// transcript 截断到 40k（与实时任务一致，防 markdown_tasks.json 膨胀）。
+  Future<void> _ensureSessionGroup(String sessionId, {bool refresh = false}) async {
     final root = _projectRoot;
     if (root == null) return;
-    if (_tasks.any((t) => t.sessionId == sessionId)) return; // 组已存在
+    final existing = _tasks
+        .where((t) => t.viewOnly && t.sessionId == sessionId)
+        .toList();
+    if (existing.isNotEmpty && !refresh) return; // 已有展示卡且不强制刷新
     final parsed = await ClaudeSessionService.parseSession(root, sessionId);
-    if (!mounted || parsed == null) return;
-    if (parsed.events.isEmpty && parsed.transcript.trim().isEmpty) return;
+    if (!mounted) return;
+    if (parsed == null || (parsed.events.isEmpty && parsed.transcript.trim().isEmpty)) {
+      // jsonl 不存在/为空：组内无卡时提示并重置活跃会话（避免悬空选中）
+      if (_activeSessionId == sessionId &&
+          !_tasks.any((t) => t.sessionId == sessionId)) {
+        setState(() => _activeSessionId = null);
+        _persistState();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context).mdSessionLoadFailed),
+        ));
+      }
+      return;
+    }
 
     ClaudeSessionInfo? info;
     for (final s in _claudeSessions) {
@@ -790,27 +824,50 @@ Rules:
         break;
       }
     }
-    final task = MdTask(
-      id: 'session-$sessionId',
-      title: info?.title ?? 'Claude Session',
-      status: MdTaskStatus.completed,
-      projectPath: root,
-      executor: MdTaskExecutor.claudeCli,
-      model: 'Claude Code CLI',
-      sessionId: sessionId,
-      viewOnly: true,
-    );
-    task.events.addAll(parsed.events);
-    task.transcript = parsed.transcript;
-    setState(() => _tasks.add(task));
+    final transcript = parsed.transcript;
+    final capped = transcript.length > 40000
+        ? transcript.substring(transcript.length - 40000)
+        : transcript;
+    if (existing.isNotEmpty) {
+      // 刷新已有展示卡：事件/抄本/标题更新（events 是 final List，clear 后重填）
+      setState(() {
+        for (final t in existing) {
+          t.events
+            ..clear()
+            ..addAll(parsed.events);
+          t.transcript = capped;
+          if (info != null) t.title = info.title;
+        }
+      });
+    } else {
+      final task = MdTask(
+        id: 'session-$sessionId',
+        title: info?.title ?? 'Claude Session',
+        status: MdTaskStatus.completed,
+        projectPath: root,
+        executor: MdTaskExecutor.claudeCli,
+        model: 'Claude Code CLI',
+        sessionId: sessionId,
+        viewOnly: true,
+      );
+      task.events.addAll(parsed.events);
+      task.transcript = capped;
+      setState(() => _tasks.add(task));
+    }
     _schedulePersistTasks();
   }
 
-  /// 当前活跃会话组的 resume 目标：组内最近一张已运行卡的 cliSessionId。
-  /// null = 该组还没跑过（如新会话第一轮）→ 不带 --resume。
+  /// 当前活跃会话组的 resume 目标。
+  ///
+  /// - 历史会话组（uuid）：resume 目标 = 组 id 本身 → `--resume <uuid>`
+  ///   真正续写该 jsonl（用户选中历史会话 = 继续那段对话，而不是另开新会话）。
+  ///   续聊后 result 的 session_id 仍是该 uuid，链路自洽。
+  /// - 新会话组（newsession-*）：找组内最近一轮的 cliSessionId
+  ///   （null = 该组还没跑过，第一轮不带 --resume 创建新 jsonl）。
   String? _resumeTarget() {
     final sid = _activeSessionId;
-    if (sid == null) return null;
+    if (sid == null || sid.isEmpty) return null;
+    if (!sid.startsWith('newsession-')) return sid;
     MdTask? last;
     for (final t in _tasks) {
       if (t.sessionId == sid &&
@@ -829,6 +886,26 @@ Rules:
     final sessions = await ClaudeSessionService.listSessions(root);
     if (!mounted) return;
     setState(() => _claudeSessions = sessions);
+  }
+
+  /// 会话组标题映射：历史会话（claudeSessions）+ 本地新会话组（newsession-*）。
+  ///
+  /// 新会话组标题取草稿卡（prompt==null）的 title——即用户起的会话名；
+  /// 草稿被复用后不再有草稿卡，取组内第一张卡标题兜底（与组头显示一致）。
+  Map<String, String> get _sessionTitles {
+    final titles = <String, String>{
+      for (final s in _claudeSessions) s.id: s.title,
+    };
+    for (final t in _tasks) {
+      final sid = t.sessionId;
+      if (sid == null || !sid.startsWith('newsession-')) continue;
+      if (t.prompt == null) {
+        titles[sid] = t.title; // 草稿卡优先（用户起的会话名）
+      } else {
+        titles.putIfAbsent(sid, () => t.title);
+      }
+    }
+    return titles;
   }
 
   Future<void> _runTask(MdTask task, String prompt, AgentModel employee) async {
@@ -1109,7 +1186,15 @@ Rules:
       case 'result':
         // 提取本轮实际会话 id（组内下一轮 --resume 用）
         final sid = obj['session_id'] as String?;
-        if (sid != null && sid.isNotEmpty) task.cliSessionId = sid;
+        if (sid != null && sid.isNotEmpty) {
+          task.cliSessionId = sid;
+          // 平铺任务（无归属组，直接在输入框提交）→ 自动归属到它产生的会话组，
+          // 消除"点击历史会话后原任务卡孤立残留"的割裂
+          if (task.sessionId == null || task.sessionId!.isEmpty) {
+            task.sessionId = sid;
+            _notifyTaskChanged(); // 归属变化 → 列表重组 + 持久化
+          }
+        }
         final isError = obj['is_error'] == true;
         final result = obj['result'];
         if (result is String && result.isNotEmpty) {
@@ -1199,13 +1284,25 @@ Rules:
   }
 
   void _deleteTask(MdTask task) {
-    // 删除历史会话内容卡（viewOnly）＝删除整个会话组（含 jsonl 记录）
+    // 只读历史内容卡：只收起展示（jsonl 保留，会话选择器里还能再选）；
+    // 真正删除 jsonl 用组头的删除按钮（_deleteSessionGroup）
     if (task.viewOnly && task.sessionId != null) {
-      _deleteSessionGroup(task.sessionId!);
+      setState(() => _tasks.removeWhere((t) => t.id == task.id));
+      _schedulePersistTasks();
+      _checkGroupEmpty(task.sessionId!);
       return;
     }
     setState(() => _tasks.removeWhere((t) => t.id == task.id));
     _schedulePersistTasks(); // 删除后持久化
+    if (task.sessionId != null) _checkGroupEmpty(task.sessionId!);
+  }
+
+  /// 删除卡后活跃会话组若已无任何卡 → 重置活跃会话（避免选择器选中但列表空）。
+  void _checkGroupEmpty(String sessionId) {
+    if (_activeSessionId != sessionId) return;
+    if (_tasks.any((t) => t.sessionId == sessionId)) return;
+    setState(() => _activeSessionId = null);
+    _persistState();
   }
 
   /// 删除整个会话组：历史会话删 jsonl + 组内所有卡；新会话组删组内所有卡
@@ -1231,7 +1328,10 @@ Rules:
       _activeSessionId = null;
       _persistState();
     }
-    setState(() => _tasks.removeWhere((t) => t.sessionId == sessionId));
+    // 删除组卡 + 涉及的 jsonl 对应的残留展示组（viewOnly 历史内容卡，
+    // 旧数据或曾点开过历史会话产生——jsonl 已删，组不能再留）
+    setState(() => _tasks.removeWhere((t) =>
+        t.sessionId == sessionId || (t.viewOnly && ids.contains(t.sessionId))));
     _schedulePersistTasks();
     _loadClaudeSessions(); // 会话选择器同步消失
   }
@@ -1648,9 +1748,7 @@ Rules:
                                 claudeSessions: _claudeSessions,
                                 resumeSessionId: _activeSessionId,
                                 onResumeSessionChanged: _onResumeSessionChanged,
-                                sessionTitles: {
-                                  for (final s in _claudeSessions) s.id: s.title,
-                                },
+                                sessionTitles: _sessionTitles,
                                 onDeleteSession: _deleteSessionGroup,
                                 onPromptSubmitted: _submitTask,
                                 onExecutorChanged: _onExecutorChanged,
