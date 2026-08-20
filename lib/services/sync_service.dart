@@ -143,22 +143,30 @@ class SyncService {
   // ══════════════════════════════════════════════════════════
 
   Future<SyncResult> testConnection() async {
+    SyncResult result;
     try {
-      switch (config.backend) {
-        case SyncBackend.webdav:
-          return _testWebdav();
-        case SyncBackend.localFolder:
-          return _testLocalFolder();
-      }
+      result = switch (config.backend) {
+        SyncBackend.webdav => await _testWebdav(),
+        SyncBackend.localFolder => await _testLocalFolder(),
+      };
     } catch (e) {
-      return SyncResult(success: false, message: e.toString());
+      result = SyncResult(success: false, message: e.toString());
     }
+
+    // Update status so the UI doesn't stay stuck on "Testing..." after
+    // the connection test finishes.
+    lastResult = result;
+    status = result.success ? SyncStatus.success : SyncStatus.failed;
+    _notify();
+    return result;
   }
 
   Future<SyncResult> _testWebdav() async {
     try {
       final uri = Uri.parse(config.webdavUrl);
-      final req = await _client.openUrl('PROPFIND', uri);
+      final req = await _client
+          .openUrl('PROPFIND', uri)
+          .timeout(const Duration(seconds: 10));
       req.headers.set('Depth', '0');
       _setAuth(req);
       final resp = await req.close().timeout(const Duration(seconds: 10));
@@ -253,6 +261,15 @@ class SyncService {
     req.headers.set('Authorization', 'Basic $auth');
   }
 
+  /// Join a base WebDAV URL and a relative path without mangling the
+  /// `https://` part. Never call `replaceAll(RegExp(r'/+'), '/')` on the
+  /// whole URL — it collapses `https://` to `https:/`.
+  String _joinWebdavUrl(String baseUrl, String relPart) {
+    final base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+    final part = relPart.startsWith('/') ? relPart.substring(1) : relPart;
+    return '$base$part';
+  }
+
   /// Upload changed local files to WebDAV server.
   Future<SyncResult> _syncWebdav() async {
     final localDir = Directory(_profilePath);
@@ -261,6 +278,7 @@ class SyncService {
     }
 
     int uploaded = 0;
+    int failed = 0;
     final files = await localDir
         .list(recursive: true)
         .where((e) => e is File && !e.path.contains('tts_cache'))
@@ -269,13 +287,26 @@ class SyncService {
     for (final entity in files) {
       if (entity is! File) continue;
       try {
-        final relPath = entity.path.substring(_profilePath.length).replaceAll('\\', '/');
-        final remoteUrl = '${config.webdavUrl}/$relPath'.replaceAll(RegExp(r'/+'), '/');
-        // Ensure remote directory exists
-        final remoteDir = remoteUrl.substring(0, remoteUrl.lastIndexOf('/'));
-        await _webdavMkcol(remoteDir);
+        final relPath = entity.path
+            .substring(_profilePath.length)
+            .replaceAll('\\', '/');
+        final relSegments = relPath
+            .split('/')
+            .where((s) => s.isNotEmpty)
+            .toList();
+
+        // Create every parent collection that doesn't exist yet, from the
+        // WebDAV root down to the file's direct parent directory.
+        var currentDir = config.webdavUrl;
+        for (int i = 0; i < relSegments.length - 1; i++) {
+          currentDir = _joinWebdavUrl(currentDir, relSegments[i]);
+          await _webdavMkcol(currentDir);
+        }
 
         // Upload
+        final remoteUrl = relSegments.length == 1
+            ? _joinWebdavUrl(config.webdavUrl, relSegments.first)
+            : _joinWebdavUrl(currentDir, relSegments.last);
         final uri = Uri.parse(remoteUrl);
         final req = await _client.putUrl(uri);
         _setAuth(req);
@@ -284,15 +315,22 @@ class SyncService {
         final resp = await req.close().timeout(const Duration(seconds: 30));
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           uploaded++;
+        } else {
+          failed++;
         }
       } catch (_) {
-        // Skip failed files
+        failed++;
       }
     }
 
+    if (files.isEmpty) {
+      return SyncResult(success: true, message: 'No files to upload');
+    }
+
     return SyncResult(
-      success: true,
-      message: 'Uploaded $uploaded files',
+      success: uploaded == files.length,
+      message: 'Uploaded $uploaded of ${files.length} files'
+          '${failed > 0 ? ' ($failed failed)' : ''}',
       filesUploaded: uploaded,
     );
   }
@@ -329,7 +367,7 @@ class SyncService {
 
   Future<void> _webdavDownloadRecursive(
     String baseUrl, String relPath, int downloaded) async {
-    final url = '$baseUrl/$relPath'.replaceAll(RegExp(r'/+'), '/');
+    final url = _joinWebdavUrl(baseUrl, relPath);
     final uri = Uri.parse(url);
 
     final req = await _client.openUrl('PROPFIND', uri);
