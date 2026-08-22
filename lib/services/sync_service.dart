@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Sync backend types matching WenzFlow's design.
@@ -61,6 +62,26 @@ class SyncConfig {
       SyncBackend.webdav => webdavUrl.isNotEmpty && webdavUsername.isNotEmpty,
       SyncBackend.localFolder => localFolderPath.isNotEmpty,
     };
+  }
+}
+
+/// Last successful upload state for a single WebDAV file.
+class _WebdavFileState {
+  final int size;
+  final int modifiedMs;
+  final String? sha256;
+
+  const _WebdavFileState(this.size, this.modifiedMs, this.sha256);
+
+  List<Object?> toJson() => [size, modifiedMs, sha256];
+
+  static _WebdavFileState? fromJson(Object? value) {
+    if (value is! List || value.length < 2) return null;
+    final size = (value[0] as num?)?.toInt();
+    final modifiedMs = (value[1] as num?)?.toInt();
+    if (size == null || modifiedMs == null) return null;
+    final sha256 = value.length >= 3 ? value[2] as String? : null;
+    return _WebdavFileState(size, modifiedMs, sha256);
   }
 }
 
@@ -272,21 +293,19 @@ class SyncService {
 
   static const _kWebdavStateKey = 'sync_webdav_file_state';
 
-  /// Loads the last-known uploaded file states: relPath -> [size, modifiedMs].
-  Future<Map<String, List<int>>> _loadWebdavState() async {
+  /// Loads the last-known uploaded file states: relPath -> state.
+  Future<Map<String, _WebdavFileState>> _loadWebdavState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kWebdavStateKey);
       if (raw == null || raw.isEmpty) return {};
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return {};
-      final state = <String, List<int>>{};
+      final state = <String, _WebdavFileState>{};
       decoded.forEach((key, value) {
-        if (key is String && value is List && value.length == 2) {
-          state[key] = [
-            (value[0] as num).toInt(),
-            (value[1] as num).toInt(),
-          ];
+        if (key is String) {
+          final fileState = _WebdavFileState.fromJson(value);
+          if (fileState != null) state[key] = fileState;
         }
       });
       return state;
@@ -295,9 +314,13 @@ class SyncService {
     }
   }
 
-  Future<void> _saveWebdavState(Map<String, List<int>> state) async {
+  Future<void> _saveWebdavState(
+    Map<String, _WebdavFileState> state,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kWebdavStateKey, jsonEncode(state));
+    final jsonMap = <String, dynamic>{};
+    state.forEach((key, value) => jsonMap[key] = value.toJson());
+    await prefs.setString(_kWebdavStateKey, jsonEncode(jsonMap));
   }
 
   /// Upload local files to WebDAV, skipping files whose size and modified
@@ -309,7 +332,7 @@ class SyncService {
     }
 
     final previousState = await _loadWebdavState();
-    final nextState = <String, List<int>>{};
+    final nextState = <String, _WebdavFileState>{};
     final failedPaths = <String>[];
 
     int uploaded = 0;
@@ -329,21 +352,33 @@ class SyncService {
 
       try {
         final stat = await entity.stat();
-        final current = [
-          stat.size,
-          stat.modified.millisecondsSinceEpoch,
-        ];
+        final currentSize = stat.size;
+        final currentModifiedMs = stat.modified.millisecondsSinceEpoch;
         final previous = previousState[relPath];
 
-        // A file is re-uploaded when it's new, its size changed, or its
-        // modified time changed (covers session files updated after chat).
-        final needsUpload = previous == null ||
-            previous.length != 2 ||
-            previous[0] != current[0] ||
-            previous[1] != current[1];
-        if (!needsUpload) {
+        // Fast path: same size and modified time as last successful upload.
+        if (previous != null &&
+            previous.size == currentSize &&
+            previous.modifiedMs == currentModifiedMs) {
           unchanged++;
           nextState[relPath] = previous;
+          continue;
+        }
+
+        final bytes = await entity.readAsBytes();
+        final currentHash = sha256.convert(bytes).toString();
+
+        // If only the modified time changed but the content is identical
+        // (for example Live2DServer re-copies the same web assets at every
+        // startup), skip the upload and refresh the recorded mtime.
+        if (previous != null && previous.sha256 == currentHash) {
+          unchanged++;
+          nextState[relPath] = _WebdavFileState(
+            currentSize,
+            currentModifiedMs,
+            currentHash,
+          );
+          print('[Sync] SKIP (content same) $relPath');
           continue;
         }
 
@@ -369,11 +404,15 @@ class SyncService {
         final req = await _client.putUrl(uri).timeout(const Duration(seconds: 30));
         _setAuth(req);
         req.headers.set('Content-Type', 'application/octet-stream');
-        req.add(await entity.readAsBytes());
+        req.add(bytes);
         final resp = await req.close().timeout(const Duration(minutes: 10));
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           uploaded++;
-          nextState[relPath] = current;
+          nextState[relPath] = _WebdavFileState(
+            currentSize,
+            currentModifiedMs,
+            currentHash,
+          );
           print('[Sync] OK ${resp.statusCode} $uri');
         } else {
           failed++;
