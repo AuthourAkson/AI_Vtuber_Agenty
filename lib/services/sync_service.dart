@@ -310,6 +310,7 @@ class SyncService {
 
     final previousState = await _loadWebdavState();
     final nextState = <String, List<int>>{};
+    final failedPaths = <String>[];
 
     int uploaded = 0;
     int failed = 0;
@@ -364,19 +365,29 @@ class SyncService {
             ? _joinWebdavUrl(config.webdavUrl, relSegments.first)
             : _joinWebdavUrl(currentDir, relSegments.last);
         final uri = Uri.parse(remoteUrl);
-        final req = await _client.putUrl(uri);
+        print('[Sync] PUT $uri');
+        final req = await _client.putUrl(uri).timeout(const Duration(seconds: 30));
         _setAuth(req);
         req.headers.set('Content-Type', 'application/octet-stream');
         req.add(await entity.readAsBytes());
-        final resp = await req.close().timeout(const Duration(seconds: 30));
+        final resp = await req.close().timeout(const Duration(seconds: 120));
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           uploaded++;
           nextState[relPath] = current;
+          print('[Sync] OK ${resp.statusCode} $uri');
         } else {
           failed++;
+          failedPaths.add('$relPath -> HTTP ${resp.statusCode}');
+          print('[Sync] FAILED HTTP ${resp.statusCode} $uri');
         }
-      } catch (_) {
+      } on TimeoutException catch (e) {
         failed++;
+        failedPaths.add('$relPath -> timeout');
+        print('[Sync] TIMEOUT $relPath: $e');
+      } catch (e) {
+        failed++;
+        failedPaths.add('$relPath -> $e');
+        print('[Sync] ERROR $relPath: $e');
       }
     }
 
@@ -395,8 +406,8 @@ class SyncService {
 
     return SyncResult(
       success: failed == 0,
-      message: 'Uploaded $uploaded, $unchanged unchanged'
-          '${failed > 0 ? ', $failed failed' : ''}',
+      message: 'Uploaded $uploaded, $unchanged unchanged, $failed failed'
+          '${failedPaths.isNotEmpty ? ' (${failedPaths.take(5).join('; ')})' : ''}',
       filesUploaded: uploaded,
     );
   }
