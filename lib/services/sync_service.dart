@@ -270,15 +270,50 @@ class SyncService {
     return '$base$part';
   }
 
-  /// Upload changed local files to WebDAV server.
+  static const _kWebdavStateKey = 'sync_webdav_file_state';
+
+  /// Loads the last-known uploaded file states: relPath -> [size, modifiedMs].
+  Future<Map<String, List<int>>> _loadWebdavState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kWebdavStateKey);
+      if (raw == null || raw.isEmpty) return {};
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      final state = <String, List<int>>{};
+      decoded.forEach((key, value) {
+        if (key is String && value is List && value.length == 2) {
+          state[key] = [
+            (value[0] as num).toInt(),
+            (value[1] as num).toInt(),
+          ];
+        }
+      });
+      return state;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _saveWebdavState(Map<String, List<int>> state) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kWebdavStateKey, jsonEncode(state));
+  }
+
+  /// Upload local files to WebDAV, skipping files whose size and modified
+  /// time match the last successful upload state.
   Future<SyncResult> _syncWebdav() async {
     final localDir = Directory(_profilePath);
     if (!await localDir.exists()) {
       return SyncResult(success: false, message: 'Local profile folder not found');
     }
 
+    final previousState = await _loadWebdavState();
+    final nextState = <String, List<int>>{};
+
     int uploaded = 0;
     int failed = 0;
+    int unchanged = 0;
     final files = await localDir
         .list(recursive: true)
         .where((e) => e is File && !e.path.contains('tts_cache'))
@@ -286,10 +321,31 @@ class SyncService {
 
     for (final entity in files) {
       if (entity is! File) continue;
+
+      final relPath = entity.path
+          .substring(_profilePath.length)
+          .replaceAll('\\', '/');
+
       try {
-        final relPath = entity.path
-            .substring(_profilePath.length)
-            .replaceAll('\\', '/');
+        final stat = await entity.stat();
+        final current = [
+          stat.size,
+          stat.modified.millisecondsSinceEpoch,
+        ];
+        final previous = previousState[relPath];
+
+        // A file is re-uploaded when it's new, its size changed, or its
+        // modified time changed (covers session files updated after chat).
+        final needsUpload = previous == null ||
+            previous.length != 2 ||
+            previous[0] != current[0] ||
+            previous[1] != current[1];
+        if (!needsUpload) {
+          unchanged++;
+          nextState[relPath] = previous;
+          continue;
+        }
+
         final relSegments = relPath
             .split('/')
             .where((s) => s.isNotEmpty)
@@ -315,6 +371,7 @@ class SyncService {
         final resp = await req.close().timeout(const Duration(seconds: 30));
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           uploaded++;
+          nextState[relPath] = current;
         } else {
           failed++;
         }
@@ -323,14 +380,23 @@ class SyncService {
       }
     }
 
+    await _saveWebdavState(nextState);
+
     if (files.isEmpty) {
       return SyncResult(success: true, message: 'No files to upload');
     }
 
+    if (failed == 0 && uploaded == 0) {
+      return SyncResult(
+        success: true,
+        message: 'No changes: $unchanged files already in sync',
+      );
+    }
+
     return SyncResult(
-      success: uploaded == files.length,
-      message: 'Uploaded $uploaded of ${files.length} files'
-          '${failed > 0 ? ' ($failed failed)' : ''}',
+      success: failed == 0,
+      message: 'Uploaded $uploaded, $unchanged unchanged'
+          '${failed > 0 ? ', $failed failed' : ''}',
       filesUploaded: uploaded,
     );
   }
