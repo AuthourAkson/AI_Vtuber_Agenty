@@ -370,7 +370,7 @@ class SyncService {
         _setAuth(req);
         req.headers.set('Content-Type', 'application/octet-stream');
         req.add(await entity.readAsBytes());
-        final resp = await req.close().timeout(const Duration(seconds: 120));
+        final resp = await req.close().timeout(const Duration(minutes: 10));
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
           uploaded++;
           nextState[relPath] = current;
