@@ -1248,11 +1248,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                       systemPrompt: systemPrompt.trim(),
                       voiceEnabled: voiceEnabled,
                     );
-                    if (persona.avatarType == AgentAvatarType.none) {
-                      mgr.removePersona(emp.uuid);
-                    } else {
-                      mgr.setPersona(emp.uuid, persona);
-                    }
+                    mgr.setPersona(emp.uuid, persona);
                     Navigator.pop(ctx);
                     setState(() {});
                   },
