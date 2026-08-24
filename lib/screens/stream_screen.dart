@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/stream_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/multi_agent_provider.dart';
 import '../services/bilibili_chat_service.dart';
 import '../services/tts_service.dart';
 import '../services/overlay_service.dart';
@@ -40,8 +41,9 @@ class _StreamScreenState extends State<StreamScreen> {
 
     _streamProvider.onAIResponse = (String prompt) async {
       if (prompt.startsWith('__SYSTEM_PROMPT__:')) {
-        chatProvider.systemPrompt =
-            prompt.substring('__SYSTEM_PROMPT__:'.length);
+        chatProvider.systemPrompt = prompt.substring(
+          '__SYSTEM_PROMPT__:'.length,
+        );
         return;
       }
 
@@ -64,16 +66,18 @@ class _StreamScreenState extends State<StreamScreen> {
         if (aiText != null && aiText.isNotEmpty) {
           final s = settingsProvider.settings;
 
-          if (s.ttsProvider == 'gpt-sovits' && tts.isGptSovitsRunning &&
+          if (s.ttsProvider == 'gpt-sovits' &&
+              tts.isGptSovitsRunning &&
               s.gptSovitsRefAudio.isNotEmpty) {
             // Use GPT-SoVITS for TTS with mouth sync (Live2D + VRM)
             final overlay = OverlayService.instance;
-            final (audioPath, volumes) = await tts.synthesizeGptSovitsWithVolumes(
-              aiText,
-              refAudioPath: s.gptSovitsRefAudio,
-              promptText: s.gptSovitsPromptText,
-              promptLang: s.gptSovitsPromptLang,
-            );
+            final (audioPath, volumes) = await tts
+                .synthesizeGptSovitsWithVolumes(
+                  aiText,
+                  refAudioPath: s.gptSovitsRefAudio,
+                  promptText: s.gptSovitsPromptText,
+                  promptLang: s.gptSovitsPromptLang,
+                );
 
             // Push audio URL to VRM pop-out (Web Audio API analysis)
             if (audioPath != null && overlay.isPopoutRunning) {
@@ -131,6 +135,41 @@ class _StreamScreenState extends State<StreamScreen> {
       }
     };
 
+    // Direction 2: danmaku audience dispatches tasks to WenzAgent employees.
+    // 使用闭包捕获 AgentManager；即使切到其它页面，回调仍可驱动 Agent 干活。
+    final agentManager = context.read<AgentManager>();
+    _streamProvider.onAgentTask = (String? targetName, String taskText) async {
+      await agentManager.ensureReady();
+      final employees = await agentManager.refreshEmployeesIfNeeded();
+      if (employees.isEmpty) return;
+
+      // Prefer explicit @name, then the default employee chosen in the panel.
+      AgentModel? target;
+      if (targetName != null && targetName.trim().isNotEmpty) {
+        for (final e in employees) {
+          if (e.name.trim() == targetName.trim() ||
+              e.name.toLowerCase().contains(targetName.trim().toLowerCase())) {
+            target = e;
+            break;
+          }
+        }
+      }
+      if (target == null) {
+        final defaultId = _streamProvider.agentTaskDefaultEmployeeId;
+        if (defaultId != null) {
+          for (final e in employees) {
+            if (e.uuid == defaultId) {
+              target = e;
+              break;
+            }
+          }
+        }
+      }
+      target ??= employees.first;
+
+      await agentManager.runStreamAgentTask(target.uuid, taskText);
+    };
+
     // 恢复上次的房间号
     _streamProvider.loadSavedRoomId().then((id) {
       if (id.isNotEmpty && mounted) {
@@ -163,6 +202,7 @@ class _StreamScreenState extends State<StreamScreen> {
   Widget build(BuildContext context) {
     // 用 context.watch 才能响应 Provider 状态变化
     _streamProvider = context.watch<LiveStreamProvider>();
+    final agentManager = context.watch<AgentManager>();
     final shad = ShadTheme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
@@ -176,7 +216,8 @@ class _StreamScreenState extends State<StreamScreen> {
             children: [
               Icon(Icons.live_tv, size: 22, color: shad.primary),
               const SizedBox(width: 8),
-              Text(l10n.streamTitle,
+              Text(
+                l10n.streamTitle,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -205,6 +246,8 @@ class _StreamScreenState extends State<StreamScreen> {
                     children: [
                       _buildConnectionPanel(shad),
                       const SizedBox(height: 12),
+                      _buildAgentTaskPanel(shad, agentManager),
+                      const SizedBox(height: 12),
                       _buildControls(shad),
                       const SizedBox(height: 12),
                       _buildReplyModePanel(shad),
@@ -216,10 +259,7 @@ class _StreamScreenState extends State<StreamScreen> {
                 Expanded(child: _buildChatList(shad)),
                 const SizedBox(width: 12),
                 // 右列
-                SizedBox(
-                  width: 300,
-                  child: _buildSetlistPanel(shad),
-                ),
+                SizedBox(width: 300, child: _buildSetlistPanel(shad)),
               ],
             ),
           ),
@@ -259,7 +299,10 @@ class _StreamScreenState extends State<StreamScreen> {
           const SizedBox(width: 6),
           Text(
             connected
-                ? l10n.streamStatusLive.replaceAll('\$pop', _streamProvider.popularity.toString())
+                ? l10n.streamStatusLive.replaceAll(
+                    '\$pop',
+                    _streamProvider.popularity.toString(),
+                  )
                 : l10n.streamStatusOff,
             style: TextStyle(
               fontSize: 11,
@@ -281,8 +324,10 @@ class _StreamScreenState extends State<StreamScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(l10n.streamAutoReply,
-            style: TextStyle(fontSize: 12, color: shad.mutedForeground)),
+        Text(
+          l10n.streamAutoReply,
+          style: TextStyle(fontSize: 12, color: shad.mutedForeground),
+        ),
         const SizedBox(width: 8),
         GestureDetector(
           onTap: () => _streamProvider.autoReply = !enabled,
@@ -295,8 +340,7 @@ class _StreamScreenState extends State<StreamScreen> {
             ),
             child: AnimatedAlign(
               duration: const Duration(milliseconds: 150),
-              alignment:
-                  enabled ? Alignment.centerRight : Alignment.centerLeft,
+              alignment: enabled ? Alignment.centerRight : Alignment.centerLeft,
               child: Container(
                 width: 18,
                 height: 18,
@@ -357,11 +401,14 @@ class _StreamScreenState extends State<StreamScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.streamConnection,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: shad.foreground)),
+          Text(
+            l10n.streamConnection,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: shad.foreground,
+            ),
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _roomIdController,
@@ -369,13 +416,20 @@ class _StreamScreenState extends State<StreamScreen> {
             decoration: InputDecoration(
               hintText: l10n.streamIdHint,
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              prefixIcon:
-                  Icon(Icons.room, size: 16, color: shad.mutedForeground),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 10,
+              ),
+              prefixIcon: Icon(
+                Icons.room,
+                size: 16,
+                color: shad.mutedForeground,
+              ),
               suffixText: connected ? l10n.streamConnected : null,
-              suffixStyle:
-                  TextStyle(color: const Color(0xFF22C55E), fontSize: 12),
+              suffixStyle: TextStyle(
+                color: const Color(0xFF22C55E),
+                fontSize: 12,
+              ),
             ),
             style: TextStyle(fontSize: 13, color: shad.foreground),
           ),
@@ -388,12 +442,16 @@ class _StreamScreenState extends State<StreamScreen> {
                 connected ? Icons.stop_circle : Icons.play_circle,
                 size: 18,
               ),
-              label: Text(connected ? l10n.streamDisconnect : l10n.streamConnect),
+              label: Text(
+                connected ? l10n.streamDisconnect : l10n.streamConnect,
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    connected ? const Color(0xFFEF4444) : shad.primary,
-                foregroundColor:
-                    connected ? Colors.white : shad.primaryForeground,
+                backgroundColor: connected
+                    ? const Color(0xFFEF4444)
+                    : shad.primary,
+                foregroundColor: connected
+                    ? Colors.white
+                    : shad.primaryForeground,
                 padding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
@@ -402,10 +460,96 @@ class _StreamScreenState extends State<StreamScreen> {
             const SizedBox(height: 6),
             Text(
               _streamProvider.statusMessage,
-              style:
-                  TextStyle(fontSize: 11, color: const Color(0xFFEF4444)),
+              style: TextStyle(fontSize: 11, color: const Color(0xFFEF4444)),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ── 控制面板 ──
+  Widget _buildAgentTaskPanel(ShadTheme shad, AgentManager mgr) {
+    final enabled = _streamProvider.agentTaskEnabled;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: shad.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: enabled ? shad.primary.withAlpha(80) : shad.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.assignment_ind,
+                size: 16,
+                color: enabled ? shad.primary : shad.mutedForeground,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Agent 弹幕派活',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: shad.foreground,
+                ),
+              ),
+              const Spacer(),
+              Switch(
+                value: enabled,
+                onChanged: (v) => _streamProvider.agentTaskEnabled = v,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '观众发送 @agent 内容 / @员工名 任务 即可派活给员工',
+            style: TextStyle(
+              fontSize: 10,
+              color: shad.mutedForeground,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (mgr.employees.isEmpty)
+            Text(
+              '暂无 WenzAgent 员工，请先在 Multi-Agent 页创建',
+              style: TextStyle(fontSize: 10, color: shad.destructive),
+            )
+          else
+            DropdownButtonFormField<String?>(
+              initialValue:
+                  _streamProvider.agentTaskDefaultEmployeeId ??
+                  (mgr.employees.isNotEmpty ? mgr.employees.first.uuid : null),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: shad.secondary,
+                border: OutlineInputBorder(),
+                labelText: '默认接活员工',
+                labelStyle: TextStyle(
+                  fontSize: 11,
+                  color: shad.mutedForeground,
+                ),
+              ),
+              items: mgr.employees
+                  .map(
+                    (e) => DropdownMenuItem<String?>(
+                      value: e.uuid,
+                      child: Text(
+                        e.name,
+                        style: TextStyle(fontSize: 12, color: shad.foreground),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => _streamProvider.agentTaskDefaultEmployeeId = v,
+            ),
         ],
       ),
     );
@@ -424,28 +568,33 @@ class _StreamScreenState extends State<StreamScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.streamControls,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: shad.foreground)),
+          Text(
+            l10n.streamControls,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: shad.foreground,
+            ),
+          ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: _streamProvider.isConnected
-                  ? () => _streamProvider
-                      .triggerReply('请对观众们说点什么吧~')
+                  ? () => _streamProvider.triggerReply('请对观众们说点什么吧~')
                   : null,
               icon: const Icon(Icons.chat, size: 16),
               label: Text(l10n.streamManualReply),
             ),
           ),
           const SizedBox(height: 8),
-            Text(
+          Text(
             l10n.streamOBSTip,
             style: TextStyle(
-                fontSize: 10, color: shad.mutedForeground, height: 1.4),
+              fontSize: 10,
+              color: shad.mutedForeground,
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -454,7 +603,8 @@ class _StreamScreenState extends State<StreamScreen> {
 
   // ── 回复模式切换面板 ──
   Widget _buildReplyModePanel(ShadTheme shad) {
-    final isSliding = _streamProvider.replyMode == StreamReplyMode.slidingWindow;
+    final isSliding =
+        _streamProvider.replyMode == StreamReplyMode.slidingWindow;
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -466,11 +616,14 @@ class _StreamScreenState extends State<StreamScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.streamReplyMode,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: shad.foreground)),
+          Text(
+            l10n.streamReplyMode,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: shad.foreground,
+            ),
+          ),
           const SizedBox(height: 8),
           // 模式切换按钮
           SizedBox(
@@ -523,8 +676,7 @@ class _StreamScreenState extends State<StreamScreen> {
                           ? l10n.streamReplyModeSequential
                           : l10n.streamReplyModeSliding,
                     ),
-                    style:
-                        TextStyle(fontSize: 9, color: shad.mutedForeground),
+                    style: TextStyle(fontSize: 9, color: shad.mutedForeground),
                   ),
                 ],
               ),
@@ -537,8 +689,10 @@ class _StreamScreenState extends State<StreamScreen> {
             child: OutlinedButton.icon(
               onPressed: _sendTestDanmaku,
               icon: const Icon(Icons.science, size: 16),
-              label: Text(l10n.streamTestDanmaku,
-                  style: const TextStyle(fontSize: 12)),
+              label: Text(
+                l10n.streamTestDanmaku,
+                style: const TextStyle(fontSize: 12),
+              ),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 side: BorderSide(color: shad.border),
@@ -580,14 +734,17 @@ class _StreamScreenState extends State<StreamScreen> {
                 Text(
                   l10n.streamMessages,
                   style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: shad.foreground),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: shad.foreground,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: shad.primary.withAlpha(30),
                     borderRadius: BorderRadius.circular(8),
@@ -613,10 +770,12 @@ class _StreamScreenState extends State<StreamScreen> {
                       isEdit
                           ? l10n.streamEditDanmakuHint
                           : _streamProvider.isConnected
-                              ? l10n.streamWaiting
-                              : l10n.streamConnectForDanmaku,
+                          ? l10n.streamWaiting
+                          : l10n.streamConnectForDanmaku,
                       style: TextStyle(
-                          fontSize: 13, color: shad.mutedForeground),
+                        fontSize: 13,
+                        color: shad.mutedForeground,
+                      ),
                     ),
                   )
                 : ListView.builder(
@@ -665,7 +824,9 @@ class _StreamScreenState extends State<StreamScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: isEdit ? const Color(0xFFF59E0B) : const Color(0xFF22C55E),
+                color: isEdit
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF22C55E),
               ),
             ),
           ],
@@ -688,8 +849,10 @@ class _StreamScreenState extends State<StreamScreen> {
               decoration: InputDecoration(
                 hintText: l10n.streamEditDanmakuHint,
                 isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
                   borderSide: BorderSide(color: shad.border),
@@ -718,7 +881,10 @@ class _StreamScreenState extends State<StreamScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
-              child: Text(l10n.streamSendDanmaku, style: const TextStyle(fontSize: 12)),
+              child: Text(
+                l10n.streamSendDanmaku,
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
           ),
         ],
@@ -779,8 +945,9 @@ class _StreamScreenState extends State<StreamScreen> {
                     ),
                   ),
                   TextSpan(
-                      text: ': ',
-                      style: TextStyle(color: shad.mutedForeground)),
+                    text: ': ',
+                    style: TextStyle(color: shad.mutedForeground),
+                  ),
                   TextSpan(text: msg.content),
                 ],
               ),
@@ -812,9 +979,10 @@ class _StreamScreenState extends State<StreamScreen> {
                 Text(
                   l10n.streamSetlist,
                   style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: shad.foreground),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: shad.foreground,
+                  ),
                 ),
                 const Spacer(),
                 _buildAddNodeButton(shad),
@@ -828,14 +996,19 @@ class _StreamScreenState extends State<StreamScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.queue_music,
-                            size: 36,
-                            color: shad.mutedForeground.withAlpha(100)),
+                        Icon(
+                          Icons.queue_music,
+                          size: 36,
+                          color: shad.mutedForeground.withAlpha(100),
+                        ),
                         const SizedBox(height: 8),
-                        Text(l10n.streamAddNodeHint,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: shad.mutedForeground)),
+                        Text(
+                          l10n.streamAddNodeHint,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: shad.mutedForeground,
+                          ),
+                        ),
                       ],
                     ),
                   )
@@ -844,10 +1017,10 @@ class _StreamScreenState extends State<StreamScreen> {
                     itemCount: setlist.length,
                     itemBuilder: (context, index) {
                       final item = setlist[index];
-                      final isCurrent = isRunning &&
+                      final isCurrent =
+                          isRunning &&
                           _streamProvider.currentNodeIndex == index;
-                      return _buildSetlistItem(
-                          item, index, isCurrent, shad);
+                      return _buildSetlistItem(item, index, isCurrent, shad);
                     },
                   ),
           ),
@@ -862,15 +1035,19 @@ class _StreamScreenState extends State<StreamScreen> {
                       ? () => _streamProvider.stopSetlist()
                       : () => _streamProvider.startSetlist(),
                   icon: Icon(
-                      isRunning ? Icons.stop : Icons.play_arrow,
-                      size: 18),
-                  label: Text(isRunning ? l10n.streamStopFlow : l10n.streamStartFlow),
+                    isRunning ? Icons.stop : Icons.play_arrow,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isRunning ? l10n.streamStopFlow : l10n.streamStartFlow,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isRunning
                         ? const Color(0xFFEF4444)
                         : shad.primary,
-                    foregroundColor:
-                        isRunning ? Colors.white : shad.primaryForeground,
+                    foregroundColor: isRunning
+                        ? Colors.white
+                        : shad.primaryForeground,
                   ),
                 ),
               ),
@@ -885,8 +1062,7 @@ class _StreamScreenState extends State<StreamScreen> {
     return PopupMenuButton<StreamNodeType>(
       icon: Icon(Icons.add, size: 18, color: shad.primary),
       onSelected: (type) => _streamProvider.addSetlistNode(type),
-      itemBuilder: (context) =>
-          StreamNodeDefinition.registry.entries.map((e) {
+      itemBuilder: (context) => StreamNodeDefinition.registry.entries.map((e) {
         return PopupMenuItem(
           value: e.key,
           child: Row(
@@ -901,8 +1077,12 @@ class _StreamScreenState extends State<StreamScreen> {
     );
   }
 
-  Widget _buildSetlistItem(StreamSetlistItem item, int index,
-      bool isCurrent, ShadTheme shad) {
+  Widget _buildSetlistItem(
+    StreamSetlistItem item,
+    int index,
+    bool isCurrent,
+    ShadTheme shad,
+  ) {
     final def = item.nodeDef;
     final name = def?.name ?? item.nodeType.name;
     final l10n = AppLocalizations.of(context)!;
@@ -912,58 +1092,57 @@ class _StreamScreenState extends State<StreamScreen> {
       decoration: BoxDecoration(
         color: isCurrent ? shad.primary.withAlpha(20) : null,
         borderRadius: BorderRadius.circular(6),
-        border:
-            isCurrent ? Border.all(color: shad.primary, width: 1.5) : null,
+        border: isCurrent ? Border.all(color: shad.primary, width: 1.5) : null,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: () => _showNodeSettingsDialog(item, index, shad),
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
             children: [
-              Icon(_getNodeIcon(item.nodeType),
-                  size: 16, color: shad.primary),
+              Icon(_getNodeIcon(item.nodeType), size: 16, color: shad.primary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '$name ${isCurrent ? l10n.streamInProgress : ""}',
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight:
-                        isCurrent ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
                     color: isCurrent ? shad.primary : shad.foreground,
                   ),
                 ),
               ),
               if (!_streamProvider.isSetlistRunning)
                 GestureDetector(
-                  onTap: () =>
-                      _streamProvider.moveSetlistNode(index, -1),
-                  child: Icon(Icons.arrow_upward,
-                      size: 14,
-                      color: index == 0
-                          ? shad.mutedForeground.withAlpha(60)
-                          : shad.mutedForeground),
+                  onTap: () => _streamProvider.moveSetlistNode(index, -1),
+                  child: Icon(
+                    Icons.arrow_upward,
+                    size: 14,
+                    color: index == 0
+                        ? shad.mutedForeground.withAlpha(60)
+                        : shad.mutedForeground,
+                  ),
                 ),
               if (!_streamProvider.isSetlistRunning)
                 GestureDetector(
-                  onTap: () =>
-                      _streamProvider.moveSetlistNode(index, 1),
-                  child: Icon(Icons.arrow_downward,
-                      size: 14,
-                      color: index ==
-                              _streamProvider.setlist.length - 1
-                          ? shad.mutedForeground.withAlpha(60)
-                          : shad.mutedForeground),
+                  onTap: () => _streamProvider.moveSetlistNode(index, 1),
+                  child: Icon(
+                    Icons.arrow_downward,
+                    size: 14,
+                    color: index == _streamProvider.setlist.length - 1
+                        ? shad.mutedForeground.withAlpha(60)
+                        : shad.mutedForeground,
+                  ),
                 ),
               if (!_streamProvider.isSetlistRunning)
                 GestureDetector(
-                  onTap: () =>
-                      _streamProvider.removeSetlistNode(index),
-                  child: Icon(Icons.close,
-                      size: 14, color: shad.mutedForeground),
+                  onTap: () => _streamProvider.removeSetlistNode(index),
+                  child: Icon(
+                    Icons.close,
+                    size: 14,
+                    color: shad.mutedForeground,
+                  ),
                 ),
             ],
           ),
@@ -973,7 +1152,10 @@ class _StreamScreenState extends State<StreamScreen> {
   }
 
   void _showNodeSettingsDialog(
-      StreamSetlistItem item, int index, ShadTheme shad) {
+    StreamSetlistItem item,
+    int index,
+    ShadTheme shad,
+  ) {
     final def = item.nodeDef;
     if (def == null) return;
     final l10n = AppLocalizations.of(context)!;
@@ -985,8 +1167,10 @@ class _StreamScreenState extends State<StreamScreen> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              title: Text(l10n.streamNodeSettings.replaceAll('\$name', def.name),
-                  style: TextStyle(color: shad.foreground)),
+              title: Text(
+                l10n.streamNodeSettings.replaceAll('\$name', def.name),
+                style: TextStyle(color: shad.foreground),
+              ),
               content: SizedBox(
                 width: 300,
                 child: Column(
@@ -998,20 +1182,22 @@ class _StreamScreenState extends State<StreamScreen> {
                           labelText: l10n.streamPreset,
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
                         ),
                         value: null,
-                        hint: Text(l10n.streamPresetHint,
-                            style: const TextStyle(fontSize: 13)),
+                        hint: Text(
+                          l10n.streamPresetHint,
+                          style: const TextStyle(fontSize: 13),
+                        ),
                         items: def.presets.keys.map((key) {
-                          return DropdownMenuItem(
-                              value: key, child: Text(key));
+                          return DropdownMenuItem(value: key, child: Text(key));
                         }).toList(),
                         onChanged: (presetKey) {
                           if (presetKey != null &&
                               def.presets.containsKey(presetKey)) {
-                            settings
-                                .addAll(def.presets[presetKey]!);
+                            settings.addAll(def.presets[presetKey]!);
                             setDialogState(() {});
                           }
                         },
@@ -1019,20 +1205,19 @@ class _StreamScreenState extends State<StreamScreen> {
                       const SizedBox(height: 12),
                     ],
                     ...def.defaultSettings.keys.map((key) {
-                      final value =
-                          settings[key] ?? def.defaultSettings[key];
+                      final value = settings[key] ?? def.defaultSettings[key];
                       if (value is String) {
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: TextField(
-                            controller: TextEditingController(
-                                text: value),
+                            controller: TextEditingController(text: value),
                             decoration: InputDecoration(
                               labelText: key,
                               isDense: true,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
                             ),
                             style: const TextStyle(fontSize: 13),
                             onChanged: (v) {
@@ -1046,19 +1231,20 @@ class _StreamScreenState extends State<StreamScreen> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: TextField(
                             controller: TextEditingController(
-                                text: value.toString()),
+                              text: value.toString(),
+                            ),
                             decoration: InputDecoration(
                               labelText: key,
                               isDense: true,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
                             ),
                             style: const TextStyle(fontSize: 13),
                             keyboardType: TextInputType.number,
                             onChanged: (v) {
-                              final num = int.tryParse(v) ??
-                                  double.tryParse(v);
+                              final num = int.tryParse(v) ?? double.tryParse(v);
                               if (num != null) settings[key] = num;
                               setDialogState(() {});
                             },
@@ -1080,8 +1266,9 @@ class _StreamScreenState extends State<StreamScreen> {
                     _streamProvider.updateNodeSettings(
                       index,
                       StreamSetlistItem(
-                          nodeType: item.nodeType,
-                          settings: settings),
+                        nodeType: item.nodeType,
+                        settings: settings,
+                      ),
                     );
                     Navigator.pop(ctx);
                   },

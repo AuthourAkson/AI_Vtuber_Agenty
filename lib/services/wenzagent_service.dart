@@ -46,8 +46,8 @@ class MultiAgentInfo {
 
   String get lastMsgPreview =>
       latestMessage != null && latestMessage!.length > 40
-          ? '${latestMessage!.substring(0, 40)}...'
-          : (latestMessage ?? '');
+      ? '${latestMessage!.substring(0, 40)}...'
+      : (latestMessage ?? '');
 }
 
 /// Bridge service between AiVtuber_Agent and the wenzagent multi-agent SDK.
@@ -93,13 +93,15 @@ class WenzAgentService {
 
       _client = DeviceClient.getInstance(_deviceId);
 
-      await _client!.initialize(DeviceClientConfig(
-        storagePath: config.storagePath,
-        host: config.host,
-        port: config.port,
-        deviceName: config.deviceName,
-        topic: config.topic,
-      ));
+      await _client!.initialize(
+        DeviceClientConfig(
+          storagePath: config.storagePath,
+          host: config.host,
+          port: config.port,
+          deviceName: config.deviceName,
+          topic: config.topic,
+        ),
+      );
 
       _notificationSub = _client!.notificationHub.subscribe(
         _onNotificationEvent,
@@ -247,7 +249,8 @@ class WenzAgentService {
       return summaries.map((s) {
         return MultiAgentInfo(
           employeeId: s.employeeId,
-          name: s.employeeId, // Will be resolved by AgentManager using employee name map
+          name: s
+              .employeeId, // Will be resolved by AgentManager using employee name map
           deviceId: s.deviceId,
           latestMessage: s.lastMsgContent,
           status: 'idle',
@@ -296,10 +299,11 @@ class WenzAgentService {
         sortOrder: 0,
         enableTools: 1,
         enableMcp: 0,
-        autoApprove: 1,           // Auto-approve tool calls to avoid "Cancelled"
+        autoApprove: 1, // Auto-approve tool calls to avoid "Cancelled"
         isPinned: 0,
         deleted: 0,
-        permissionConfig: permissionConfigJson,  // Inject global permission rules
+        permissionConfig:
+            permissionConfigJson, // Inject global permission rules
       );
       await _client!.employeeManager.createEmployee(entity);
       return entity;
@@ -342,6 +346,24 @@ class WenzAgentService {
       }
     } catch (e) {
       print('[WenzAgentService] updateEmployeeProvider failed: $e');
+    }
+  }
+
+  /// Update an employee's system prompt (personality prompt).
+  Future<void> updateEmployeeSystemPrompt({
+    required String employeeId,
+    String? systemPrompt,
+  }) async {
+    if (_client == null) return;
+    try {
+      final emp = await _client!.employeeManager.getEmployee(employeeId);
+      if (emp != null) {
+        emp.systemPrompt = systemPrompt;
+        emp.updateTime = DateTime.now();
+        await _client!.employeeManager.updateEmployee(emp);
+      }
+    } catch (e) {
+      print('[WenzAgentService] updateEmployeeSystemPrompt failed: $e');
     }
   }
 
@@ -398,7 +420,9 @@ class WenzAgentService {
       // 1. Resolve the SDK's expected skill folder location
       final skillsDir = _client?.skillsDir;
       if (skillsDir == null || skillsDir.isEmpty) {
-        print('[WenzAgentService] createGlobalFolderSkill: skillsDir not set, device not initialized?');
+        print(
+          '[WenzAgentService] createGlobalFolderSkill: skillsDir not set, device not initialized?',
+        );
         return null;
       }
       final targetPath = p.join(skillsDir, name);
@@ -406,7 +430,9 @@ class WenzAgentService {
       // 2. Validate source folder exists
       final sourceDir = Directory(folderPath);
       if (!await sourceDir.exists()) {
-        print('[WenzAgentService] createGlobalFolderSkill: source folder not found: $folderPath');
+        print(
+          '[WenzAgentService] createGlobalFolderSkill: source folder not found: $folderPath',
+        );
         return null;
       }
 
@@ -416,7 +442,9 @@ class WenzAgentService {
       if (normalizedSource != normalizedTarget) {
         try {
           await _copyDirectory(folderPath, targetPath);
-          print('[WenzAgentService] createGlobalFolderSkill: copied $folderPath -> $targetPath');
+          print(
+            '[WenzAgentService] createGlobalFolderSkill: copied $folderPath -> $targetPath',
+          );
         } catch (e) {
           print('[WenzAgentService] createGlobalFolderSkill: copy failed: $e');
           return null;
@@ -538,7 +566,9 @@ class WenzAgentService {
       await skillMgr.createSkill(entity);
 
       // Push to agent runtime
-      final proxy = await _client!.getOrCreateAgentProxy(employeeId: employeeId);
+      final proxy = await _client!.getOrCreateAgentProxy(
+        employeeId: employeeId,
+      );
       await proxy.initialize();
       final skills = await skillMgr.getSkills(employeeId);
       await proxy.setSkills(skills.map((e) => e.toMap()).toList());
@@ -551,7 +581,10 @@ class WenzAgentService {
   }
 
   /// Remove a global skill from an employee.
-  Future<void> removeGlobalSkillFromEmployee(String employeeId, String globalSkillId) async {
+  Future<void> removeGlobalSkillFromEmployee(
+    String employeeId,
+    String globalSkillId,
+  ) async {
     try {
       final skillMgr = SkillManager.getInstance(_deviceId);
       final skills = await skillMgr.getSkills(employeeId);
@@ -561,7 +594,9 @@ class WenzAgentService {
         }
       }
       // Push to agent runtime
-      final proxy = await _client!.getOrCreateAgentProxy(employeeId: employeeId);
+      final proxy = await _client!.getOrCreateAgentProxy(
+        employeeId: employeeId,
+      );
       await proxy.initialize();
       final updated = await skillMgr.getSkills(employeeId);
       await proxy.setSkills(updated.map((e) => e.toMap()).toList());
@@ -571,7 +606,9 @@ class WenzAgentService {
   }
 
   /// Get skills for an employee.
-  Future<List<AiEmployeeSkillEntity>> getEmployeeSkills(String employeeId) async {
+  Future<List<AiEmployeeSkillEntity>> getEmployeeSkills(
+    String employeeId,
+  ) async {
     try {
       final skillMgr = SkillManager.getInstance(_deviceId);
       return await skillMgr.getSkills(employeeId);
@@ -592,24 +629,23 @@ class WenzAgentService {
       'createdAt': msg.createdAt.toIso8601String(),
       'toolName': msg.toolName,
       'toolResult': msg.toolResult,
-      'toolCalls': msg.toolCalls?.map((t) => {
-        'id': t.id,
-        'name': t.name,
-        'arguments': t.arguments,
-      }).toList(),
+      'toolCalls': msg.toolCalls
+          ?.map((t) => {'id': t.id, 'name': t.name, 'arguments': t.arguments})
+          .toList(),
     };
   }
 
   void _onNotificationEvent(AgentNotificationEvent event) {
     switch (event) {
       case AgentMessageArrivedEvent(
-          :final message,
-          :final employeeId,
-          :final isRemote):
+        :final message,
+        :final employeeId,
+        :final isRemote,
+      ):
         _messageController.add({
           'type': 'message',
           'employeeId': employeeId,
-          'message': _msgToMap(message),  // Full message data for real-time UI
+          'message': _msgToMap(message), // Full message data for real-time UI
           'isRemote': isRemote,
         });
         break;
@@ -622,9 +658,7 @@ class WenzAgentService {
         });
         break;
 
-      case AgentUnreadCountChangedEvent(
-          :final employeeId,
-          :final unreadCount):
+      case AgentUnreadCountChangedEvent(:final employeeId, :final unreadCount):
         _messageController.add({
           'type': 'unread',
           'employeeId': employeeId,

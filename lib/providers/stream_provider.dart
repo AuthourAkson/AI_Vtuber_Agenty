@@ -7,16 +7,17 @@ import '../services/bilibili_chat_service.dart';
 enum StreamReplyMode {
   /// 滑动窗口：3槽队列，一次处理一条，处理完从最新弹幕补位
   slidingWindow,
+
   /// 顺序回复：严格FIFO，一条一条按顺序回复
   sequential,
 }
 
 /// Setlist节点类型 (1:1对应LAV2的NodeRegistry)
 enum StreamNodeType {
-  systemPrompt,   // 设置系统提示词
+  systemPrompt, // 设置系统提示词
   promptedResponse, // AI根据提示词回复
-  chat,           // 聊天模式（持续N分钟读取弹幕并回复）
-  sing,           // 唱歌模式（播放音频）
+  chat, // 聊天模式（持续N分钟读取弹幕并回复）
+  sing, // 唱歌模式（播放音频）
 }
 
 /// Setlist节点定义
@@ -40,14 +41,10 @@ class StreamNodeDefinition {
       defaultSettings: {'systemPrompt': ''},
       presets: {
         '默认直播': {
-          'systemPrompt': '你正在Bilibili进行直播，请用活泼热情的语气和观众互动。回复要简洁生动，适当使用语气词。'
+          'systemPrompt': '你正在Bilibili进行直播，请用活泼热情的语气和观众互动。回复要简洁生动，适当使用语气词。',
         },
-        '杂谈模式': {
-          'systemPrompt': '你正在和观众闲聊。请放松自然地聊天，可以分享日常趣事，回答观众问题。'
-        },
-        '歌回模式': {
-          'systemPrompt': '你正在进行唱歌直播。每唱完一首歌后和观众互动，感谢礼物，接受点歌。'
-        },
+        '杂谈模式': {'systemPrompt': '你正在和观众闲聊。请放松自然地聊天，可以分享日常趣事，回答观众问题。'},
+        '歌回模式': {'systemPrompt': '你正在进行唱歌直播。每唱完一首歌后和观众互动，感谢礼物，接受点歌。'},
       },
     ),
     StreamNodeType.promptedResponse: StreamNodeDefinition(
@@ -84,18 +81,19 @@ class StreamSetlistItem {
   StreamNodeType nodeType;
   Map<String, dynamic> settings;
 
-  StreamSetlistItem({
-    required this.nodeType,
-    Map<String, dynamic>? settings,
-  }) : settings = settings ?? Map<String, dynamic>.from(
-            StreamNodeDefinition.registry[nodeType]?.defaultSettings ?? {});
+  StreamSetlistItem({required this.nodeType, Map<String, dynamic>? settings})
+    : settings =
+          settings ??
+          Map<String, dynamic>.from(
+            StreamNodeDefinition.registry[nodeType]?.defaultSettings ?? {},
+          );
 
   StreamNodeDefinition? get nodeDef => StreamNodeDefinition.registry[nodeType];
 
   Map<String, dynamic> toJson() => {
-        'nodeType': nodeType.name,
-        'settings': settings,
-      };
+    'nodeType': nodeType.name,
+    'settings': settings,
+  };
 
   factory StreamSetlistItem.fromJson(Map<String, dynamic> json) {
     final type = StreamNodeType.values.firstWhere(
@@ -166,6 +164,28 @@ class LiveStreamProvider extends ChangeNotifier {
 
   // ── 回调 ──
   Future<void> Function(String message)? onAIResponse; // 由外部注入（异步，支持等待完成）
+
+  /// 观众 @员工 / !agent 派活回调（Direction 2）。
+  /// [targetName] 为从弹幕中解析出的员工名（可能为 null，表示用默认员工）。
+  Future<void> Function(String? targetName, String taskText)? onAgentTask;
+
+  // ── Agent任务开关/默认员工 ──
+  bool _agentTaskEnabled = true;
+  String? _agentTaskDefaultEmployeeId;
+
+  bool get agentTaskEnabled => _agentTaskEnabled;
+  set agentTaskEnabled(bool v) {
+    if (_agentTaskEnabled == v) return;
+    _agentTaskEnabled = v;
+    notifyListeners();
+  }
+
+  String? get agentTaskDefaultEmployeeId => _agentTaskDefaultEmployeeId;
+  set agentTaskDefaultEmployeeId(String? id) {
+    if (_agentTaskDefaultEmployeeId == id) return;
+    _agentTaskDefaultEmployeeId = id;
+    notifyListeners();
+  }
 
   // ── Stream subscriptions ──
   StreamSubscription<BilibiliDanmaku>? _msgSub;
@@ -298,7 +318,9 @@ class LiveStreamProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         'stream_reply_mode',
-        _replyMode == StreamReplyMode.sequential ? 'sequential' : 'slidingWindow',
+        _replyMode == StreamReplyMode.sequential
+            ? 'sequential'
+            : 'slidingWindow',
       );
     } catch (_) {}
   }
@@ -347,28 +369,109 @@ class LiveStreamProvider extends ChangeNotifier {
     if (_isAiBusy) return;
 
     final msg = _pendingMessages.removeAt(0);
+
+    // Direction 2: viewer can dispatch a task directly to a WenzAgent employee.
+    if (_tryDispatchAgentTask(msg)) return;
+
     _isAiBusy = true;
     notifyListeners();
 
-    final prompt =
-        '你正在Bilibili进行直播。以下是观众的最新弹幕，请用自然活泼的语气回应（1-2句话即可）：\n\n$msg';
+    final prompt = '你正在Bilibili进行直播。以下是观众的最新弹幕，请用自然活泼的语气回应（1-2句话即可）：\n\n$msg';
 
-    onAIResponse!(prompt).then((_) {
-      _isAiBusy = false;
-      if (_replyMode == StreamReplyMode.slidingWindow) {
-        _refillSlidingWindow();
+    onAIResponse!(prompt)
+        .then((_) {
+          _isAiBusy = false;
+          if (_replyMode == StreamReplyMode.slidingWindow) {
+            _refillSlidingWindow();
+          }
+          notifyListeners();
+          if (_pendingMessages.isNotEmpty) {
+            _startFastPoll();
+          }
+        })
+        .catchError((_) {
+          _isAiBusy = false;
+          notifyListeners();
+          if (_pendingMessages.isNotEmpty) {
+            _startFastPoll();
+          }
+        });
+  }
+
+  /// Strip the `【观众 xxx】` prefix from pending-message text.
+  String _danmakuContent(String msg) {
+    final idx = msg.lastIndexOf('】');
+    if (idx >= 0 && idx + 1 < msg.length) return msg.substring(idx + 1).trim();
+    return msg.trim();
+  }
+
+  bool _tryDispatchAgentTask(String msg) {
+    if (!_agentTaskEnabled || onAgentTask == null) return false;
+
+    final content = _danmakuContent(msg);
+    final parsed = _parseAgentCommand(content);
+    if (parsed == null) return false;
+
+    _isAiBusy = true;
+    notifyListeners();
+
+    onAgentTask!(parsed.targetName, parsed.taskText)
+        .then((_) {
+          _isAiBusy = false;
+          if (_replyMode == StreamReplyMode.slidingWindow) {
+            _refillSlidingWindow();
+          }
+          notifyListeners();
+          if (_pendingMessages.isNotEmpty) {
+            _startFastPoll();
+          }
+        })
+        .catchError((_) {
+          _isAiBusy = false;
+          notifyListeners();
+          if (_pendingMessages.isNotEmpty) {
+            _startFastPoll();
+          }
+        });
+    return true;
+  }
+
+  /// Parse `@agent 任务` / `!agent @员工 任务` style danmaku commands.
+  /// Returns null when the message is not an agent task command.
+  ({String? targetName, String taskText})? _parseAgentCommand(String content) {
+    String rest = '';
+    if (content.startsWith('!agent') || content.startsWith('！agent')) {
+      rest = content.substring(6).trim();
+    }
+    if (rest.isEmpty &&
+        (content.startsWith('@agent') || content.startsWith('＠agent'))) {
+      rest = content.substring(6).trim();
+    }
+    if (rest.isEmpty &&
+        (content.startsWith('@员工') ||
+            content.startsWith('!员工') ||
+            content.startsWith('！员工'))) {
+      rest = content.substring(3).trim();
+      if (rest.isEmpty) return null;
+    }
+    if (rest.isEmpty) return null;
+
+    // Target employee: `@员工名 任务内容`
+    String? targetName;
+    String taskText = rest;
+    if (rest.startsWith('@') || rest.startsWith('＠')) {
+      final space = rest.indexOf(RegExp(r'\s'));
+      if (space > 1) {
+        targetName = rest.substring(1, space);
+        taskText = rest.substring(space).trim();
+      } else {
+        targetName = rest.substring(1);
+        taskText = '';
       }
-      notifyListeners();
-      if (_pendingMessages.isNotEmpty) {
-        _startFastPoll();
-      }
-    }).catchError((_) {
-      _isAiBusy = false;
-      notifyListeners();
-      if (_pendingMessages.isNotEmpty) {
-        _startFastPoll();
-      }
-    });
+    }
+
+    if (taskText.isEmpty) taskText = '请向观众做一个简短的自我介绍吧';
+    return (targetName: targetName, taskText: taskText);
   }
 
   /// 滑动窗口补位：从溢出缓冲区取最新弹幕填充窗口
@@ -560,14 +663,12 @@ class LiveStreamProvider extends ChangeNotifier {
 
       case StreamNodeType.chat:
         // 聊天模式：持续N分钟
-        final duration =
-            (node.settings['duration'] as num?)?.toInt() ?? 5;
+        final duration = (node.settings['duration'] as num?)?.toInt() ?? 5;
         // 确保自动回复开启
         _autoReply = true;
         _startReplyTimer();
         // N分钟后继续下一个节点
-        _setlistTimer = Timer(
-            Duration(minutes: duration), _advanceToNextNode);
+        _setlistTimer = Timer(Duration(minutes: duration), _advanceToNextNode);
         break;
 
       case StreamNodeType.sing:
