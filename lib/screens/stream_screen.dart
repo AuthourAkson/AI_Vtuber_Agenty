@@ -523,6 +523,9 @@ class _StreamScreenState extends State<StreamScreen> {
             )
           else
             DropdownButtonFormField<String?>(
+              key: ValueKey(
+                'agent-default-${mgr.employees.map((e) => e.uuid).join(',')}',
+              ),
               initialValue:
                   _streamProvider.agentTaskDefaultEmployeeId ??
                   (mgr.employees.isNotEmpty ? mgr.employees.first.uuid : null),
