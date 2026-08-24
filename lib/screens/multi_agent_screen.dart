@@ -15,8 +15,7 @@ import '../services/log_service.dart';
 import '../services/sync_service.dart';
 import '../services/live2d_model_service.dart';
 import '../services/vrm_model_service.dart';
-import '../widgets/live2d_view.dart';
-import '../widgets/vrm_view.dart';
+import '../services/overlay_service.dart';
 import '../l10n/app_localizations.dart';
 import 'multi_agent_appearance.dart';
 
@@ -41,7 +40,6 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
   String _searchQuery = '';
   String? _selectedSkillId; // Track selected skill for detail view
   int _lastMsgCount = 0; // Track to auto-scroll only on new messages
-  bool _showAgentAvatar = false; // Direction 1: show bound avatar above chat
   final SyncService _syncService = SyncService();
 
   @override
@@ -5170,17 +5168,11 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
               ),
               SizedBox(width: 4),
               GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _showAgentAvatar = !_showAgentAvatar;
-                  });
-                },
+                onTap: () => _toggleAgentAvatarOverlay(mgr),
                 child: Icon(
                   Icons.face_retouching_natural,
                   size: 19,
-                  color:
-                      mgr.activePersona?.avatarType != AgentAvatarType.none &&
-                          _showAgentAvatar
+                  color: mgr.activePersona?.avatarType != AgentAvatarType.none
                       ? const Color(0xFF22C55E)
                       : ShadTheme.of(context).mutedForeground,
                 ),
@@ -5210,7 +5202,9 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
           ),
         ),
         Divider(height: 1, color: ShadTheme.of(context).border),
-        if (_showAgentAvatar) _buildAgentAvatarStrip(mgr),
+        if (mgr.activePersona != null &&
+            mgr.activePersona!.avatarType != AgentAvatarType.none)
+          _buildAgentPersonaBar(mgr),
         // Messages
         Expanded(
           child: mgr.activeMessages.isEmpty
@@ -5558,74 +5552,113 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
     );
   }
 
-  Widget _buildAgentAvatarStrip(AgentManager mgr) {
-    final employeeId = mgr.activeEmployeeId;
-    if (employeeId == null) return const SizedBox.shrink();
-    final persona = mgr.getPersona(employeeId);
+  Widget _buildAgentPersonaBar(AgentManager mgr) {
+    final persona = mgr.activePersona;
     if (persona == null || persona.avatarType == AgentAvatarType.none) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        color: ShadTheme.of(context).secondary.withAlpha(80),
-        child: Text(
-          '这个员工还没有绑定形象。点击右上角 👤 或前往员工详情页赋予形象。',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 11,
-            color: ShadTheme.of(context).mutedForeground,
-          ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
+    final modelName = persona.avatarPath.replaceAll('\\', '/').split('/').last;
+    final overlayRunning = OverlayService.instance.isPopoutRunning;
+
     return Container(
-      height: 200,
       width: double.infinity,
-      color: Colors.black.withAlpha(25),
-      child: Stack(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: ShadTheme.of(context).secondary.withAlpha(80),
+      child: Row(
         children: [
-          // 透明背景方便之后做绿幕/抠像
-          if (persona.avatarType == AgentAvatarType.live2d)
-            Live2DView(
-              key: ValueKey('agent-l2d-${persona.avatarPath}'),
-              modelPath: persona.avatarPath,
-              backgroundColor: Colors.transparent,
-              positionX: 45,
-              positionY: 50,
-              scale: 0.14,
-            )
-          else if (persona.avatarType == AgentAvatarType.vrm)
-            VrmView(
-              key: ValueKey('agent-vrm-${persona.avatarPath}'),
-              modelPath: persona.avatarPath,
-              backgroundColor: Colors.transparent,
-            ),
-          Positioned(
-            top: 6,
-            right: 8,
-            child: Row(
+          Icon(
+            persona.avatarType == AgentAvatarType.live2d
+                ? Icons.animation
+                : Icons.view_in_ar,
+            size: 22,
+            color: const Color(0xFF22C55E),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.volume_up,
-                  size: 12,
-                  color: persona.voiceEnabled
-                      ? const Color(0xFF22C55E)
-                      : ShadTheme.of(context).mutedForeground,
-                ),
-                const SizedBox(width: 3),
                 Text(
-                  persona.voice,
+                  '${persona.avatarType.name.toUpperCase()} · $modelName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 10,
-                    color: ShadTheme.of(context).mutedForeground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: ShadTheme.of(context).foreground,
                   ),
                 ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.volume_up,
+                      size: 12,
+                      color: persona.voiceEnabled
+                          ? const Color(0xFF22C55E)
+                          : ShadTheme.of(context).mutedForeground,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${persona.voice}${persona.voiceEnabled ? '' : ' · 静音'}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: ShadTheme.of(context).mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
               ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () => _toggleAgentAvatarOverlay(mgr),
+            icon: Icon(
+              overlayRunning ? Icons.close_fullscreen : Icons.open_in_new,
+              size: 14,
+            ),
+            label: Text(
+              overlayRunning ? '关闭窗口' : '预览形象',
+              style: TextStyle(fontSize: 11),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _toggleAgentAvatarOverlay(AgentManager mgr) async {
+    final employeeId = mgr.activeEmployeeId;
+    if (employeeId == null) return;
+    final persona = mgr.getPersona(employeeId);
+    if (persona == null || persona.avatarType == AgentAvatarType.none) {
+      final emp = mgr.employees.where((e) => e.uuid == employeeId).toList();
+      if (emp.isNotEmpty) {
+        _showPersonaDialog(mgr, emp.first);
+      }
+      return;
+    }
+
+    final overlay = OverlayService.instance;
+    if (overlay.isPopoutRunning) {
+      await overlay.stopPopout();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final ok = await overlay.startCharacterPopout(
+      use3D: persona.avatarType == AgentAvatarType.vrm,
+      modelPath: persona.avatarPath,
+      backgroundColor: const Color(0xFF00FF00),
+    );
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法打开形象窗口，请确认原生 Overlay 可用')),
+      );
+    }
+    if (mounted) setState(() {});
   }
 
   Widget _buildChatInput(AgentManager mgr) {
