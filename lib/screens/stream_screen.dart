@@ -26,12 +26,20 @@ class _StreamScreenState extends State<StreamScreen> {
   final _scrollController = ScrollController();
   final _editDanmakuController = TextEditingController();
   late LiveStreamProvider _streamProvider;
+  AgentManager? _agentManager;
   StreamSubscription<void>? _ttsCompleteSub;
 
   @override
   void initState() {
     super.initState();
     _streamProvider = context.read<LiveStreamProvider>();
+    _agentManager = context.read<AgentManager>();
+    _agentManager!.addListener(_syncAgentEmployeeNames);
+    _syncAgentEmployeeNames();
+    // 提前初始化 WenzAgent 并刷新员工列表，确保第一波弹幕 @员工 就能被识别。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _agentManager!.ensureReady().then((_) => _syncAgentEmployeeNames());
+    });
 
     // 用闭包捕获 ChatProvider 和 SettingsProvider，不依赖 mounted 状态
     // 即使 StreamScreen 被切到后台，AI 回复回调仍能正常工作
@@ -137,7 +145,7 @@ class _StreamScreenState extends State<StreamScreen> {
 
     // Direction 2: danmaku audience dispatches tasks to WenzAgent employees.
     // 使用闭包捕获 AgentManager；即使切到其它页面，回调仍可驱动 Agent 干活。
-    final agentManager = context.read<AgentManager>();
+    final agentManager = _agentManager!;
     _streamProvider.onAgentTask = (String? targetName, String taskText) async {
       await agentManager.ensureReady();
       final employees = await agentManager.refreshEmployeesIfNeeded();
@@ -183,11 +191,20 @@ class _StreamScreenState extends State<StreamScreen> {
 
   @override
   void dispose() {
+    _agentManager?.removeListener(_syncAgentEmployeeNames);
     _ttsCompleteSub?.cancel();
     _roomIdController.dispose();
     _scrollController.dispose();
     _editDanmakuController.dispose();
     super.dispose();
+  }
+
+  void _syncAgentEmployeeNames() {
+    final mgr = _agentManager;
+    if (mgr == null) return;
+    _streamProvider.agentTaskEmployeeNames = mgr.employees
+        .map((e) => e.name)
+        .toList();
   }
 
   Future<void> _toggleConnection() async {

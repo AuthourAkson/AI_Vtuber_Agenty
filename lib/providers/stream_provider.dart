@@ -172,6 +172,7 @@ class LiveStreamProvider extends ChangeNotifier {
   // ── Agent任务开关/默认员工 ──
   bool _agentTaskEnabled = true;
   String? _agentTaskDefaultEmployeeId;
+  List<String> _agentTaskEmployeeNames = [];
 
   bool get agentTaskEnabled => _agentTaskEnabled;
   set agentTaskEnabled(bool v) {
@@ -185,6 +186,25 @@ class LiveStreamProvider extends ChangeNotifier {
     if (_agentTaskDefaultEmployeeId == id) return;
     _agentTaskDefaultEmployeeId = id;
     notifyListeners();
+  }
+
+  /// 员工名单（用于识别弹幕中的 `@员工名` 直接派活）。
+  /// 由 StreamScreen 从 AgentManager 同步。
+  List<String> get agentTaskEmployeeNames => _agentTaskEmployeeNames;
+  set agentTaskEmployeeNames(List<String> names) {
+    final normalized = names.map((n) => n.trim()).toList();
+    if (identical(normalized, _agentTaskEmployeeNames)) return;
+    if (_listEq(normalized, _agentTaskEmployeeNames)) return;
+    _agentTaskEmployeeNames = normalized;
+    notifyListeners();
+  }
+
+  bool _listEq(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].toLowerCase() != b[i].toLowerCase()) return false;
+    }
+    return true;
   }
 
   // ── Stream subscriptions ──
@@ -454,9 +474,28 @@ class LiveStreamProvider extends ChangeNotifier {
       rest = content.substring(3).trim();
       if (rest.isEmpty) return null;
     }
+
+    // Direct mention: `@马甲其 任务内容`.
+    // Only treated as an agent task when the name matches a WenzAgent employee,
+    // otherwise it falls back to the normal live-chat reply pipeline.
+    if (rest.isEmpty && (content.startsWith('@') || content.startsWith('＠'))) {
+      final space = content.indexOf(RegExp(r'\s'));
+      final name = space > 1
+          ? content.substring(1, space).trim()
+          : content.substring(1).trim();
+      if (name.isNotEmpty && _employeeNameMatches(name)) {
+        final taskText = space > 1 ? content.substring(space).trim() : '';
+        return (
+          targetName: name,
+          taskText: taskText.isEmpty ? '请向观众做一个简短的自我介绍吧' : taskText,
+        );
+      }
+      return null;
+    }
+
     if (rest.isEmpty) return null;
 
-    // Target employee: `@员工名 任务内容`
+    // Target employee: `!agent @员工名 任务内容`
     String? targetName;
     String taskText = rest;
     if (rest.startsWith('@') || rest.startsWith('＠')) {
@@ -472,6 +511,11 @@ class LiveStreamProvider extends ChangeNotifier {
 
     if (taskText.isEmpty) taskText = '请向观众做一个简短的自我介绍吧';
     return (targetName: targetName, taskText: taskText);
+  }
+
+  bool _employeeNameMatches(String name) {
+    final target = name.trim().toLowerCase();
+    return _agentTaskEmployeeNames.any((n) => n.toLowerCase() == target);
   }
 
   /// 滑动窗口补位：从溢出缓冲区取最新弹幕填充窗口
