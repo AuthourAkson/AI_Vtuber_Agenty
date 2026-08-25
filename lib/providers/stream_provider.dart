@@ -169,6 +169,18 @@ class LiveStreamProvider extends ChangeNotifier {
   /// [targetName] 为从弹幕中解析出的员工名（可能为 null，表示用默认员工）。
   Future<void> Function(String? targetName, String taskText)? onAgentTask;
 
+  /// Agent confirm 等待期间，普通弹幕会先交给此回调判断是否为选项答案。
+  /// 返回 true 表示该弹幕被当作 confirm 答案消费掉，不再回复主页面 AI。
+  Future<bool> Function(String message)? onConfirmChoice;
+
+  bool _confirmWaitMode = false;
+  bool get confirmWaitMode => _confirmWaitMode;
+  set confirmWaitMode(bool v) {
+    if (_confirmWaitMode == v) return;
+    _confirmWaitMode = v;
+    notifyListeners();
+  }
+
   // ── Agent任务开关/默认员工 ──
   bool _agentTaskEnabled = true;
   String? _agentTaskDefaultEmployeeId;
@@ -411,7 +423,34 @@ class LiveStreamProvider extends ChangeNotifier {
       return;
     }
 
+    // Agent confirm 等待期间，观众弹幕优先被当作选项答案。
+    final confirmChoice = onConfirmChoice;
+    if (_confirmWaitMode && confirmChoice != null) {
+      _isAiBusy = true;
+      notifyListeners();
+      confirmChoice(content)
+          .then((handled) {
+            if (handled) {
+              _afterAutoReplyHandled();
+            } else {
+              _isAiBusy = false;
+              notifyListeners();
+              _dispatchNormalAi(msg);
+            }
+          })
+          .catchError((_) {
+            _isAiBusy = false;
+            notifyListeners();
+            _dispatchNormalAi(msg);
+          });
+      return;
+    }
+
     // 普通弹幕自动回复（走主页面聊天 AI）。
+    _dispatchNormalAi(msg);
+  }
+
+  void _dispatchNormalAi(String msg) {
     if (onAIResponse == null) return;
 
     _isAiBusy = true;

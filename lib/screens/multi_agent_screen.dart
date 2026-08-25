@@ -5243,7 +5243,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                       itemCount: totalItems,
                       itemBuilder: (_, i) {
                         if (i < mgr.activeMessages.length) {
-                          return _msgBubble(mgr.activeMessages[i]);
+                          return _msgBubble(mgr.activeMessages[i], mgr);
                         }
                         return _buildThinkingIndicator();
                       },
@@ -5319,7 +5319,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
     );
   }
 
-  Widget _msgBubble(Map<String, dynamic> msg) {
+  Widget _msgBubble(Map<String, dynamic> msg, AgentManager mgr) {
     final isUser = (msg['role'] ?? 'user') == 'user';
     final content = msg['content']?.toString() ?? '';
     final type = msg['type']?.toString() ?? 'text';
@@ -5332,6 +5332,12 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
     final hasToolName = toolName != null && toolName.isNotEmpty;
     final hasToolResult = toolResult != null && toolResult.isNotEmpty;
     final isToolMessage = type == 'functionCall' || type == 'functionResult';
+    final hasConfirmToolCall =
+        hasToolCalls &&
+        toolCalls!.any((tc) {
+          final m = tc is Map ? tc : <String, dynamic>{};
+          return m['name']?.toString() == 'confirm';
+        });
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -5367,11 +5373,19 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                 // ── Tool call header ──
                 if (isToolMessage && hasToolName)
                   _buildToolCallHeader(toolName!, hasToolResult),
+                // confirm 只出现在 toolName 而没有 toolCalls 的情况
+                if (!hasConfirmToolCall && hasToolName && toolName == 'confirm')
+                  _buildConfirmChoiceCard(mgr, <String, dynamic>{}),
                 // ── Tool calls list ──
                 if (hasToolCalls)
-                  ...toolCalls!.map(
-                    (tc) => _buildToolCallItem(tc as Map<String, dynamic>),
-                  ),
+                  ...toolCalls!.map((tc) {
+                    final tcMap = tc as Map<String, dynamic>;
+                    final tcName = tcMap['name']?.toString() ?? '';
+                    if (tcName == 'confirm') {
+                      return _buildConfirmChoiceCard(mgr, tcMap);
+                    }
+                    return _buildToolCallItem(tcMap);
+                  }),
                 // ── Content (markdown if assistant, plain text if user) ──
                 if (content.isNotEmpty)
                   isUser
@@ -5420,6 +5434,190 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
         ),
       ),
     );
+  }
+
+  /// 解析 confirm 工具调用参数。
+  Map<String, dynamic>? _parseConfirmArgs(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) return decoded;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// confirm 工具的可点击选项卡片（不再收叠）。
+  Widget _buildConfirmChoiceCard(AgentManager mgr, Map<String, dynamic> tc) {
+    final args = _parseConfirmArgs(tc['arguments']);
+    final request = mgr.confirmRequest;
+    final title =
+        (args != null ? args['title'] : null)?.toString() ??
+        request?['title']?.toString() ??
+        '请选择方案';
+    final message =
+        (args != null ? args['message'] : null)?.toString() ??
+        request?['message']?.toString() ??
+        '';
+    final optionsRaw = args?['options'] as List? ?? [];
+    final activeRequestOptions = request?['options'] as List?;
+    final options = activeRequestOptions?.isNotEmpty == true
+        ? activeRequestOptions!
+        : optionsRaw;
+    final defaultOption =
+        args?['defaultOption']?.toString() ??
+        request?['defaultOption']?.toString();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withAlpha(18),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF59E0B).withAlpha(70)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.help_outline,
+                size: 16,
+                color: Color(0xFFF59E0B),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '需要选择：$title',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: ShadTheme.of(context).foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (message.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 12,
+                color: ShadTheme.of(context).foreground.withAlpha(200),
+                height: 1.5,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          ...(options.isNotEmpty
+              ? options.map((rawOpt) {
+                  final opt = rawOpt as Map<String, dynamic>? ?? {};
+                  return _buildConfirmOptionWidget(mgr, opt, defaultOption);
+                }).toList()
+              : [
+                  Text(
+                    '等待确认请求...',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: ShadTheme.of(context).mutedForeground,
+                    ),
+                  ),
+                ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConfirmOptionWidget(
+    AgentManager mgr,
+    Map<String, dynamic> opt,
+    String? defaultOption,
+  ) {
+    final key = opt['key']?.toString() ?? '';
+    final label = opt['label']?.toString() ?? key;
+    final desc = opt['description']?.toString();
+    final isDefault = defaultOption != null && defaultOption == key;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _answerAgentConfirm(mgr, key, label),
+              icon: Icon(
+                isDefault ? Icons.star : Icons.radio_button_unchecked,
+                size: 15,
+                color: const Color(0xFFF59E0B),
+              ),
+              label: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  isDefault ? '$label（默认）' : label,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                alignment: Alignment.centerLeft,
+                side: BorderSide(color: const Color(0xFFF59E0B).withAlpha(120)),
+              ),
+            ),
+          ),
+          if (desc != null && desc.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 2, 0, 0),
+              child: Text(
+                desc,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: ShadTheme.of(context).mutedForeground,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 用户点击选项后回调。
+  Future<void> _answerAgentConfirm(
+    AgentManager mgr,
+    String key,
+    String label,
+  ) async {
+    if (key.isEmpty) return;
+    try {
+      if (mgr.confirmRequest == null) {
+        await mgr.refreshConfirmRequest();
+      }
+      if (mgr.confirmRequest == null) {
+        await mgr.sendMessage('我选择：$label');
+      } else {
+        await mgr.answerConfirm(key);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('已选择：$label')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('选择失败: $e')));
+      }
+    }
   }
 
   /// Individual tool call item with arguments.

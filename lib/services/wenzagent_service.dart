@@ -225,6 +225,28 @@ class WenzAgentService {
     } catch (_) {}
   }
 
+  /// 获取当前 Agent 的确认请求（confirm 工具）。
+  Future<Map<String, dynamic>?> getPendingConfirmRequest() async {
+    if (_activeProxy == null) return null;
+    try {
+      final req = await _activeProxy!.getPendingConfirmRequestAsync();
+      return req?.toMap();
+    } catch (e) {
+      print('[WenzAgentService] getPendingConfirmRequest failed: $e');
+      return null;
+    }
+  }
+
+  /// 回应 Agent 的确认请求（用户选择某个选项）。
+  Future<void> respondToConfirm(String requestId, String selectedOption) async {
+    if (_activeProxy == null) return;
+    try {
+      await _activeProxy!.respondToConfirm(requestId, selectedOption);
+    } catch (e) {
+      print('[WenzAgentService] respondToConfirm failed: $e');
+    }
+  }
+
   Future<void> clearSession() async {
     try {
       await _activeProxy?.clearCurrentSession();

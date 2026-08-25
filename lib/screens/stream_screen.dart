@@ -27,6 +27,8 @@ class _StreamScreenState extends State<StreamScreen> {
   final _editDanmakuController = TextEditingController();
   late LiveStreamProvider _streamProvider;
   AgentManager? _agentManager;
+  TTSService? _confirmTts;
+  String? _spokenConfirmRequestId;
   StreamSubscription<void>? _ttsCompleteSub;
 
   @override
@@ -34,8 +36,8 @@ class _StreamScreenState extends State<StreamScreen> {
     super.initState();
     _streamProvider = context.read<LiveStreamProvider>();
     _agentManager = context.read<AgentManager>();
-    _agentManager!.addListener(_syncAgentEmployeeNames);
-    _syncAgentEmployeeNames();
+    _agentManager!.addListener(_onAgentManagerChanged);
+    _onAgentManagerChanged();
     // 提前初始化 WenzAgent 并刷新员工列表，确保第一波弹幕 @员工 就能被识别。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _agentManager!.ensureReady().then((_) => _syncAgentEmployeeNames());
@@ -46,6 +48,7 @@ class _StreamScreenState extends State<StreamScreen> {
     final chatProvider = context.read<ChatProvider>();
     final settingsProvider = context.read<SettingsProvider>();
     final tts = chatProvider.backend.tts;
+    _confirmTts = tts;
 
     _streamProvider.onAIResponse = (String prompt) async {
       if (prompt.startsWith('__SYSTEM_PROMPT__:')) {
@@ -178,6 +181,23 @@ class _StreamScreenState extends State<StreamScreen> {
       await agentManager.runStreamAgentTask(target.uuid, taskText);
     };
 
+    // Agent confirm 答案：观众发来的弹幕先在这里尝试匹配选项。
+    _streamProvider.onConfirmChoice = (String message) async {
+      final mgr = _agentManager;
+      if (mgr == null) return false;
+      final req = mgr.confirmRequest;
+      if (req == null) return false;
+      final requestId = req['requestId']?.toString();
+      if (requestId == null || requestId.isEmpty) return false;
+      final options = (req['options'] as List?) ?? [];
+      final matchedKey = _matchConfirmOption(message, options);
+      if (matchedKey == null) return false;
+
+      await mgr.answerConfirm(matchedKey);
+      _streamProvider.confirmWaitMode = false;
+      return true;
+    };
+
     // 恢复上次的房间号
     _streamProvider.loadSavedRoomId().then((id) {
       if (id.isNotEmpty && mounted) {
@@ -191,7 +211,7 @@ class _StreamScreenState extends State<StreamScreen> {
 
   @override
   void dispose() {
-    _agentManager?.removeListener(_syncAgentEmployeeNames);
+    _agentManager?.removeListener(_onAgentManagerChanged);
     _ttsCompleteSub?.cancel();
     _roomIdController.dispose();
     _scrollController.dispose();
@@ -205,6 +225,97 @@ class _StreamScreenState extends State<StreamScreen> {
     _streamProvider.agentTaskEmployeeNames = mgr.employees
         .map((e) => e.name)
         .toList();
+  }
+
+  void _onAgentManagerChanged() {
+    _syncAgentEmployeeNames();
+    final mgr = _agentManager;
+    if (mgr == null) return;
+
+    final req = mgr.confirmRequest;
+    if (req != null) {
+      _streamProvider.confirmWaitMode = true;
+      final requestId = req['requestId']?.toString();
+      if (requestId != null &&
+          requestId.isNotEmpty &&
+          requestId != _spokenConfirmRequestId) {
+        _spokenConfirmRequestId = requestId;
+        _announceConfirmRequest(mgr, req);
+      }
+    } else {
+      _streamProvider.confirmWaitMode = false;
+      _spokenConfirmRequestId = null;
+    }
+  }
+
+  void _announceConfirmRequest(AgentManager mgr, Map<String, dynamic> req) {
+    final tts = _confirmTts;
+    if (tts == null) return;
+
+    final title = req['title']?.toString() ?? '';
+    final message = req['message']?.toString() ?? '';
+    final options = (req['options'] as List?) ?? [];
+    final labels = options
+        .map((o) => o is Map ? o['label']?.toString() ?? '' : '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final labelText = labels.isNotEmpty ? labels.join('；') : '请等待主播代选';
+
+    // 尝试使用绑定员工的声音，更贴合人格化设定。
+    final persona = mgr.activePersona;
+    if (persona != null && persona.voice.isNotEmpty) {
+      tts.setVoice(persona.voice);
+    }
+
+    final employeeName = mgr.activeEmployeeName ?? 'Agent员工';
+    final text = StringBuffer()
+      ..write('收到$employeeName的确认请求：$title。')
+      ..write(message.isNotEmpty ? '$message。' : '')
+      ..write('可选方案：$labelText。')
+      ..write('请发送弹幕选项序号或方案名称进行选择。');
+    tts.synthesizeAndPlay(text.toString());
+  }
+
+  String? _matchConfirmOption(String message, List options) {
+    final normalized = message.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    // 1. 直接匹配 label/key/description
+    for (final raw in options) {
+      if (raw is! Map) continue;
+      final key = raw['key']?.toString() ?? '';
+      final label = raw['label']?.toString() ?? '';
+      final desc = raw['description']?.toString() ?? '';
+      if (key.isNotEmpty && normalized == key.toLowerCase()) return key;
+      if (label.isNotEmpty && normalized == label.toLowerCase()) return key;
+      if (desc.isNotEmpty && normalized == desc.toLowerCase()) return key;
+    }
+
+    // 2. 序号匹配：1/2/3、选项1/选项2、一/二/三
+    final indexTexts = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    final normalizedNumber = normalized
+        .replaceAll('选项', '')
+        .replaceAll('方案', '')
+        .replaceAll('第', '')
+        .replaceAll('一', '1')
+        .replaceAll('二', '2')
+        .replaceAll('三', '3')
+        .replaceAll('四', '4')
+        .replaceAll('五', '5')
+        .replaceAll('六', '6')
+        .replaceAll('七', '7')
+        .replaceAll('八', '8')
+        .replaceAll('九', '9');
+    for (var i = 0; i < options.length && i < indexTexts.length; i++) {
+      if (normalized == indexTexts[i] || normalizedNumber == indexTexts[i]) {
+        final raw = options[i];
+        if (raw is Map) {
+          final key = raw['key']?.toString() ?? '';
+          if (key.isNotEmpty) return key;
+        }
+      }
+    }
+    return null;
   }
 
   Future<void> _toggleConnection() async {
@@ -264,6 +375,10 @@ class _StreamScreenState extends State<StreamScreen> {
                       _buildConnectionPanel(shad),
                       const SizedBox(height: 12),
                       _buildAgentTaskPanel(shad, agentManager),
+                      if (agentManager.confirmRequest != null) ...[
+                        const SizedBox(height: 12),
+                        _buildAgentConfirmPanel(shad, agentManager),
+                      ],
                       const SizedBox(height: 12),
                       _buildControls(shad),
                       const SizedBox(height: 12),
@@ -570,6 +685,90 @@ class _StreamScreenState extends State<StreamScreen> {
                   .toList(),
               onChanged: (v) => _streamProvider.agentTaskDefaultEmployeeId = v,
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAgentConfirmPanel(ShadTheme shad, AgentManager mgr) {
+    final req = mgr.confirmRequest;
+    if (req == null) return const SizedBox.shrink();
+
+    final title = req['title']?.toString() ?? '请选择';
+    final message = req['message']?.toString() ?? '';
+    final options = (req['options'] as List?) ?? [];
+    final defaultOption = req['defaultOption']?.toString();
+    final employeeName = mgr.activeEmployeeName ?? 'Agent员工';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withAlpha(12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF59E0B).withAlpha(90)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.rule, size: 16, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '$employeeName 需要选择：$title',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: shad.foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (message.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 10,
+                color: shad.mutedForeground,
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          ...options.map((raw) {
+            final opt = raw as Map<String, dynamic>? ?? {};
+            final key = opt['key']?.toString() ?? '';
+            final label = opt['label']?.toString() ?? key;
+            final isDefault = defaultOption != null && defaultOption == key;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () async {
+                    await mgr.answerConfirm(key);
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('已为观众选择：$label')));
+                    }
+                  },
+                  child: Text(
+                    isDefault ? '$label（默认）' : label,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 4),
+          Text(
+            '主播可代观众点击；观众也可发弹幕 1/2/方案名 选择。当前处于确认等待模式。',
+            style: TextStyle(fontSize: 10, color: shad.mutedForeground),
+          ),
         ],
       ),
     );

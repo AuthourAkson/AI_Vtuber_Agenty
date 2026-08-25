@@ -131,8 +131,15 @@ class AgentManager extends ChangeNotifier {
   String _lastAgentStatus = 'idle';
   bool _agentTaskRunning = false;
 
+  /// 当前待处理的 confirm 请求（WenzAgent confirm 工具）。
+  Map<String, dynamic>? _confirmRequest;
+  Timer? _confirmSyncTimer;
+
   /// Whether a viewer-initiated Agent task is currently running.
   bool get agentTaskRunning => _agentTaskRunning;
+
+  /// 当前 Agent 的确认请求，供聊天页和直播页渲染成可点击选项。
+  Map<String, dynamic>? get confirmRequest => _confirmRequest;
 
   // ─── Multi-Agent Data ───────────────────────
 
@@ -881,6 +888,8 @@ class AgentManager extends ChangeNotifier {
     _activeMessages = [];
     _lastSpokenAssistantMsgId = null;
     _lastAgentStatus = 'idle';
+    _confirmRequest = null;
+    _confirmSyncTimer?.cancel();
     notifyListeners();
 
     final proxy = await wenzagent.openAgent(employeeId);
@@ -974,6 +983,42 @@ class AgentManager extends ChangeNotifier {
     }
   }
 
+  /// 拉取当前 Agent 的 confirm 请求并通知 UI。
+  Future<void> _syncConfirmRequest() async {
+    final req = await wenzagent.getPendingConfirmRequest();
+    final oldJson = jsonEncode(_confirmRequest);
+    final newJson = jsonEncode(req);
+    if (oldJson == newJson) return;
+    _confirmRequest = req;
+    notifyListeners();
+  }
+
+  /// 在消息/状态更新后稍等片刻再拉取 confirm（Agent 可能正在写入）。
+  void _scheduleConfirmSync([
+    Duration delay = const Duration(milliseconds: 350),
+  ]) {
+    _confirmSyncTimer?.cancel();
+    _confirmSyncTimer = Timer(delay, _syncConfirmRequest);
+  }
+
+  /// 供 UI 在用户点击选项前先刷新一次 confirm 请求。
+  Future<void> refreshConfirmRequest() => _syncConfirmRequest();
+
+  /// 回答当前 confirm 请求。
+  /// [selectedKey] 为选项的 key（也兼容传入 label/index，尽量在 UI 层传 key）。
+  Future<void> answerConfirm(String selectedKey) async {
+    final req = _confirmRequest;
+    if (req == null) return;
+    final requestId = req['requestId'] as String?;
+    if (requestId == null || requestId.isEmpty) return;
+
+    await wenzagent.respondToConfirm(requestId, selectedKey);
+    _confirmRequest = null;
+    notifyListeners();
+    // Agent 继续执行后会推新消息，稍后刷新确认状态防止又有新的 confirm。
+    _scheduleConfirmSync(const Duration(milliseconds: 800));
+  }
+
   /// Preview a persona voice in the persona editor.
   Future<void> previewPersonaVoice(AgentPersona persona, String text) async {
     final tts = _tts ??= TTSService(StorageService());
@@ -1065,6 +1110,7 @@ class AgentManager extends ChangeNotifier {
           }
         }
         notifyListeners();
+        _scheduleConfirmSync();
       }
     }
     if (type == 'unread') {
@@ -1125,6 +1171,7 @@ class AgentManager extends ChangeNotifier {
           if (previousStatus == 'processing' || previousStatus == 'streaming') {
             _speakLatestAssistantMessage();
           }
+          _scheduleConfirmSync();
         });
       }
       _lastAgentStatus = status ?? previousStatus;
