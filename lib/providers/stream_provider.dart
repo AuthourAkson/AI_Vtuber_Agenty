@@ -385,13 +385,34 @@ class LiveStreamProvider extends ChangeNotifier {
   /// 尝试发送一条弹幕。有 _isAiBusy 保护，不会重复。
   /// 不递归、不 .then() 链、不在同一个函数里处理多条。
   void _tryFlushOne() {
-    if (_pendingMessages.isEmpty || onAIResponse == null) return;
+    if (_pendingMessages.isEmpty) return;
     if (_isAiBusy) return;
 
     final msg = _pendingMessages.removeAt(0);
+    final content = _danmakuContent(msg);
+    final agentCmd = _parseAgentCommand(content);
 
-    // Direction 2: viewer can dispatch a task directly to a WenzAgent employee.
-    if (_tryDispatchAgentTask(msg)) return;
+    // Agent 指令类弹幕由 WenzAgent 管线消费，绝不透传给主页面聊天 AI，
+    // 即使 Agent 任务开关关闭或桥接未就绪，也只丢弃而不落到主页面。
+    if (agentCmd != null) {
+      if (_agentTaskEnabled && onAgentTask != null) {
+        _isAiBusy = true;
+        notifyListeners();
+
+        onAgentTask!(agentCmd.targetName, agentCmd.taskText)
+            .then((_) => _afterAutoReplyHandled())
+            .catchError((_) => _afterAutoReplyHandled());
+      } else {
+        print(
+          '[Stream] Agent command dropped: enabled=$_agentTaskEnabled bridge=${onAgentTask != null}',
+        );
+        _afterAutoReplyHandled();
+      }
+      return;
+    }
+
+    // 普通弹幕自动回复（走主页面聊天 AI）。
+    if (onAIResponse == null) return;
 
     _isAiBusy = true;
     notifyListeners();
@@ -399,23 +420,19 @@ class LiveStreamProvider extends ChangeNotifier {
     final prompt = '你正在Bilibili进行直播。以下是观众的最新弹幕，请用自然活泼的语气回应（1-2句话即可）：\n\n$msg';
 
     onAIResponse!(prompt)
-        .then((_) {
-          _isAiBusy = false;
-          if (_replyMode == StreamReplyMode.slidingWindow) {
-            _refillSlidingWindow();
-          }
-          notifyListeners();
-          if (_pendingMessages.isNotEmpty) {
-            _startFastPoll();
-          }
-        })
-        .catchError((_) {
-          _isAiBusy = false;
-          notifyListeners();
-          if (_pendingMessages.isNotEmpty) {
-            _startFastPoll();
-          }
-        });
+        .then((_) => _afterAutoReplyHandled())
+        .catchError((_) => _afterAutoReplyHandled());
+  }
+
+  void _afterAutoReplyHandled() {
+    _isAiBusy = false;
+    if (_replyMode == StreamReplyMode.slidingWindow) {
+      _refillSlidingWindow();
+    }
+    notifyListeners();
+    if (_pendingMessages.isNotEmpty) {
+      _startFastPoll();
+    }
   }
 
   /// Strip the `【观众 xxx】` prefix from pending-message text.
@@ -423,37 +440,6 @@ class LiveStreamProvider extends ChangeNotifier {
     final idx = msg.lastIndexOf('】');
     if (idx >= 0 && idx + 1 < msg.length) return msg.substring(idx + 1).trim();
     return msg.trim();
-  }
-
-  bool _tryDispatchAgentTask(String msg) {
-    if (!_agentTaskEnabled || onAgentTask == null) return false;
-
-    final content = _danmakuContent(msg);
-    final parsed = _parseAgentCommand(content);
-    if (parsed == null) return false;
-
-    _isAiBusy = true;
-    notifyListeners();
-
-    onAgentTask!(parsed.targetName, parsed.taskText)
-        .then((_) {
-          _isAiBusy = false;
-          if (_replyMode == StreamReplyMode.slidingWindow) {
-            _refillSlidingWindow();
-          }
-          notifyListeners();
-          if (_pendingMessages.isNotEmpty) {
-            _startFastPoll();
-          }
-        })
-        .catchError((_) {
-          _isAiBusy = false;
-          notifyListeners();
-          if (_pendingMessages.isNotEmpty) {
-            _startFastPoll();
-          }
-        });
-    return true;
   }
 
   /// Parse `@agent 任务` / `!agent @员工 任务` style danmaku commands.
