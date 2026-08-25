@@ -248,6 +248,11 @@ class OverlayService {
   int _mouthIndex = 0;
   List<double> _mouthVolumes = const [];
 
+  /// Mouth timeline is pushed from Flutter to the native pop-out WebView2.
+  /// Script execution/rendering there has a small round-trip latency; this
+  /// lead (in seconds) makes the mouth start a little earlier to compensate.
+  static const double _visemeLeadSec = 0.10;
+
   /// Dynamic mouth scale multiplier.
   /// Live2D: amplifies precomputed RMS volumes in the animation timer.
   /// VRM: pushed to renderer as speakAnimation.weight via vrmSetMouthScale.
@@ -328,7 +333,9 @@ class OverlayService {
         return;
       }
 
-      final elapsed = DateTime.now().difference(start).inMilliseconds / 1000.0;
+      final elapsed =
+          DateTime.now().difference(start).inMilliseconds / 1000.0 +
+          _visemeLeadSec;
       Map<String, dynamic>? current;
       for (final f in frames) {
         final ft = (f['t'] as num?)?.toDouble() ?? 0;
