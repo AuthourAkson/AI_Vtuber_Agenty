@@ -10,7 +10,6 @@ import '../providers/multi_agent_provider.dart';
 import '../services/bilibili_chat_service.dart';
 import '../services/tts_service.dart';
 import '../services/overlay_service.dart';
-import '../services/live2d_server.dart';
 
 /// Bilibili直播Stream页面
 /// 三列布局: 连接面板+直播控制 / 弹幕实时列表 / Setlist编辑器
@@ -92,20 +91,18 @@ class _StreamScreenState extends State<StreamScreen> {
                   refAudioPath: s.gptSovitsRefAudio,
                   promptText: s.gptSovitsPromptText,
                   promptLang: s.gptSovitsPromptLang,
-                  onBeforePlay: (path, frames) {
-                    if (overlay.isPopoutRunning) {
-                      final audioUrl = Live2DServer.toModelUrl(path);
-                      overlay.pushAudioToPopout(
-                        audioUrl,
-                        frames.map((f) => f.toJson()).toList(),
-                      );
-                    }
-                  },
                 );
 
-            // Start mouth animation for Live2D (volume-based)
+            // Start mouth animation: VRM uses AIUEO timeline when available,
+            // otherwise falls back to volume-driven animation.
             if (overlay.isPopoutRunning) {
-              overlay.startMouthAnimation(volumes);
+              if (overlay.isPopout3D && visemeFrames.isNotEmpty) {
+                overlay.startVisemeTimelineAnimation(
+                  visemeFrames.map((f) => f.toJson()).toList(),
+                );
+              } else {
+                overlay.startMouthAnimation(volumes);
+              }
             }
 
             if (volumes.isNotEmpty && overlay.isPopoutRunning) {
@@ -127,21 +124,18 @@ class _StreamScreenState extends State<StreamScreen> {
 
             final overlay = OverlayService.instance;
             final (audioPath, volumes, visemeFrames) = await tts
-                .synthesizeWithVisemes(
-                  aiText,
-                  onBeforePlay: (path, frames) {
-                    if (overlay.isPopoutRunning) {
-                      final audioUrl = Live2DServer.toModelUrl(path);
-                      overlay.pushAudioToPopout(
-                        audioUrl,
-                        frames.map((f) => f.toJson()).toList(),
-                      );
-                    }
-                  },
-                );
+                .synthesizeWithVisemes(aiText);
 
+            // Start mouth animation: VRM uses AIUEO timeline when available,
+            // otherwise falls back to volume-driven animation.
             if (overlay.isPopoutRunning) {
-              overlay.startMouthAnimation(volumes);
+              if (overlay.isPopout3D && visemeFrames.isNotEmpty) {
+                overlay.startVisemeTimelineAnimation(
+                  visemeFrames.map((f) => f.toJson()).toList(),
+                );
+              } else {
+                overlay.startMouthAnimation(volumes);
+              }
             }
 
             if (volumes.isNotEmpty && overlay.isPopoutRunning) {

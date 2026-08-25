@@ -136,6 +136,9 @@ class OverlayService {
   /// Whether a Character Pop Out window is currently open.
   bool get isPopoutRunning => _popoutId > 0 && _ffi.isAlive(_popoutId);
 
+  /// Whether the current pop-out is a VRM (3D) window.
+  bool get isPopout3D => _popoutIs3D;
+
   /// Open a Character Pop Out window — normal window with Chroma Key bg.
   /// [use3D] — true for VRM, false for Live2D.
   /// [modelPath] — disk path to the model file.
@@ -271,9 +274,6 @@ class OverlayService {
     _stopMouthAnimation(); // cancel any previous animation
     if (!isPopoutRunning) return;
 
-    // VRM handles its own audio analysis via vrmPlayAudio — skip timer
-    if (_popoutIs3D) return;
-
     if (volumes.isEmpty) {
       // Fallback: simple sine wave (no audio analysis available)
       _startSineWaveAnimation();
@@ -303,6 +303,45 @@ class OverlayService {
       } else {
         executePopoutScript('setMouthOpen($value);');
       }
+    });
+  }
+
+  /// Drive the VRM pop-out with a precomputed A/I/U/E/O viseme timeline.
+  /// This uses Flutter's own timer and does not depend on Web Audio inside the
+  /// pop-out, which is more reliable across WebView2 versions.
+  void startVisemeTimelineAnimation(List<Map<String, dynamic>> frames) {
+    _stopMouthAnimation();
+    if (!isPopoutRunning || !_popoutIs3D || frames.isEmpty) return;
+
+    final start = DateTime.now();
+    _mouthTimer = Timer.periodic(const Duration(milliseconds: 33), (timer) {
+      if (!isPopoutRunning) {
+        _stopMouthAnimation();
+        return;
+      }
+
+      final elapsed = DateTime.now().difference(start).inMilliseconds / 1000.0;
+      Map<String, dynamic>? current;
+      for (final f in frames) {
+        final ft = (f['t'] as num?)?.toDouble() ?? 0;
+        if (ft >= elapsed) {
+          current = f;
+          break;
+        }
+      }
+
+      if (current == null) {
+        executePopoutScript('vrmSetVisemeValues(0,0,0,0,0);');
+        _stopMouthAnimation();
+        return;
+      }
+
+      final a = ((current['a'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+      final i = ((current['i'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+      final u = ((current['u'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+      final e = ((current['e'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+      final o = ((current['o'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+      executePopoutScript('vrmSetVisemeValues($a,$i,$u,$e,$o);');
     });
   }
 
@@ -341,6 +380,7 @@ class OverlayService {
     if (isPopoutRunning) {
       if (_popoutIs3D) {
         executePopoutScript('vrmSetVolume(0);');
+        executePopoutScript('vrmSetVisemeValues(0,0,0,0,0);');
       } else {
         executePopoutScript('setMouthOpen(0);');
       }
