@@ -85,17 +85,34 @@ class _StreamScreenState extends State<StreamScreen> {
               s.gptSovitsRefAudio.isNotEmpty) {
             // Use GPT-SoVITS for TTS with mouth sync (Live2D + VRM)
             final overlay = OverlayService.instance;
+            var visemeStarted = false;
             final (audioPath, volumes, visemeFrames) = await tts
                 .synthesizeGptSovitsWithVisemes(
                   aiText,
                   refAudioPath: s.gptSovitsRefAudio,
                   promptText: s.gptSovitsPromptText,
                   promptLang: s.gptSovitsPromptLang,
+                  onBeforePlay: (path, frames) {
+                    if (overlay.isPopoutRunning &&
+                        overlay.isPopout3D &&
+                        frames.isNotEmpty) {
+                      overlay.startVisemeTimelineAnimation(
+                        frames.map((f) => f.toJson()).toList(),
+                      );
+                      visemeStarted = true;
+                    }
+                  },
                 );
+
+            print(
+              '[Stream] GPT-SoVITS TTS done audioPath=$audioPath '
+              'volumes=${volumes.length} frames=${visemeFrames.length} '
+              'popout=${overlay.isPopoutRunning} is3D=${overlay.isPopout3D}',
+            );
 
             // Start mouth animation: VRM uses AIUEO timeline when available,
             // otherwise falls back to volume-driven animation.
-            if (overlay.isPopoutRunning) {
+            if (!visemeStarted && overlay.isPopoutRunning) {
               if (overlay.isPopout3D && visemeFrames.isNotEmpty) {
                 overlay.startVisemeTimelineAnimation(
                   visemeFrames.map((f) => f.toJson()).toList(),
@@ -123,12 +140,31 @@ class _StreamScreenState extends State<StreamScreen> {
             );
 
             final overlay = OverlayService.instance;
+            var visemeStarted = false;
             final (audioPath, volumes, visemeFrames) = await tts
-                .synthesizeWithVisemes(aiText);
+                .synthesizeWithVisemes(
+                  aiText,
+                  onBeforePlay: (path, frames) {
+                    if (overlay.isPopoutRunning &&
+                        overlay.isPopout3D &&
+                        frames.isNotEmpty) {
+                      overlay.startVisemeTimelineAnimation(
+                        frames.map((f) => f.toJson()).toList(),
+                      );
+                      visemeStarted = true;
+                    }
+                  },
+                );
+
+            print(
+              '[Stream] EdgeTTS TTS done audioPath=$audioPath '
+              'volumes=${volumes.length} frames=${visemeFrames.length} '
+              'popout=${overlay.isPopoutRunning} is3D=${overlay.isPopout3D}',
+            );
 
             // Start mouth animation: VRM uses AIUEO timeline when available,
             // otherwise falls back to volume-driven animation.
-            if (overlay.isPopoutRunning) {
+            if (!visemeStarted && overlay.isPopoutRunning) {
               if (overlay.isPopout3D && visemeFrames.isNotEmpty) {
                 overlay.startVisemeTimelineAnimation(
                   visemeFrames.map((f) => f.toJson()).toList(),

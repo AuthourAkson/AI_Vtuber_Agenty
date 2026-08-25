@@ -272,6 +272,10 @@ class OverlayService {
   /// so this timer is only used for Live2D.
   void startMouthAnimation([List<double> volumes = const []]) {
     _stopMouthAnimation(); // cancel any previous animation
+    print(
+      '[OverlayService] startMouthAnimation volumes=${volumes.length} '
+      'popout=$isPopoutRunning is3D=$_popoutIs3D',
+    );
     if (!isPopoutRunning) return;
 
     if (volumes.isEmpty) {
@@ -311,6 +315,10 @@ class OverlayService {
   /// pop-out, which is more reliable across WebView2 versions.
   void startVisemeTimelineAnimation(List<Map<String, dynamic>> frames) {
     _stopMouthAnimation();
+    print(
+      '[OverlayService] startVisemeTimelineAnimation frames=${frames.length} '
+      'popout=$isPopoutRunning is3D=$_popoutIs3D',
+    );
     if (!isPopoutRunning || !_popoutIs3D || frames.isEmpty) return;
 
     final start = DateTime.now();
