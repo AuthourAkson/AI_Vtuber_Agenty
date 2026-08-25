@@ -255,15 +255,15 @@ class TTSService {
           )
         : <MouthVisemeFrame>[];
 
-    onBeforePlay?.call(path, frames);
-
     try {
       await _player.stop();
       await _player.play(DeviceFileSource(path));
-    } catch (_) {
-      return (path, volumes, frames);
+    } catch (e) {
+      print('[TTSService] EdgeTTS playback failed: $e');
+      return (null, volumes, frames);
     }
 
+    onBeforePlay?.call(path, frames);
     return (path, volumes, frames);
   }
 
@@ -301,15 +301,16 @@ class TTSService {
           )
         : <MouthVisemeFrame>[];
 
-    onBeforePlay?.call(tempFile.path, frames);
-
     try {
       await _player.stop();
       await _player.play(DeviceFileSource(tempFile.path));
-      return (tempFile.path, volumes, frames);
-    } catch (_) {
-      return (null, <double>[], <MouthVisemeFrame>[]);
+    } catch (e) {
+      print('[TTSService] GPT-SoVITS playback failed: $e');
+      return (null, volumes, frames);
     }
+
+    onBeforePlay?.call(tempFile.path, frames);
+    return (tempFile.path, volumes, frames);
   }
 
   /// Stop current playback.
