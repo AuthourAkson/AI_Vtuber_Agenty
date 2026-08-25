@@ -37,10 +37,14 @@ class _StreamScreenState extends State<StreamScreen> {
     _streamProvider = context.read<LiveStreamProvider>();
     _agentManager = context.read<AgentManager>();
     _agentManager!.addListener(_onAgentManagerChanged);
-    _onAgentManagerChanged();
     // 提前初始化 WenzAgent 并刷新员工列表，确保第一波弹幕 @员工 就能被识别。
+    // 注意：必须 post-frame 再触发，不能在 initState/build 期间 notifyListeners。
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _agentManager!.ensureReady().then((_) => _syncAgentEmployeeNames());
+      _onAgentManagerChanged();
+      _agentManager!.ensureReady().then((_) {
+        _syncAgentEmployeeNames();
+        _onAgentManagerChanged();
+      });
     });
 
     // 用闭包捕获 ChatProvider 和 SettingsProvider，不依赖 mounted 状态
