@@ -69,35 +69,55 @@ class TTSService {
       return cacheFile.path;
     }
 
-    // Use edge-tts CLI
-    try {
-      final tempMp3 = p.join(_cacheDir, '${cacheKey}_temp.mp3');
-      final result = await Process.run('edge-tts', [
-        '--voice',
-        _voice,
-        '--text',
-        text,
-        '--pitch',
-        _pitch,
-        '--rate',
-        _rate,
-        '--volume',
-        _volume,
-        '--write-media',
-        tempMp3,
-      ], runInShell: true);
+    // Use edge-tts CLI with a few retries. edge-tts talks to Microsoft's
+    // online TTS endpoint, which can occasionally fail on unstable proxies.
+    final tempMp3 = p.join(_cacheDir, '${cacheKey}_temp.mp3');
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      final tempFile = File(tempMp3);
+      if (tempFile.existsSync()) tempFile.deleteSync();
 
-      if (result.exitCode == 0) {
-        final tempFile = File(tempMp3);
-        if (tempFile.existsSync()) {
-          // Move to cache
-          tempFile.copySync(cacheFile.path);
-          tempFile.deleteSync();
-          return cacheFile.path;
+      try {
+        print(
+          '[TTSService] edge-tts synthesize attempt $attempt '
+          '(${text.length} chars)',
+        );
+        final result = await Process.run('edge-tts', [
+          '--voice',
+          _voice,
+          '--text',
+          text,
+          '--pitch',
+          _pitch,
+          '--rate',
+          _rate,
+          '--volume',
+          _volume,
+          '--write-media',
+          tempMp3,
+        ], runInShell: true).timeout(const Duration(seconds: 25));
+
+        if (result.exitCode == 0) {
+          if (tempFile.existsSync()) {
+            // Move to cache
+            tempFile.copySync(cacheFile.path);
+            tempFile.deleteSync();
+            return cacheFile.path;
+          } else {
+            print('[TTSService] edge-tts attempt $attempt: no output file');
+          }
+        } else {
+          print(
+            '[TTSService] edge-tts attempt $attempt exit=${result.exitCode} '
+            'stderr=${(result.stderr as String?)?.substring(0, 200)}',
+          );
         }
+      } catch (e) {
+        print('[TTSService] edge-tts attempt $attempt failed: $e');
       }
-    } catch (_) {
-      // edge-tts not available — return null
+
+      if (attempt < 3) {
+        await Future.delayed(Duration(milliseconds: 400 * attempt));
+      }
     }
 
     return null;
@@ -236,6 +256,24 @@ class TTSService {
     return 0;
   }
 
+  /// Play a local audio file with one retry. Returns false when playback
+  /// could not be started (e.g. audioplayers native channel is busy).
+  Future<bool> _playFile(String path) async {
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await _player.stop();
+        await _player.play(DeviceFileSource(path));
+        return true;
+      } catch (e) {
+        print('[TTSService] play attempt $attempt failed: $e');
+        if (attempt < 2) {
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
+      }
+    }
+    return false;
+  }
+
   /// Synthesize + volumes + A/I/U/E/O viseme frames. TTS-provider agnostic:
   /// EdgeTTS path; GPT-SoVITS uses the same generator from the same text.
   Future<(String?, List<double>, List<MouthVisemeFrame>)> synthesizeWithVisemes(
@@ -255,11 +293,9 @@ class TTSService {
           )
         : <MouthVisemeFrame>[];
 
-    try {
-      await _player.stop();
-      await _player.play(DeviceFileSource(path));
-    } catch (e) {
-      print('[TTSService] EdgeTTS playback failed: $e');
+    final played = await _playFile(path);
+    if (!played) {
+      print('[TTSService] EdgeTTS playback failed after retries');
       return (null, volumes, frames);
     }
 
@@ -301,11 +337,9 @@ class TTSService {
           )
         : <MouthVisemeFrame>[];
 
-    try {
-      await _player.stop();
-      await _player.play(DeviceFileSource(tempFile.path));
-    } catch (e) {
-      print('[TTSService] GPT-SoVITS playback failed: $e');
+    final played = await _playFile(tempFile.path);
+    if (!played) {
+      print('[TTSService] GPT-SoVITS playback failed after retries');
       return (null, volumes, frames);
     }
 
