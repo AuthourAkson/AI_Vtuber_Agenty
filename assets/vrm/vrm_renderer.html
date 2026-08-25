@@ -327,12 +327,11 @@ function animate() {
   // A/I/U/E/O viseme timeline override (after mixer so it wins this frame).
   // Only active when a viseme timeline or explicit viseme values are set,
   // otherwise the volume-driven speakAnimation owns the mouth.
+  // NOTE: setValue takes the expression preset name ('aa', 'ih', ...), NOT
+  // the animation track name ('aa.weight').
   if (visemeActive && vrm && vrm.expressionManager) {
-    for (const [track, value] of Object.entries(visemeTargets)) {
-      const trackName = vrm.expressionManager.getExpressionTrackName(track);
-      if (trackName) {
-        vrm.expressionManager.setValue(trackName, Math.max(0, Math.min(1, value)));
-      }
+    for (const [preset, value] of Object.entries(visemeTargets)) {
+      vrm.expressionManager.setValue(preset, Math.max(0, Math.min(1, value)));
     }
   }
 
