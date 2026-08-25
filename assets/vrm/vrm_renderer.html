@@ -324,6 +324,16 @@ function animate() {
     if (vrm) vrm.update(delta);
   }
 
+  // A/I/U/E/O viseme timeline override (after mixer so it wins this frame)
+  if (vrm && vrm.expressionManager) {
+    for (const [track, value] of Object.entries(visemeTargets)) {
+      const trackName = vrm.expressionManager.getExpressionTrackName(track);
+      if (trackName) {
+        vrm.expressionManager.setValue(trackName, Math.max(0, Math.min(1, value)));
+      }
+    }
+  }
+
   // Speak animation driven by volume (binary play/stop, keyframes scaled by mouthScale)
   if (speakAnimation) {
     if (currentVolume > 0.02) {
@@ -416,8 +426,11 @@ let audioCtx = null;
 let analyserNode = null;
 let animFrameId = null;
 let sourceNode = null;
+let sourceStartTime = 0;
+let visemeTimeline = null;
+let visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
 
-window.vrmPlayAudio = async function(audioUrl) {
+window.vrmPlayAudio = async function(audioUrl, framesJson) {
   // Stop previous analysis
   if (sourceNode) {
     try { sourceNode.stop(); } catch(_) {}
@@ -469,11 +482,22 @@ window.vrmPlayAudio = async function(audioUrl) {
       analyserNode.getByteFrequencyData(dataArray);
       const sum = dataArray.reduce((a, b) => a + b, 0);
       currentVolume = sum / 15096; // exact LAV2 normalization
+
+      if (visemeTimeline) {
+        const elapsed = Math.max(0, audioCtx.currentTime - sourceStartTime);
+        visemeTargets = sampleVisemeTimeline(visemeTimeline, elapsed);
+        // Timeline drives the mouth; suppress old volume-based aa animation.
+        currentVolume = 0;
+      } else {
+        visemeTargets = {aa: currentVolume, ih: 0, ou: 0, ee: 0, oh: 0};
+      }
+
       // Check if source is still playing (0 = UNSCHEDULED, 1 = SCHEDULED, 2 = PLAYING, 3 = FINISHED)
       if (sourceNode && sourceNode.playbackState !== 3) {
         animFrameId = requestAnimationFrame(updateVolume);
       } else {
         currentVolume = 0;
+        visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
       }
     };
 
@@ -483,6 +507,10 @@ window.vrmPlayAudio = async function(audioUrl) {
       if (animFrameId) cancelAnimationFrame(animFrameId);
     };
 
+    if (framesJson) {
+      vrmSetVisemeTimeline(framesJson);
+    }
+    sourceStartTime = audioCtx.currentTime;
     sourceNode.start(0);
     updateVolume();
     console.log('[VRM] Analysis started for:', audioUrl);
@@ -491,6 +519,49 @@ window.vrmPlayAudio = async function(audioUrl) {
     currentVolume = 0;
   }
 };
+
+window.vrmSetVisemeTimeline = function(framesJson) {
+  visemeTimeline = typeof framesJson === 'string' ? JSON.parse(framesJson) : (framesJson || null);
+  if (!visemeTimeline || visemeTimeline.length === 0) {
+    visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
+  }
+};
+
+window.vrmSetVisemeValues = function(a, i, u, e, o) {
+  visemeTimeline = null;
+  visemeTargets = {
+    aa: Number(a) || 0,
+    ih: Number(i) || 0,
+    ou: Number(u) || 0,
+    ee: Number(e) || 0,
+    oh: Number(o) || 0,
+  };
+};
+
+function sampleVisemeTimeline(frames, t) {
+  if (!frames || frames.length === 0) return {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
+  if (t <= frames[0].t) return frameToTargets(frames[0]);
+  for (let i = 1; i < frames.length; i++) {
+    const prev = frames[i - 1];
+    const cur = frames[i];
+    if (t <= cur.t) {
+      const span = Math.max(cur.t - prev.t, 0.0001);
+      const k = Math.max(0, Math.min(1, (t - prev.t) / span));
+      return {
+        aa: prev.a + (cur.a - prev.a) * k,
+        ih: prev.i + (cur.i - prev.i) * k,
+        ou: prev.u + (cur.u - prev.u) * k,
+        ee: prev.e + (cur.e - prev.e) * k,
+        oh: prev.o + (cur.o - prev.o) * k,
+      };
+    }
+  }
+  return frameToTargets(frames[frames.length - 1]);
+}
+
+function frameToTargets(f) {
+  return {aa: f.a || 0, ih: f.i || 0, ou: f.u || 0, ee: f.e || 0, oh: f.o || 0};
+}
 
 window.vrmSetBackground = function(colorHex) {
   if (!colorHex || colorHex === 'transparent') {

@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' show Color;
 import 'live2d_overlay_ffi.dart';
 import 'live2d_server.dart';
 
 /// 角色透明Overlay窗口服务
-/// 
+///
 /// 底层是原生C++窗口(WebView2)，支持:
 /// - 透明背景 (WS_EX_NOREDIRECTIONBITMAP + DWM per-pixel alpha)
 /// - 始终置顶 (WS_EX_TOPMOST)
@@ -47,7 +48,8 @@ class OverlayService {
     // 构建URL: renderer.html + model参数
     final modelUrl = Live2DServer.toModelUrl(modelPath);
     final encodedModel = Uri.encodeComponent(modelUrl);
-    final url = 'http://localhost:${Live2DServer.port}'
+    final url =
+        'http://localhost:${Live2DServer.port}'
         '/live2d_web/renderer.html'
         '?model=$encodedModel'
         '&scale=$scale'
@@ -77,7 +79,8 @@ class OverlayService {
 
     final vrmUrl = Live2DServer.toModelUrl(modelPath);
     final encodedModel = Uri.encodeComponent(vrmUrl);
-    final url = 'http://localhost:${Live2DServer.port}'
+    final url =
+        'http://localhost:${Live2DServer.port}'
         '/vrm_web/vrm_renderer.html'
         '?model=$encodedModel'
         '&scale=$scale';
@@ -158,9 +161,9 @@ class OverlayService {
     final modelUrl = Live2DServer.toModelUrl(modelPath);
     final bgHex = backgroundColor != null
         ? (backgroundColor.value & 0xFFFFFF)
-            .toRadixString(16)
-            .padLeft(6, '0')
-            .toUpperCase()
+              .toRadixString(16)
+              .padLeft(6, '0')
+              .toUpperCase()
         : null;
 
     String url;
@@ -168,7 +171,8 @@ class OverlayService {
       url = 'http://localhost:${Live2DServer.port}/vrm_web/vrm_renderer.html';
     } else {
       final encodedModel = Uri.encodeComponent(modelUrl);
-      url = 'http://localhost:${Live2DServer.port}'
+      url =
+          'http://localhost:${Live2DServer.port}'
           '/live2d_web/renderer.html'
           '?model=$encodedModel'
           '&scale=$scale'
@@ -216,9 +220,12 @@ class OverlayService {
 
   /// Update pop-out background color.
   void setPopoutBackground(Color color) {
-    final hex = '#${(color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    final hex =
+        '#${(color.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
     executePopoutScript("setBackground('$hex');");
-    executePopoutScript("vrmSetBackground('$hex');"); // VRM too (no-op if not VRM)
+    executePopoutScript(
+      "vrmSetBackground('$hex');",
+    ); // VRM too (no-op if not VRM)
   }
 
   /// Close the Character Pop Out.
@@ -310,8 +317,11 @@ class OverlayService {
         return;
       }
       phase += 0.2 + random.nextDouble() * 0.4;
-      final value = ((sin(phase) * 0.5 + 0.5) * 0.85 + random.nextDouble() * 0.15)
-          .clamp(0.0, 1.0);
+      final value =
+          ((sin(phase) * 0.5 + 0.5) * 0.85 + random.nextDouble() * 0.15).clamp(
+            0.0,
+            1.0,
+          );
 
       if (_popoutIs3D) {
         executePopoutScript('vrmSetVolume($value);');
@@ -343,11 +353,21 @@ class OverlayService {
   /// Push TTS audio URL to the pop-out renderer for real-time analysis.
   /// VRM: injects vrmPlayAudio(url) → Web Audio API → currentVolume → speak anim.
   /// Live2D: no-op (Live2D uses the Dart volume timer instead).
-  void pushAudioToPopout(String audioUrl) {
+  void pushAudioToPopout(
+    String audioUrl, [
+    List<Map<String, dynamic>>? visemeFrames,
+  ]) {
     if (!isPopoutRunning) return;
     if (_popoutIs3D) {
-      final safeUrl = audioUrl.replaceAll("'", "\\'");
-      executePopoutScript("vrmPlayAudio('$safeUrl');");
+      final safeUrl = audioUrl.replaceAll('\\', '\\').replaceAll("'", "\'");
+      if (visemeFrames != null && visemeFrames.isNotEmpty) {
+        final framesJson = jsonEncode(
+          visemeFrames,
+        ).replaceAll('\\', '\\').replaceAll("'", "\'");
+        executePopoutScript("vrmPlayAudio('$safeUrl', '$framesJson');");
+      } else {
+        executePopoutScript("vrmPlayAudio('$safeUrl');");
+      }
     }
   }
 }

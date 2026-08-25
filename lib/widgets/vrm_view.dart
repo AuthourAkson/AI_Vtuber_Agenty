@@ -41,10 +41,10 @@ class VrmView extends StatefulWidget {
   });
 
   @override
-  State<VrmView> createState() => _VrmViewState();
+  State<VrmView> createState() => VrmViewState();
 }
 
-class _VrmViewState extends State<VrmView> {
+class VrmViewState extends State<VrmView> {
   InAppWebViewController? _controller;
   bool _ready = false;
   bool _loading = true;
@@ -85,11 +85,9 @@ class _VrmViewState extends State<VrmView> {
     final modelUrl = Live2DServer.toModelUrl(path);
     debugPrint('[VrmView] Loading model: $modelUrl');
 
-    final escapedUrl = modelUrl
-        .replaceAll('\\', '\\\\')
-        .replaceAll("'", "\\'");
+    final escapedUrl = modelUrl.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
     await _controller!.evaluateJavascript(
-      source: "vrmLoadModel('$escapedUrl')"
+      source: "vrmLoadModel('$escapedUrl')",
     );
     _loadedModelPath = path;
   }
@@ -99,9 +97,7 @@ class _VrmViewState extends State<VrmView> {
     if (_controller == null || !_ready) return;
     final color = widget.backgroundColor ?? ShadTheme.of(context).background;
     final hex = '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
-    await _controller!.evaluateJavascript(
-      source: "vrmSetBackground('$hex')"
-    );
+    await _controller!.evaluateJavascript(source: "vrmSetBackground('$hex')");
   }
 
   /// Set speak volume for mouth animation (0.0 ~ 1.0)
@@ -109,8 +105,42 @@ class _VrmViewState extends State<VrmView> {
     if (_controller == null || !_ready) return;
     if ((volume - _currentVolume).abs() < 0.01 && volume < 0.01) return;
     _currentVolume = volume;
+    await _controller!.evaluateJavascript(source: 'vrmSetVolume($volume)');
+  }
+
+  /// Drive A/I/U/E/O expression values directly (0.0 ~ 1.0 each).
+  Future<void> setVisemeValues(
+    double a,
+    double i,
+    double u,
+    double e,
+    double o,
+  ) async {
+    if (_controller == null || !_ready) return;
     await _controller!.evaluateJavascript(
-      source: 'vrmSetVolume($volume)'
+      source: 'vrmSetVisemeValues($a, $i, $u, $e, $o)',
+    );
+  }
+
+  /// Feed a sampled viseme timeline (frames with t/a/i/u/e/o) into the renderer.
+  /// The renderer interpolates the frames by audio time.
+  Future<void> setVisemeTimeline(List<Map<String, dynamic>> frames) async {
+    if (_controller == null || !_ready || frames.isEmpty) return;
+    final js = jsonEncode(frames);
+    await _controller!.evaluateJavascript(source: 'vrmSetVisemeTimeline($js)');
+  }
+
+  /// Start silent audio analysis with viseme timeline in the WebView.
+  Future<void> playAudioWithVisemes(
+    String audioUrl,
+    List<Map<String, dynamic>> frames,
+  ) async {
+    if (_controller == null || !_ready) return;
+    final safeUrl = audioUrl.replaceAll('\\', '\\').replaceAll("'", "\'");
+    final js = jsonEncode(frames);
+    final safeFrames = js.replaceAll('\\', '\\').replaceAll("'", "\'");
+    await _controller!.evaluateJavascript(
+      source: "vrmPlayAudio('$safeUrl', '$safeFrames')",
     );
   }
 
@@ -121,13 +151,16 @@ class _VrmViewState extends State<VrmView> {
   }
 
   /// Play a named VRM animation (.vrma file)
-  Future<void> playAnimation(String animationUrl, {String type = 'gesture'}) async {
+  Future<void> playAnimation(
+    String animationUrl, {
+    String type = 'gesture',
+  }) async {
     if (_controller == null || !_ready) return;
     final escaped = animationUrl
         .replaceAll('\\', '\\\\')
         .replaceAll("'", "\\'");
     await _controller!.evaluateJavascript(
-      source: "vrmPlayAnimation('$escaped', '$type')"
+      source: "vrmPlayAnimation('$escaped', '$type')",
     );
   }
 
@@ -138,74 +171,74 @@ class _VrmViewState extends State<VrmView> {
         // Background color Container (WebView2 on Windows can't do true transparency)
         Container(color: widget.backgroundColor ?? Colors.transparent),
         InAppWebView(
-            key: const ValueKey('vrm_webview'),
-            initialUrlRequest: URLRequest(url: WebUri(_htmlUrl)),
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              transparentBackground: true,
-              allowContentAccess: true,
-              mediaPlaybackRequiresUserGesture: false,
-              javaScriptCanOpenWindowsAutomatically: false,
-              // Allow loading Three.js + VRM from CDN
-              allowUniversalAccessFromFileURLs: true,
-              // Allow CORS for model file loading
-              disableDefaultErrorPage: true,
-            ),
-            onWebViewCreated: (controller) {
-              _controller = controller;
-              controller.addJavaScriptHandler(
-                handlerName: 'onVrmEvent',
-                callback: (args) {
-                  if (args.isNotEmpty) {
-                    try {
-                      final event = VrmEvent.fromJson(args[0] as String);
-                      _handleEvent(event);
-                    } catch (e) {
-                      debugPrint('[VrmView] Event parse error: $e');
-                    }
-                  }
-                },
-              );
-            },
-            onLoadStop: (controller, url) async {
-              // Poll window.__vrmReady until JS module finishes loading
-              _pollVrmReady(controller);
-            },
-            onConsoleMessage: (controller, msg) {
-              debugPrint('[VRM JS] ${msg.message}');
-            },
-            onReceivedError: (controller, request, error) {
-              debugPrint('[VrmView] WebView error: ${error.description}');
-            },
+          key: const ValueKey('vrm_webview'),
+          initialUrlRequest: URLRequest(url: WebUri(_htmlUrl)),
+          initialSettings: InAppWebViewSettings(
+            javaScriptEnabled: true,
+            transparentBackground: true,
+            allowContentAccess: true,
+            mediaPlaybackRequiresUserGesture: false,
+            javaScriptCanOpenWindowsAutomatically: false,
+            // Allow loading Three.js + VRM from CDN
+            allowUniversalAccessFromFileURLs: true,
+            // Allow CORS for model file loading
+            disableDefaultErrorPage: true,
           ),
-          if (_loading)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(
-                      color: ShadTheme.of(context).primary,
-                      strokeWidth: 2,
+          onWebViewCreated: (controller) {
+            _controller = controller;
+            controller.addJavaScriptHandler(
+              handlerName: 'onVrmEvent',
+              callback: (args) {
+                if (args.isNotEmpty) {
+                  try {
+                    final event = VrmEvent.fromJson(args[0] as String);
+                    _handleEvent(event);
+                  } catch (e) {
+                    debugPrint('[VrmView] Event parse error: $e');
+                  }
+                }
+              },
+            );
+          },
+          onLoadStop: (controller, url) async {
+            // Poll window.__vrmReady until JS module finishes loading
+            _pollVrmReady(controller);
+          },
+          onConsoleMessage: (controller, msg) {
+            debugPrint('[VRM JS] ${msg.message}');
+          },
+          onReceivedError: (controller, request, error) {
+            debugPrint('[VrmView] WebView error: ${error.description}');
+          },
+        ),
+        if (_loading)
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    color: ShadTheme.of(context).primary,
+                    strokeWidth: 2,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Initializing VRM...',
+                    style: TextStyle(
+                      color: ShadTheme.of(context).mutedForeground,
+                      fontSize: 12,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Initializing VRM...',
-                      style: TextStyle(
-                        color: ShadTheme.of(context).mutedForeground,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-        ],
+          ),
+      ],
     );
   }
 

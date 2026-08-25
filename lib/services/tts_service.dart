@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 import 'storage_service.dart';
+import 'mouth_viseme_generator.dart';
 
 /// TTS service using edge-tts CLI (subprocess).
 /// Audio cached in D:\\AiVtuber_Agent_profile\\tts_cache\\
@@ -38,12 +39,7 @@ class TTSService {
   void setVoice(String v) => _voice = v;
 
   /// Set EdgeTTS parameters.
-  void setParams({
-    String? voice,
-    String? pitch,
-    String? rate,
-    String? volume,
-  }) {
+  void setParams({String? voice, String? pitch, String? rate, String? volume}) {
     if (voice != null) _voice = voice;
     if (pitch != null) _pitch = pitch;
     if (rate != null) _rate = rate;
@@ -76,18 +72,20 @@ class TTSService {
     // Use edge-tts CLI
     try {
       final tempMp3 = p.join(_cacheDir, '${cacheKey}_temp.mp3');
-      final result = await Process.run(
-        'edge-tts',
-        [
-          '--voice', _voice,
-          '--text', text,
-          '--pitch', _pitch,
-          '--rate', _rate,
-          '--volume', _volume,
-          '--write-media', tempMp3,
-        ],
-        runInShell: true,
-      );
+      final result = await Process.run('edge-tts', [
+        '--voice',
+        _voice,
+        '--text',
+        text,
+        '--pitch',
+        _pitch,
+        '--rate',
+        _rate,
+        '--volume',
+        _volume,
+        '--write-media',
+        tempMp3,
+      ], runInShell: true);
 
       if (result.exitCode == 0) {
         final tempFile = File(tempMp3);
@@ -125,8 +123,10 @@ class TTSService {
   /// Volume values are [0.0, 1.0] at ~50ms intervals (20 FPS).
   /// [onBeforePlay] is called after synthesis but before playback starts —
   /// gives VRM pop-out a head start on fetching/decoding the audio.
-  Future<(String?, List<double>)> synthesizeWithVolumes(String text,
-      {void Function(String path)? onBeforePlay}) async {
+  Future<(String?, List<double>)> synthesizeWithVolumes(
+    String text, {
+    void Function(String path)? onBeforePlay,
+  }) async {
     final path = await synthesizeToFile(text);
     if (path == null) return (null, <double>[]);
 
@@ -155,11 +155,16 @@ class TTSService {
       final result = await Process.run(
         'ffmpeg',
         [
-          '-i', audioPath,
-          '-f', 's16le',
-          '-acodec', 'pcm_s16le',
-          '-ar', '16000',
-          '-ac', '1',
+          '-i',
+          audioPath,
+          '-f',
+          's16le',
+          '-acodec',
+          'pcm_s16le',
+          '-ar',
+          '16000',
+          '-ac',
+          '1',
           'pipe:1',
         ],
         stdoutEncoding: null, // raw bytes
@@ -201,6 +206,109 @@ class TTSService {
     }
   }
 
+  /// Detect a language family for viseme generation from the spoken text.
+  String _detectMouthLanguage(String text) {
+    final hasCjk = RegExp(r'[一-龥]').hasMatch(text);
+    if (hasCjk) return 'zh-CN';
+    final hasKana = RegExp(r'[぀-ヿ]').hasMatch(text);
+    if (hasKana) return 'ja-JP';
+    return 'en-US';
+  }
+
+  /// Get audio duration in seconds using ffprobe.
+  Future<double> getAudioDurationSec(String audioPath) async {
+    try {
+      final result = await Process.run('ffprobe', [
+        '-v',
+        'error',
+        '-show_entries',
+        'format=duration',
+        '-of',
+        'default=noprint_wrappers=1:nokey=1',
+        audioPath,
+      ], runInShell: true);
+      final text = (result.stdout as String? ?? '').trim();
+      if (text.isNotEmpty) {
+        final v = double.tryParse(text.split('\n').first);
+        if (v != null) return v;
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Synthesize + volumes + A/I/U/E/O viseme frames. TTS-provider agnostic:
+  /// EdgeTTS path; GPT-SoVITS uses the same generator from the same text.
+  Future<(String?, List<double>, List<MouthVisemeFrame>)> synthesizeWithVisemes(
+    String text, {
+    void Function(String path)? onBeforePlay,
+  }) async {
+    final path = await synthesizeToFile(text);
+    if (path == null) return (null, <double>[], <MouthVisemeFrame>[]);
+
+    final volumes = await computeVolumeSequence(path);
+    final duration = await getAudioDurationSec(path);
+    final frames = duration > 0
+        ? await MouthVisemeGenerator.instance.generate(
+            text: text,
+            durationSec: duration,
+            language: _detectMouthLanguage(text),
+          )
+        : <MouthVisemeFrame>[];
+
+    onBeforePlay?.call(path);
+
+    try {
+      await _player.stop();
+      await _player.play(DeviceFileSource(path));
+    } catch (_) {
+      return (path, volumes, frames);
+    }
+
+    return (path, volumes, frames);
+  }
+
+  /// GPT-SoVITS + volumes + A/I/U/E/O viseme frames.
+  Future<(String?, List<double>, List<MouthVisemeFrame>)>
+  synthesizeGptSovitsWithVisemes(
+    String text, {
+    String textLang = 'zh',
+    required String refAudioPath,
+    String promptText = '',
+    String promptLang = 'zh',
+  }) async {
+    final bytes = await synthesizeGptSovits(
+      text: text,
+      textLang: textLang,
+      refAudioPath: refAudioPath,
+      promptText: promptText,
+      promptLang: promptLang,
+    );
+    if (bytes == null || bytes.isEmpty) {
+      return (null, <double>[], <MouthVisemeFrame>[]);
+    }
+
+    final tempFile = File(p.join(_cacheDir, 'gpt_sovits_temp.wav'));
+    tempFile.writeAsBytesSync(bytes);
+
+    final volumes = await computeVolumeSequence(tempFile.path);
+    final duration = await getAudioDurationSec(tempFile.path);
+    final frames = duration > 0
+        ? await MouthVisemeGenerator.instance.generate(
+            text: text,
+            durationSec: duration,
+            language: _detectMouthLanguage(text),
+          )
+        : <MouthVisemeFrame>[];
+
+    try {
+      await _player.stop();
+      await _player.play(DeviceFileSource(tempFile.path));
+      return (tempFile.path, volumes, frames);
+    } catch (_) {
+      return (null, <double>[], <MouthVisemeFrame>[]);
+    }
+  }
+
   /// Stop current playback.
   Future<void> stop() async {
     try {
@@ -226,11 +334,9 @@ class TTSService {
   /// List available edge-tts voices.
   Future<List<Map<String, String>>> listVoices() async {
     try {
-      final result = await Process.run(
-        'edge-tts',
-        ['--list-voices'],
-        runInShell: true,
-      );
+      final result = await Process.run('edge-tts', [
+        '--list-voices',
+      ], runInShell: true);
       if (result.exitCode == 0) {
         final lines = (result.stdout as String).split('\n');
         final voices = <Map<String, String>>[];
@@ -278,30 +384,116 @@ class TTSService {
 
   List<Map<String, String>> _defaultVoices() {
     return [
-      {'shortName': 'zh-CN-XiaoxiaoNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoxiao (晓晓)'},
-      {'shortName': 'zh-CN-YunxiNeural', 'locale': 'zh-CN', 'displayName': 'Yunxi (云希)'},
-      {'shortName': 'zh-CN-YunyangNeural', 'locale': 'zh-CN', 'displayName': 'Yunyang (云扬)'},
-      {'shortName': 'zh-CN-XiaoyiNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoyi (晓伊)'},
-      {'shortName': 'zh-CN-YunjianNeural', 'locale': 'zh-CN', 'displayName': 'Yunjian (云健)'},
-      {'shortName': 'zh-CN-XiaochenNeural', 'locale': 'zh-CN', 'displayName': 'Xiaochen (晓辰)'},
-      {'shortName': 'zh-CN-XiaohanNeural', 'locale': 'zh-CN', 'displayName': 'Xiaohan (晓涵)'},
-      {'shortName': 'zh-CN-XiaomengNeural', 'locale': 'zh-CN', 'displayName': 'Xiaomeng (晓萌)'},
-      {'shortName': 'zh-CN-XiaomoNeural', 'locale': 'zh-CN', 'displayName': 'Xiaomo (晓墨)'},
-      {'shortName': 'zh-CN-XiaoqiuNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoqiu (晓秋)'},
-      {'shortName': 'zh-CN-XiaoruiNeural', 'locale': 'zh-CN', 'displayName': 'Xiaorui (晓睿)'},
-      {'shortName': 'zh-CN-XiaoshuangNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoshuang (晓双)'},
-      {'shortName': 'zh-CN-XiaoxuanNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoxuan (晓萱)'},
-      {'shortName': 'zh-CN-XiaoyanNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoyan (晓颜)'},
-      {'shortName': 'zh-CN-XiaoyouNeural', 'locale': 'zh-CN', 'displayName': 'Xiaoyou (晓悠)'},
-      {'shortName': 'zh-CN-XiaozhenNeural', 'locale': 'zh-CN', 'displayName': 'Xiaozhen (晓臻)'},
-      {'shortName': 'en-US-JennyNeural', 'locale': 'en-US', 'displayName': 'Jenny'},
-      {'shortName': 'en-US-AriaNeural', 'locale': 'en-US', 'displayName': 'Aria'},
-      {'shortName': 'ja-JP-NanamiNeural', 'locale': 'ja-JP', 'displayName': 'Nanami'},
-      {'shortName': 'ja-JP-KeitaNeural', 'locale': 'ja-JP', 'displayName': 'Keita'},
+      {
+        'shortName': 'zh-CN-XiaoxiaoNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoxiao (晓晓)',
+      },
+      {
+        'shortName': 'zh-CN-YunxiNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Yunxi (云希)',
+      },
+      {
+        'shortName': 'zh-CN-YunyangNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Yunyang (云扬)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoyiNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoyi (晓伊)',
+      },
+      {
+        'shortName': 'zh-CN-YunjianNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Yunjian (云健)',
+      },
+      {
+        'shortName': 'zh-CN-XiaochenNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaochen (晓辰)',
+      },
+      {
+        'shortName': 'zh-CN-XiaohanNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaohan (晓涵)',
+      },
+      {
+        'shortName': 'zh-CN-XiaomengNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaomeng (晓萌)',
+      },
+      {
+        'shortName': 'zh-CN-XiaomoNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaomo (晓墨)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoqiuNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoqiu (晓秋)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoruiNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaorui (晓睿)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoshuangNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoshuang (晓双)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoxuanNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoxuan (晓萱)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoyanNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoyan (晓颜)',
+      },
+      {
+        'shortName': 'zh-CN-XiaoyouNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaoyou (晓悠)',
+      },
+      {
+        'shortName': 'zh-CN-XiaozhenNeural',
+        'locale': 'zh-CN',
+        'displayName': 'Xiaozhen (晓臻)',
+      },
+      {
+        'shortName': 'en-US-JennyNeural',
+        'locale': 'en-US',
+        'displayName': 'Jenny',
+      },
+      {
+        'shortName': 'en-US-AriaNeural',
+        'locale': 'en-US',
+        'displayName': 'Aria',
+      },
+      {
+        'shortName': 'ja-JP-NanamiNeural',
+        'locale': 'ja-JP',
+        'displayName': 'Nanami',
+      },
+      {
+        'shortName': 'ja-JP-KeitaNeural',
+        'locale': 'ja-JP',
+        'displayName': 'Keita',
+      },
     ];
   }
 
-  String _cacheKey(String text, String voice, String pitch, String rate, String volume) {
+  String _cacheKey(
+    String text,
+    String voice,
+    String pitch,
+    String rate,
+    String volume,
+  ) {
     final combined = '$text|$voice|$pitch|$rate|$volume';
     final hash = combined.hashCode.toRadixString(16);
     return 'tts_${voice}_$hash.mp3';
@@ -320,21 +512,43 @@ class TTSService {
   // ── Windows Job Object (auto-kill subprocess on parent exit) ──
 
   static final DynamicLibrary _kernel32 = DynamicLibrary.open('kernel32.dll');
-  static final Pointer<IntPtr> Function(Pointer<Utf16> name, Pointer<Utf16> name2) _CreateJobObjectW =
-      _kernel32.lookupFunction<Pointer<IntPtr> Function(Pointer<Utf16>, Pointer<Utf16>),
-          Pointer<IntPtr> Function(Pointer<Utf16>, Pointer<Utf16>)>('CreateJobObjectW');
-  static final int Function(Pointer<IntPtr> job, int infoClass, Pointer<Void> info, int infoLen) _SetInformationJobObject =
-      _kernel32.lookupFunction<Int32 Function(Pointer<IntPtr>, Uint32, Pointer<Void>, Uint32),
-          int Function(Pointer<IntPtr>, int, Pointer<Void>, int)>('SetInformationJobObject');
-  static final int Function(Pointer<IntPtr> job, Pointer<Void> process) _AssignProcessToJobObject =
-      _kernel32.lookupFunction<Int32 Function(Pointer<IntPtr>, Pointer<Void>),
-          int Function(Pointer<IntPtr>, Pointer<Void>)>('AssignProcessToJobObject');
-  static final Pointer<Void> Function(int access, int inherit, int pid) _OpenProcess =
-      _kernel32.lookupFunction<Pointer<Void> Function(Uint32, Int32, Uint32),
-          Pointer<Void> Function(int, int, int)>('OpenProcess');
-  static final int Function(Pointer<Void> handle) _CloseHandle =
-      _kernel32.lookupFunction<Int32 Function(Pointer<Void>),
-          int Function(Pointer<Void>)>('CloseHandle');
+  static final Pointer<IntPtr> Function(
+    Pointer<Utf16> name,
+    Pointer<Utf16> name2,
+  )
+  _CreateJobObjectW = _kernel32
+      .lookupFunction<
+        Pointer<IntPtr> Function(Pointer<Utf16>, Pointer<Utf16>),
+        Pointer<IntPtr> Function(Pointer<Utf16>, Pointer<Utf16>)
+      >('CreateJobObjectW');
+  static final int Function(
+    Pointer<IntPtr> job,
+    int infoClass,
+    Pointer<Void> info,
+    int infoLen,
+  )
+  _SetInformationJobObject = _kernel32
+      .lookupFunction<
+        Int32 Function(Pointer<IntPtr>, Uint32, Pointer<Void>, Uint32),
+        int Function(Pointer<IntPtr>, int, Pointer<Void>, int)
+      >('SetInformationJobObject');
+  static final int Function(Pointer<IntPtr> job, Pointer<Void> process)
+  _AssignProcessToJobObject = _kernel32
+      .lookupFunction<
+        Int32 Function(Pointer<IntPtr>, Pointer<Void>),
+        int Function(Pointer<IntPtr>, Pointer<Void>)
+      >('AssignProcessToJobObject');
+  static final Pointer<Void> Function(int access, int inherit, int pid)
+  _OpenProcess = _kernel32
+      .lookupFunction<
+        Pointer<Void> Function(Uint32, Int32, Uint32),
+        Pointer<Void> Function(int, int, int)
+      >('OpenProcess');
+  static final int Function(Pointer<Void> handle) _CloseHandle = _kernel32
+      .lookupFunction<
+        Int32 Function(Pointer<Void>),
+        int Function(Pointer<Void>)
+      >('CloseHandle');
 
   static Pointer<IntPtr>? _gptJobHandle;
 
@@ -345,7 +559,10 @@ class TTSService {
     // JOBOBJECT_EXTENDED_LIMIT_INFORMATION: LimitFlags at offset 16
     const int JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
     final ptr = calloc<Uint8>(144);
-    ptr[16] = 0x00; ptr[17] = 0x20; ptr[18] = 0x00; ptr[19] = 0x00;
+    ptr[16] = 0x00;
+    ptr[17] = 0x20;
+    ptr[18] = 0x00;
+    ptr[19] = 0x00;
     _SetInformationJobObject(_gptJobHandle!, 9, ptr.cast<Void>(), 144);
     calloc.free(ptr);
   }
@@ -355,7 +572,11 @@ class TTSService {
     if (_gptJobHandle == null) return;
     const int PROCESS_SET_QUOTA = 0x0100;
     const int PROCESS_TERMINATE = 0x0001;
-    final hProcess = _OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+    final hProcess = _OpenProcess(
+      PROCESS_SET_QUOTA | PROCESS_TERMINATE,
+      0,
+      pid,
+    );
     if (hProcess != nullptr) {
       _AssignProcessToJobObject(_gptJobHandle!, hProcess);
       _CloseHandle(hProcess);
@@ -400,7 +621,7 @@ class TTSService {
         'custom:\n'
         '  device: $device\n'
         '  is_half: $isHalf\n'
-        '  version: v2\n'
+        '  version: v2\n',
       );
 
       _gptSovitsProcess = await Process.start(
@@ -419,18 +640,18 @@ class TTSService {
           .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen((line) {
-        _gptStdoutBuf.add(line);
-        if (_gptStdoutBuf.length > 50) _gptStdoutBuf.removeAt(0);
-      });
+            _gptStdoutBuf.add(line);
+            if (_gptStdoutBuf.length > 50) _gptStdoutBuf.removeAt(0);
+          });
 
       // Capture stderr for debugging
       _gptSovitsProcess!.stderr
           .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen((line) {
-        _gptStderrBuf.add(line);
-        if (_gptStderrBuf.length > 50) _gptStderrBuf.removeAt(0);
-      });
+            _gptStderrBuf.add(line);
+            if (_gptStderrBuf.length > 50) _gptStderrBuf.removeAt(0);
+          });
 
       // Capture exit future once (single-subscription)
       final exitFuture = _gptSovitsProcess!.exitCode;
@@ -468,7 +689,9 @@ class TTSService {
         _gptSovitsProcess?.kill();
         _gptSovitsProcess = null;
         final tail = _buildGptErrorTail();
-        final output = tail.isNotEmpty ? '\n$tail' : '\n(no stdout/stderr output)';
+        final output = tail.isNotEmpty
+            ? '\n$tail'
+            : '\n(no stdout/stderr output)';
         return 'Server not responding after 60s.$output\n\nTry running manually: cd "$projectPath" && $pythonPath api_v2.py -p $port';
       }
     } catch (e) {
@@ -500,8 +723,11 @@ class TTSService {
   Future<bool> _checkGptSovitsAlive() async {
     try {
       final port = Uri.parse(_gptSovitsBaseUrl).port;
-      final socket = await Socket.connect('127.0.0.1', port,
-        timeout: Duration(seconds: 3));
+      final socket = await Socket.connect(
+        '127.0.0.1',
+        port,
+        timeout: Duration(seconds: 3),
+      );
       socket.destroy();
       return true;
     } catch (_) {
@@ -525,33 +751,43 @@ class TTSService {
     String mediaType = 'wav',
   }) async {
     // Strip emoji to avoid GBK encoding errors in GPT-SoVITS Python server
-    final cleanText = text.replaceAll(RegExp(r'[\u{1F600}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{200D}\u{200C}]', unicode: true), '');
+    final cleanText = text.replaceAll(
+      RegExp(
+        r'[\u{1F600}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FEFF}\u{200D}\u{200C}]',
+        unicode: true,
+      ),
+      '',
+    );
     final uri = Uri.parse('$_gptSovitsBaseUrl/tts');
-    print('[GPT-SoVITS] TTS request:\n  text=${cleanText.length>50 ? "${cleanText.substring(0,50)}..." : cleanText}\n  ref_audio=$refAudioPath\n  prompt_text=$promptText\n  prompt_lang=$promptLang');
-    final body = utf8.encode(jsonEncode({
-      'text': cleanText,
-      'text_lang': textLang,
-      'ref_audio_path': refAudioPath,
-      'aux_ref_audio_paths': [],
-      'prompt_text': promptText,
-      'prompt_lang': promptLang,
-      'top_k': topK,
-      'top_p': topP,
-      'temperature': temperature,
-      'text_split_method': 'cut0',
-      'batch_size': batchSize,
-      'batch_threshold': 0.75,
-      'split_bucket': true,
-      'speed_factor': speed,
-      'fragment_interval': 0.3,
-      'seed': -1,
-      'media_type': mediaType,
-      'streaming_mode': false,
-      'parallel_infer': true,
-      'repetition_penalty': 1.35,
-      'sample_steps': 32,
-      'super_sampling': false,
-    }));
+    print(
+      '[GPT-SoVITS] TTS request:\n  text=${cleanText.length > 50 ? "${cleanText.substring(0, 50)}..." : cleanText}\n  ref_audio=$refAudioPath\n  prompt_text=$promptText\n  prompt_lang=$promptLang',
+    );
+    final body = utf8.encode(
+      jsonEncode({
+        'text': cleanText,
+        'text_lang': textLang,
+        'ref_audio_path': refAudioPath,
+        'aux_ref_audio_paths': [],
+        'prompt_text': promptText,
+        'prompt_lang': promptLang,
+        'top_k': topK,
+        'top_p': topP,
+        'temperature': temperature,
+        'text_split_method': 'cut0',
+        'batch_size': batchSize,
+        'batch_threshold': 0.75,
+        'split_bucket': true,
+        'speed_factor': speed,
+        'fragment_interval': 0.3,
+        'seed': -1,
+        'media_type': mediaType,
+        'streaming_mode': false,
+        'parallel_infer': true,
+        'repetition_penalty': 1.35,
+        'sample_steps': 32,
+        'super_sampling': false,
+      }),
+    );
 
     final client = HttpClient();
     try {
@@ -651,7 +887,9 @@ class TTSService {
   Future<bool> setGptWeights(String weightsPath) async {
     final client = HttpClient();
     try {
-      final uri = Uri.parse('$_gptSovitsBaseUrl/set_gpt_weights?weights_path=${Uri.encodeComponent(weightsPath)}');
+      final uri = Uri.parse(
+        '$_gptSovitsBaseUrl/set_gpt_weights?weights_path=${Uri.encodeComponent(weightsPath)}',
+      );
       final request = await client.getUrl(uri);
       final response = await request.close().timeout(Duration(seconds: 5));
       return response.statusCode == 200;
@@ -666,7 +904,9 @@ class TTSService {
   Future<bool> setSovitsWeights(String weightsPath) async {
     final client = HttpClient();
     try {
-      final uri = Uri.parse('$_gptSovitsBaseUrl/set_sovits_weights?weights_path=${Uri.encodeComponent(weightsPath)}');
+      final uri = Uri.parse(
+        '$_gptSovitsBaseUrl/set_sovits_weights?weights_path=${Uri.encodeComponent(weightsPath)}',
+      );
       final request = await client.getUrl(uri);
       final response = await request.close().timeout(Duration(seconds: 5));
       return response.statusCode == 200;
@@ -693,7 +933,8 @@ class TTSService {
       Map<String, dynamic> meta = {};
       if (metaFile.existsSync()) {
         try {
-          meta = jsonDecode(metaFile.readAsStringSync()) as Map<String, dynamic>;
+          meta =
+              jsonDecode(metaFile.readAsStringSync()) as Map<String, dynamic>;
         } catch (_) {}
       }
 
@@ -747,11 +988,13 @@ class TTSService {
     // Write metadata
     final metaPath = p.join(voiceDir.path, 'metadata.json');
     try {
-      File(metaPath).writeAsStringSync(jsonEncode({
-        'prompt_text': promptText,
-        'prompt_lang': promptLang,
-        'audio_file': 'reference.wav',
-      }));
+      File(metaPath).writeAsStringSync(
+        jsonEncode({
+          'prompt_text': promptText,
+          'prompt_lang': promptLang,
+          'audio_file': 'reference.wav',
+        }),
+      );
     } catch (e) {
       return 'Failed to write metadata: $e';
     }
@@ -804,21 +1047,31 @@ class TTSService {
     }
 
     // 1. Pretrained models (base models under GPT_SoVITS/)
-    final pretrainedDir = Directory(p.join(projectPath, 'GPT_SoVITS', 'pretrained_models'));
+    final pretrainedDir = Directory(
+      p.join(projectPath, 'GPT_SoVITS', 'pretrained_models'),
+    );
     scan(pretrainedDir);
 
     // 2. Fine-tuned GPT models (versioned weight dirs at project root)
     for (final subdir in [
-      'GPT_weights', 'GPT_weights_v2', 'GPT_weights_v3',
-      'GPT_weights_v4', 'GPT_weights_v2Pro', 'GPT_weights_v2ProPlus',
+      'GPT_weights',
+      'GPT_weights_v2',
+      'GPT_weights_v3',
+      'GPT_weights_v4',
+      'GPT_weights_v2Pro',
+      'GPT_weights_v2ProPlus',
     ]) {
       scan(Directory(p.join(projectPath, subdir)));
     }
 
     // 3. Fine-tuned SoVITS models
     for (final subdir in [
-      'SoVITS_weights', 'SoVITS_weights_v2', 'SoVITS_weights_v3',
-      'SoVITS_weights_v4', 'SoVITS_weights_v2Pro', 'SoVITS_weights_v2ProPlus',
+      'SoVITS_weights',
+      'SoVITS_weights_v2',
+      'SoVITS_weights_v3',
+      'SoVITS_weights_v4',
+      'SoVITS_weights_v2Pro',
+      'SoVITS_weights_v2ProPlus',
     ]) {
       scan(Directory(p.join(projectPath, subdir)));
     }

@@ -58,5 +58,6 @@ flutter:
     - assets/vrm/lib/three-vrm/lib/
     - assets/vrm/lib/three-vrm-animation/lib/
     - assets/python/
+    - assets/data/
 
 

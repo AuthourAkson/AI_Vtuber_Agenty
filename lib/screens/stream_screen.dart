@@ -82,18 +82,21 @@ class _StreamScreenState extends State<StreamScreen> {
               s.gptSovitsRefAudio.isNotEmpty) {
             // Use GPT-SoVITS for TTS with mouth sync (Live2D + VRM)
             final overlay = OverlayService.instance;
-            final (audioPath, volumes) = await tts
-                .synthesizeGptSovitsWithVolumes(
+            final (audioPath, volumes, visemeFrames) = await tts
+                .synthesizeGptSovitsWithVisemes(
                   aiText,
                   refAudioPath: s.gptSovitsRefAudio,
                   promptText: s.gptSovitsPromptText,
                   promptLang: s.gptSovitsPromptLang,
                 );
 
-            // Push audio URL to VRM pop-out (Web Audio API analysis)
+            // Push audio URL + A/I/U/E/O viseme timeline to VRM pop-out.
             if (audioPath != null && overlay.isPopoutRunning) {
               final audioUrl = Live2DServer.toModelUrl(audioPath);
-              overlay.pushAudioToPopout(audioUrl);
+              overlay.pushAudioToPopout(
+                audioUrl,
+                visemeFrames.map((f) => f.toJson()).toList(),
+              );
             }
 
             // Start mouth animation for Live2D (volume-based)
@@ -119,15 +122,17 @@ class _StreamScreenState extends State<StreamScreen> {
             );
 
             final overlay = OverlayService.instance;
-            final (audioPath, volumes) = await tts.synthesizeWithVolumes(
-              aiText,
-              onBeforePlay: (path) {
-                if (overlay.isPopoutRunning) {
-                  final audioUrl = Live2DServer.toModelUrl(path);
-                  overlay.pushAudioToPopout(audioUrl);
-                }
-              },
-            );
+            final (audioPath, volumes, visemeFrames) = await tts
+                .synthesizeWithVisemes(aiText);
+
+            // Push audio URL + A/I/U/E/O viseme timeline to VRM pop-out.
+            if (audioPath != null && overlay.isPopoutRunning) {
+              final audioUrl = Live2DServer.toModelUrl(audioPath);
+              overlay.pushAudioToPopout(
+                audioUrl,
+                visemeFrames.map((f) => f.toJson()).toList(),
+              );
+            }
 
             if (overlay.isPopoutRunning) {
               overlay.startMouthAnimation(volumes);
