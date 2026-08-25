@@ -240,7 +240,7 @@ class TTSService {
   /// EdgeTTS path; GPT-SoVITS uses the same generator from the same text.
   Future<(String?, List<double>, List<MouthVisemeFrame>)> synthesizeWithVisemes(
     String text, {
-    void Function(String path)? onBeforePlay,
+    void Function(String path, List<MouthVisemeFrame> frames)? onBeforePlay,
   }) async {
     final path = await synthesizeToFile(text);
     if (path == null) return (null, <double>[], <MouthVisemeFrame>[]);
@@ -255,7 +255,7 @@ class TTSService {
           )
         : <MouthVisemeFrame>[];
 
-    onBeforePlay?.call(path);
+    onBeforePlay?.call(path, frames);
 
     try {
       await _player.stop();
@@ -275,6 +275,7 @@ class TTSService {
     required String refAudioPath,
     String promptText = '',
     String promptLang = 'zh',
+    void Function(String path, List<MouthVisemeFrame> frames)? onBeforePlay,
   }) async {
     final bytes = await synthesizeGptSovits(
       text: text,
@@ -299,6 +300,8 @@ class TTSService {
             language: _detectMouthLanguage(text),
           )
         : <MouthVisemeFrame>[];
+
+    onBeforePlay?.call(tempFile.path, frames);
 
     try {
       await _player.stop();

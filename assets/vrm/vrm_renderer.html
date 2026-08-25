@@ -324,8 +324,10 @@ function animate() {
     if (vrm) vrm.update(delta);
   }
 
-  // A/I/U/E/O viseme timeline override (after mixer so it wins this frame)
-  if (vrm && vrm.expressionManager) {
+  // A/I/U/E/O viseme timeline override (after mixer so it wins this frame).
+  // Only active when a viseme timeline or explicit viseme values are set,
+  // otherwise the volume-driven speakAnimation owns the mouth.
+  if (visemeActive && vrm && vrm.expressionManager) {
     for (const [track, value] of Object.entries(visemeTargets)) {
       const trackName = vrm.expressionManager.getExpressionTrackName(track);
       if (trackName) {
@@ -429,6 +431,7 @@ let sourceNode = null;
 let sourceStartTime = 0;
 let visemeTimeline = null;
 let visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
+let visemeActive = false;
 
 window.vrmPlayAudio = async function(audioUrl, framesJson) {
   // Stop previous analysis
@@ -486,10 +489,12 @@ window.vrmPlayAudio = async function(audioUrl, framesJson) {
       if (visemeTimeline) {
         const elapsed = Math.max(0, audioCtx.currentTime - sourceStartTime);
         visemeTargets = sampleVisemeTimeline(visemeTimeline, elapsed);
+        visemeActive = true;
         // Timeline drives the mouth; suppress old volume-based aa animation.
         currentVolume = 0;
       } else {
         visemeTargets = {aa: currentVolume, ih: 0, ou: 0, ee: 0, oh: 0};
+        visemeActive = false;
       }
 
       // Check if source is still playing (0 = UNSCHEDULED, 1 = SCHEDULED, 2 = PLAYING, 3 = FINISHED)
@@ -498,12 +503,15 @@ window.vrmPlayAudio = async function(audioUrl, framesJson) {
       } else {
         currentVolume = 0;
         visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
+        visemeActive = false;
       }
     };
 
     sourceNode.onended = () => {
       console.log('[VRM] Audio analysis complete');
       currentVolume = 0;
+      visemeActive = false;
+      visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
       if (animFrameId) cancelAnimationFrame(animFrameId);
     };
 
@@ -524,6 +532,9 @@ window.vrmSetVisemeTimeline = function(framesJson) {
   visemeTimeline = typeof framesJson === 'string' ? JSON.parse(framesJson) : (framesJson || null);
   if (!visemeTimeline || visemeTimeline.length === 0) {
     visemeTargets = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
+    visemeActive = false;
+  } else {
+    visemeActive = true;
   }
 };
 
@@ -536,6 +547,7 @@ window.vrmSetVisemeValues = function(a, i, u, e, o) {
     ee: Number(e) || 0,
     oh: Number(o) || 0,
   };
+  visemeActive = true;
 };
 
 function sampleVisemeTimeline(frames, t) {
