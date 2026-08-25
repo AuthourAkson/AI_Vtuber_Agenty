@@ -60,4 +60,8 @@ flutter:
     - assets/python/
     - assets/data/
 
-
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+      name_windows: winsqlite3
