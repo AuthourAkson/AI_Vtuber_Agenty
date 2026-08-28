@@ -1,74 +1,93 @@
 # AI VTuber Agent
 
-A Flutter desktop application that reproduces and extends LocalAIVtuber2 — a fully local AI-powered virtual YouTuber. Frontend visuals are a 1:1 replica of LAV2's React + shadcn/ui design.
+A Flutter Desktop (Windows) AI VTuber application that combines a live 2D/3D character, Bilibili streaming, TTS voice, and a WenzAgent multi-agent network. It reproduces the LocalAIVtuber2 React + shadcn/ui visual language and extends it with employee personas, viewer-dispatched agent tasks, and A/I/U/E/O viseme lip-sync.
+
+## Screenshots
+
+| Page | Preview |
+|------|---------|
+| Home / Chat | ![Home](image/HomePage.png) |
+| Character (Live2D / VRM) | ![Character](image/CharacterPage.png) |
+| TTS | ![TTS](image/TTsPage.png) |
+| Memory | ![Memory](image/MemoryPage.png) |
+| Stream | ![Stream](image/StreamPage.png) |
+| Pipeline Monitor | ![Pipeline](image/StreamPipelinePage.png) |
+| Multi-Agent Employee Session | ![Agent Chat](image/MultiAgent-EmployeeSession.png) |
+| Multi-Agent Settings | ![Agent Settings](image/MultiAgent-Settings.png) |
+| Multi-Agent Data Sync | ![Data Sync](image/MultiAgent-Settings-DataSync.png) |
+| MarkdownText IDE 1 | ![MarkdownText 1](image/MarkdownTextPage1.png) |
+| MarkdownText IDE 2 | ![MarkdownText 2](image/MarkdownTextPage2.png) |
+| MarkdownText IDE 3 | ![MarkdownText 3](image/MarkdownTextPage3.png) |
 
 ## Features
 
-- **10-page sidebar navigation** with collapsible shadcn-style sidebar (200px/48px)
-- **Chat interface** with streaming LLM responses (direct OpenAI-compatible API)
-- **Markdown rendering** — bold, italic, lists, links, blockquotes
-- **Code blocks** with dark-themed styling + native text selection for copy
-- **LaTeX math** — inline `$...$` and display `$$...$$` via flutter_math_fork
-- **Chemical formulas** — `\ce{H2O}` auto-converted to subscripts/superscripts
-- **Session management** — slide-in panel with create/load/delete sessions
-- **LLM Monitor** — real-time system/vision/ocr/memory context display
-- **Live2D character** display with WebView + PixiJS rendering
-- **TTS voice synthesis** (edge-tts via subprocess)
-- **Screenshot vision + OCR**
-- **Local memory search** (keyword-based, no external DB)
-- **Pipeline Monitor** — real-time LLM→TTS→Audio task tracking
-- **Settings side panel** — API config, system prompt, monitor toggle
+### AI Chat & Character
+- Streaming LLM chat with OpenAI-compatible APIs (SiliconFlow / OpenRouter / Anthropic / Google / Ollama)
+- Live2D and VRM 3D character rendering with WebView + PixiJS / Three.js
+- Edge-TTS and GPT-SoVITS voice synthesis with local audio cache
+- OBS pop-out character window with chroma-key background
+- A/I/U/E/O viseme mouth animation for VRM, plus volume-based mouth animation for Live2D
 
-## Visual Design
+### Bilibili Streaming
+- Bilibili danmaku polling, auto reply, sliding-window / sequential reply modes
+- Setlist editor (system prompt / AI reply / chat / sing nodes)
+- Viewer can dispatch tasks directly to WenzAgent employees:
+  - `@employee-name task`
+  - `@agent task`
+  - `!agent task`
+- Agent confirm requests are announced by TTS and can be answered by viewers via danmaku (`1` / `2` / option name)
 
-The UI is a faithful replica of LocalAIVtuber2's **shadcn/ui dark theme**:
+### WenzAgent Multi-Agent
+- LAN device / employee management
+- AI employee personas: bind each employee to a Live2D or VRM avatar, voice, and system prompt
+- Confirm tool requests rendered as clickable choice cards
+- Agent replies can be spoken with the employee's bound voice
+- WebDAV / local-folder data sync with incremental content-hash upload
 
-| Element | Color |
-|---------|-------|
-| Background | `#1A1A1A` |
-| Cards | `#252525` |
-| Secondary | `#2E2E2E` |
-| Borders | `rgba(255,255,255,0.1)` |
-| Text | `#F5F5F5` / `#9E9E9E` |
-| Corner radius | 6px (md), 8px (lg), 10px (input) |
+### MarkdownText IDE
+- Project document workspace with file tree, Markdown editor, and AI task center
+- Employees / Claude Code CLI executors
+- Structured streaming task events with tool progress
 
-## Stack
+### Other
+- Vision screenshot OCR
+- Local memory search
+- Pipeline monitor
+- 16 shadcn-style theme presets
+- i18n: English / Simplified Chinese / Traditional Chinese
 
-- **Frontend:** Flutter Desktop (Windows) — Material 3
-- **Window:** bitsdojo_window (frameless) + flutter_acrylic (Mica blur)
+## Tech Stack
+
+- **Frontend:** Flutter Desktop (Windows)
 - **State:** Provider (ChangeNotifier)
-- **Markdown:** flutter_markdown + flutter_math_fork (LaTeX)
-- **Backend:** Self-contained Dart services (no external server needed)
-- **Storage:** `D:\AiVtuber_Agent_profile\` (Steam-style local saves)
+- **UI:** ShadTheme (shadcn/ui style, Material 3 base)
+- **Window:** bitsdojo_window + flutter_acrylic
+- **Live2D:** PixiJS + Live2D Cubism SDK
+- **VRM:** Three.js + @pixiv/three-vrm
+- **TTS:** edge-tts CLI / GPT-SoVITS HTTP API + ffmpeg
+- **Multi-Agent:** WenzAgent Dart SDK (LAN)
+- **Storage:** `D:\AiVtuber_Agent_profile\` local JSON/SQLite data
 
 ## Quick Start
 
 ```bash
-# Windows terminal:
 cd D:\AiVtuber_Agent
 flutter pub get
 flutter run -d windows
 ```
 
-## Architecture
-
-The app is **fully self-contained** — no Python FastAPI backend required:
-
-- **LLM** — Direct HTTP/SSE to OpenAI-compatible APIs
-- **TTS** — edge-tts CLI subprocess, audio cached locally
-- **Memory** — Keyword-matching across local session JSON files
-- **Storage** — `D:\AiVtuber_Agent_profile\settings.json` + `sessions/*.json`
-
-Configure API relay in the **Settings side panel** (⚙) on the Chat page.
-
 ## Profile Data
 
 ```
 D:\AiVtuber_Agent_profile\
-├── settings.json          # LLM config, TTS voice, character settings
-├── sessions\               # Chat session JSON files
-├── tts_cache\              # Cached TTS audio files
-└── screenshots\            # Captured screenshots
+├── settings.json              # LLM / TTS / character settings
+├── sessions\                   # Chat session JSON files
+├── tts_cache\                  # Cached TTS audio
+├── screenshots\                # Vision screenshots
+├── models\live2d\              # Live2D models
+├── models\vrm\                 # VRM models
+├── wenzagent\                  # WenzAgent SDK data
+└── wenzagent_profiles.json     # Multi-agent profiles + employee personas
 ```
 
 ## Development
@@ -76,5 +95,5 @@ D:\AiVtuber_Agent_profile\
 ```bash
 flutter pub get
 flutter run -d windows
-flutter build windows     # Release .exe
+flutter build windows --release
 ```
