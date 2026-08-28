@@ -15,6 +15,7 @@ class MdTitleBar extends StatelessWidget {
   final VoidCallback? onOpenAi;
   final VoidCallback? onOpenDocs;
   final VoidCallback? onToggleTheme;
+
   /// AI 面板是否显示（控制 AI 按钮高亮态，实现侧栏开关的视觉反馈）。
   final bool aiActive;
 
@@ -48,7 +49,7 @@ class MdTitleBar extends StatelessWidget {
                 Icon(Icons.auto_awesome, size: 14, color: theme.accent),
                 const SizedBox(width: 6),
                 Text(
-                  'wenzmark',
+                  'AgentMark',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -117,13 +118,7 @@ class _MenuLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 7),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: theme.muted,
-        ),
-      ),
+      child: Text(text, style: TextStyle(fontSize: 12, color: theme.muted)),
     );
   }
 }
@@ -223,7 +218,9 @@ class _ActionButtonState extends State<_ActionButton> {
               Icon(
                 widget.icon,
                 size: 12,
-                color: highlighted ? theme.accent : (_hovered ? theme.foreground : theme.muted),
+                color: highlighted
+                    ? theme.accent
+                    : (_hovered ? theme.foreground : theme.muted),
               ),
               const SizedBox(width: 4),
               Text(

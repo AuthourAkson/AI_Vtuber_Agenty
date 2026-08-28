@@ -51,7 +51,10 @@ class MdBottomStatusBar extends StatelessWidget {
           const SizedBox(width: 8),
           Icon(Icons.attach_file, size: 10, color: theme.faint),
           const SizedBox(width: 4),
-          Text(l10n.mdAllAttachments, style: TextStyle(fontSize: 10, color: theme.muted)),
+          Text(
+            l10n.mdAllAttachments,
+            style: TextStyle(fontSize: 10, color: theme.muted),
+          ),
           const SizedBox(width: 12),
           Text(
             dirty ? l10n.mdUnsaved : l10n.mdSaved,
@@ -65,23 +68,32 @@ class MdBottomStatusBar extends StatelessWidget {
           const SizedBox(width: 12),
           Icon(Icons.check_circle_outline, size: 10, color: theme.success),
           const SizedBox(width: 4),
-          Text('$taskCount${l10n.mdTasksSuffix}', style: TextStyle(fontSize: 10, color: theme.muted)),
+          Text(
+            '$taskCount${l10n.mdTasksSuffix}',
+            style: TextStyle(fontSize: 10, color: theme.muted),
+          ),
         ],
       ),
     );
   }
 
   String _breadcrumb() {
-    if (projectRoot.isEmpty) return 'wenzmark';
-    final parts = projectRoot.replaceAll('\\', '/').split('/').where((p) => p.isNotEmpty).toList();
-    final project = parts.isEmpty ? 'wenzmark' : parts.last;
+    if (projectRoot.isEmpty) return 'AgentMark';
+    final parts = projectRoot
+        .replaceAll('\\', '/')
+        .split('/')
+        .where((p) => p.isNotEmpty)
+        .toList();
+    final project = parts.isEmpty ? 'AgentMark' : parts.last;
     if (currentPath.isEmpty) return project;
     return '$project > ${currentPath.replaceAll('/', ' > ')}';
   }
 
   (int, int, int) _stats(String text) {
     final lines = text.isEmpty ? 0 : '\n'.allMatches(text).length + 1;
-    final words = text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
+    final words = text.trim().isEmpty
+        ? 0
+        : text.trim().split(RegExp(r'\s+')).length;
     return (lines, words, text.length);
   }
 }
