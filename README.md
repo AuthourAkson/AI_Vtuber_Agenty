@@ -1,5 +1,7 @@
 # AI VTuber Agent
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 A Flutter Desktop (Windows) AI VTuber application that combines a live 2D/3D character, Bilibili streaming, TTS voice, and a WenzAgent multi-agent network. It reproduces the LocalAIVtuber2 React + shadcn/ui visual language and extends it with employee personas, viewer-dispatched agent tasks, and A/I/U/E/O viseme lip-sync.
 
 ## Screenshots
@@ -18,6 +20,7 @@ A Flutter Desktop (Windows) AI VTuber application that combines a live 2D/3D cha
 | MarkdownText IDE 1 | ![MarkdownText 1](image/MarkdownTextPage1.png) |
 | MarkdownText IDE 2 | ![MarkdownText 2](image/MarkdownTextPage2.png) |
 | MarkdownText IDE 3 | ![MarkdownText 3](image/MarkdownTextPage3.png) |
+| MarkdownText IDE 4 | ![MarkdownText 4](image/MarkdownTextPage4.png) |
 
 ## Features
 
@@ -44,7 +47,7 @@ A Flutter Desktop (Windows) AI VTuber application that combines a live 2D/3D cha
 - Agent replies can be spoken with the employee's bound voice
 - WebDAV / local-folder data sync with incremental content-hash upload
 
-### MarkdownText IDE
+### MarkdownText IDE (AgentMark)
 - Project document workspace with file tree, Markdown editor, and AI task center
 - Employees / Claude Code CLI executors
 - Structured streaming task events with tool progress
