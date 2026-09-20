@@ -19,7 +19,7 @@ WenzAgent-based multi-agent collaboration system. Manages employee agents, LAN c
 ```
 AgentManager (ChangeNotifier)
   → WenzAgentService (SDK wrapper)
-    → WenzAgent SDK (D:/wenzagent-1.0.4/)
+    → AUAKAgent SDK (vendored: sdks/auakagent/, fork of wenzagent 1.0.4)
       → LAN discovery + P2P messaging
       → Skill management (GlobalSkillManager, SkillStore)
       → Agent sessions with tool calling
@@ -38,4 +38,4 @@ Each employee shows:
 - `lib/providers/multi_agent_provider.dart` — AgentManager state
 - `lib/services/wenzagent_service.dart` — SDK API wrapper
 - `lib/screens/multi_agent_appearance.dart` — Appearance settings
-- `pubspec.yaml` — wenzagent path dependency
+- `pubspec.yaml` — `auakagent` path dependency (`sdks/auakagent`)

@@ -15,8 +15,8 @@ import 'models/appearance_prefs.dart';
 // Switching presets changes the entire app look, not just accent.
 // ════════════════════════════════════════════════════════════
 
-/// Central app version — keep in sync with pubspec.yaml version field.
-const String kAppVersion = '1.0.0';
+// App version: single source of truth is `version:` in pubspec.yaml, read at
+// runtime by lib/services/app_version.dart (AppVersion.semver).
 
 class ThemePreset {
   final String label;

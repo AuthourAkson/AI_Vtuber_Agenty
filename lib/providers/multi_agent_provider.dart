@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:wenzagent/wenzagent.dart';
+import 'package:auakagent/auakagent.dart';
 import '../services/log_service.dart';
 import '../services/storage_service.dart';
 import '../services/tts_service.dart';

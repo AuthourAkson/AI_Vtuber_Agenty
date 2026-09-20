@@ -12,10 +12,14 @@ import 'providers/multi_agent_provider.dart';
 import 'providers/stream_provider.dart';
 import 'services/live2d_server.dart';
 import 'services/vrm_pet_bridge.dart';
+import 'services/app_version.dart';
 import 'providers/appearance_provider.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Resolve the app version from the bundled pubspec.yaml
+  await AppVersion.load();
 
   // Start Live2D HTTP file server
   await Live2DServer.start();

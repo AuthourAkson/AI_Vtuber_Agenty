@@ -36,9 +36,9 @@ dependencies:
   ffi: ^2.1.0
   desktop_multi_window: ^0.3.0
   window_manager: ^0.5.1
-  # WenzAgent multi-agent SDK
-  wenzagent:
-    path: D:/wenzagent-1.0.4
+  # AUAKAgent multi-agent SDK (vendored fork of wenzagent 1.0.4, lives in-repo)
+  auakagent:
+    path: sdks/auakagent
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +48,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    # Bundled so AppVersion can read the real `version:` at runtime
+    # (single source of truth — see lib/services/app_version.dart).
+    - pubspec.yaml
     - assets/
     - assets/live2d/
     - assets/vrm/

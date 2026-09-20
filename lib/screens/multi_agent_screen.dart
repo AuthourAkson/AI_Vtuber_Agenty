@@ -5,12 +5,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
-import 'package:wenzagent/wenzagent.dart';
+import 'package:auakagent/auakagent.dart';
 import '../app.dart';
 import '../providers/multi_agent_provider.dart';
 import '../providers/appearance_provider.dart';
 import 'package:flutter/services.dart';
 import '../services/wenzagent_service.dart';
+import '../services/app_version.dart';
 import '../services/log_service.dart';
 import '../services/sync_service.dart';
 import '../services/live2d_model_service.dart';
@@ -4254,7 +4255,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  l10n.aboutVersion.replaceAll(r'$version', kAppVersion),
+                  l10n.aboutVersion.replaceAll(r'$version', AppVersion.semver),
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -4316,7 +4317,7 @@ class _MultiAgentScreenState extends State<MultiAgentScreen> {
 
   Future<void> _checkForUpdate(AgentManager mgr) async {
     final l10n = AppLocalizations.of(context);
-    final currentVersion = 'v$kAppVersion';
+    final currentVersion = AppVersion.tagged;
     const repoApi =
         'https://api.github.com/repos/AuthourAkson/AI_Vtuber_Agenty/releases/latest';
 

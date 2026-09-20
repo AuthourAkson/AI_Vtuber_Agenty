@@ -29,3 +29,6 @@ prompt.md
 changes.md
 Sdk-Mcp-Changes.md
 .flutter-plugins-dependencies
+
+# Vendored SDKs (local only — not committed yet)
+sdks/auakagent/
