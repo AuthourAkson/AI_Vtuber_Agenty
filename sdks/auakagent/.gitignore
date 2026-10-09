@@ -1,0 +1,28 @@
+# Dependencies
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Build output
+dist/
+
+# Data
+data/
+
+# Test output
+test_output.*
+test_db/
+
+# AI test config (contains sensitive keys)
+config/ai_test_config.yaml

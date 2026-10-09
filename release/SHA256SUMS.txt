@@ -1,0 +1,2 @@
+d6e6128faccc8a44d84e8ef7d5acf909f8c11cf9ecacb53187eb6bc297360204  AiVtuber-Agent-v1.0.0-win-x64.zip
+d4b42bf17d74b84fec0ef1686ed97aeb941165d81bc198c78152ac276d43e2a7  auakagent-windows-x64.zip

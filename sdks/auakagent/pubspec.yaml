@@ -1,0 +1,63 @@
+# AUAKAgent — vendored fork of wenzagent 1.0.4 (package renamed to `auakagent`).
+# Upstream: https://github.com/lyming99/wenzagent (Apache-2.0)
+# Only the package name / entrypoint / self-imports differ from upstream; runtime
+# identifiers (wenzagent.db, LAN protocol strings, MCP client identity) are unchanged.
+name: auakagent
+description: Pure Dart library for LAN communication, RPC, and Agent management. (AUAKAgent fork of wenzagent)
+version: 1.0.0
+repository: https://github.com/lyming99/wenzagent
+homepage: https://github.com/lyming99/wenzagent
+issue_tracker: https://github.com/lyming99/wenzagent/issues
+topics:
+  - agent
+  - llm
+  - lan
+  - rpc
+  - ai
+  - mcp
+
+license: Apache-2.0
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  uuid: ^4.5.1
+  shelf: ^1.4.0
+  shelf_web_socket: ^2.0.0
+  web_socket_channel: ^3.0.1
+  crypto: ^3.0.6
+  path: ^1.9.0
+  yaml: ^3.1.2
+  meta: ^1.12.0
+  # SQLite for local storage (纯 Dart FFI)
+  sqlite3: ^3.2.0
+  # High-performance async interface for SQLite
+  sqlite_async: ^0.14.2
+  # LLM unified interface
+  llm_dart:
+    git:
+      url: https://github.com/lyming99/llm_dart.git
+  # Pinned to the exact version the host app locks: dio >= 5.10 adds
+  # DioExceptionType.transformTimeout, which makes the switch statements in
+  # llm_dart non-exhaustive and breaks AOT compilation of bin/auak_*.dart.
+  dio: 5.9.2
+  # MCP SDK
+  mcp_dart: ^2.1.0
+  # Mutex / synchronized lock
+  synchronized: ^3.4.0
+  # ZIP archive
+  archive: ^4.0.4
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6
+
+# Link against the Windows system SQLite (winsqlite3.dll) instead of downloading
+# a prebuilt binary from GitHub — required for offline / restricted-network builds
+# of bin/auak_server.dart and bin/auak_client.dart (mirrors the host app's config).
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+      name_windows: winsqlite3

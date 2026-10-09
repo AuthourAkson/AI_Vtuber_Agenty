@@ -30,5 +30,13 @@ changes.md
 Sdk-Mcp-Changes.md
 .flutter-plugins-dependencies
 
-# Vendored SDKs (local only — not committed yet)
-sdks/auakagent/
+# Release packaging output (binaries ship as GitHub Release assets, not in git)
+release/_build/
+release/*.zip
+
+# Node deps of other bundled SDKs
+sdks/*/node_modules/
+
+# Agent/IDE local settings (per-machine, may hold personal paths — never publish)
+.claude/settings.local.json
+settings.local.json

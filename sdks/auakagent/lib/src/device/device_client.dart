@@ -1,0 +1,1812 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:archive/archive.dart';
+import 'package:meta/meta.dart';
+import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
+
+import '../agent/client/cached_agent_proxy.dart';
+import '../agent/entity/entity.dart';
+import '../agent/rpc/agent_rpc_config.dart';
+import '../agent/notification/agent_notification_hub.dart';
+import '../host/host_rpc_methods.dart';
+import '../entity/lan_device_info.dart';
+import '../entity/lan_message.dart';
+import '../persistence/persistence.dart';
+import '../service/service.dart';
+import '../utils/logger.dart';
+import 'app_context.dart';
+import 'impl/async_lock.dart';
+import 'impl/data_sync_manager.dart';
+import 'impl/device_agent_manager.dart';
+import 'impl/device_config_manager.dart';
+import 'impl/device_connection_manager.dart';
+import 'impl/device_message_handler.dart';
+import 'impl/device_notification_manager.dart';
+import 'impl/device_registry.dart';
+import 'impl/device_rpc_handler.dart';
+import 'impl/device_state_holder.dart';
+import 'impl/employee_online_tracker.dart';
+
+/// DeviceClient 初始化配置
+///
+/// 包含数据库路径和连接参数等初始化所需的信息。
+/// host/port/topic 不传时，将从数据库配置表中自动读取。
+/// DeviceClient 配置
+///
+/// [storagePath] 是存储根路径（必填），用于推导其他路径：
+/// - db_path: {storagePath}/db
+/// - skill_path: {storagePath}/skills/folder
+///
+/// 如果需要覆盖默认推导路径，可单独传入 [dbPath] 或 [skillsDir]。
+class DeviceClientConfig {
+  /// 存储根路径（必填）
+  ///
+  /// 作为 db_path 和 skill_path 的前缀：
+  /// - db_path 默认: {storagePath}/db
+  /// - skill_path 默认: {storagePath}/skills/folder
+  final String storagePath;
+
+  /// 数据库存储路径（可选，默认 {storagePath}/db）
+  final String? dbPath;
+
+  /// Skill 文件夹存储路径（可选，默认 {storagePath}/skills/folder）
+  final String? skillsDir;
+
+  /// 服务器地址（可选，不传则从数据库配置读取）
+  final String? host;
+
+  /// 服务器端口，默认 9090
+  final int port;
+
+  /// 分组主题（可选）
+  final String? topic;
+
+  /// 设备名称（可选）
+  final String? deviceName;
+
+  const DeviceClientConfig({
+    required this.storagePath,
+    this.dbPath,
+    this.skillsDir,
+    this.host,
+    this.port = 9090,
+    this.topic,
+    this.deviceName,
+  });
+}
+
+/// 当前打开的会话状态
+class OpenSessionState {
+  final String employeeId;
+  final String? fromDeviceId;
+
+  const OpenSessionState({required this.employeeId, this.fromDeviceId});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OpenSessionState &&
+          employeeId == other.employeeId &&
+          fromDeviceId == other.fromDeviceId;
+
+  @override
+  int get hashCode => Object.hash(employeeId, fromDeviceId);
+}
+
+/// 设备连接状态
+enum DeviceConnectionState {
+  /// 已断开
+  disconnected,
+
+  /// 连接中
+  connecting,
+
+  /// 已连接
+  connected,
+
+  /// 重连中
+  reconnecting,
+}
+
+/// LAN消息处理器
+typedef LanMessageHandler = void Function(LanMessage message);
+
+/// 模型配置查询回调类型
+///
+/// 前端注册此回调，当其他设备通过 LAN RPC 查询本设备的模型配置时，
+/// 后端调用此回调从前端获取模型配置数据。
+///
+/// 返回 `List<Map<String, dynamic>>`，每条记录包含:
+///   - employeeId: String       员工ID
+///   - provider: String         提供商 (openai/anthropic/google/ollama/deepseek)
+///   - model: String            模型标识
+///   - apiKey: String?          API 密钥
+///   - baseUrl: String?         API 基础 URL
+///   - options: Map?            模型参数 (temperature, maxTokens, topP, stop)
+///   - organization: String?    组织 ID
+///   - compression: Map?        压缩配置
+///   - retry: Map?              重试配置
+///   - updateTime: int          更新时间戳 (millisecondsSinceEpoch)
+typedef ModelConfigQueryCallback = Future<List<Map<String, dynamic>>> Function();
+
+/// DeviceClient - 设备级统一入口
+///
+/// 核心概念：
+/// - deviceId 作为数据隔离标识
+/// - 员工绑定设备 = 员工在该设备上线
+/// - AgentProxy = 会话窗口代理，用于与员工对话
+/// - 数据同步通过LAN RPC自动实现
+///
+/// 业务操作通过暴露的Service属性访问：
+/// - employeeManager: 员工CRUD操作
+/// - sessionManager: 会话管理
+/// - skillManager: 技能管理
+/// - messageStore: 消息存储
+/// - configService: 员工配置管理（包含MCP配置）
+///
+/// 使用 [getInstance] 获取实例，用 [initialize] 初始化。
+///
+/// ```dart
+/// final client = DeviceClient.getInstance(deviceId);
+/// await client.initialize(DeviceClientConfig(
+///   storagePath: '/path/to/data',
+///   host: '192.168.1.100',
+///   port: 9090,
+/// ));
+/// await client.connect();
+/// ```
+class DeviceClient {
+  static final _log = Logger('DeviceClient');
+
+  final String _deviceId;
+  String? _deviceName;
+  String _host = '';
+  int _port = 9090;
+  String? _topic;
+  bool _initialized = false;
+
+  /// Skill 文件夹存储根路径，初始化时由 DeviceClientConfig 推导设置
+  String _skillsDir = '';
+
+  /// 获取 Skill 文件夹存储根路径
+  String get skillsDir => _skillsDir;
+
+  // ===== 模型配置查询回调 =====
+
+  /// 模型配置查询回调（由前端注册）
+  ///
+  /// 当其他设备通过 LAN RPC 查询本设备的模型配置时，
+  /// 调用此回调获取数据。
+  ///
+  /// **重要**：必须在调用 [connect] 之前通过 [setModelConfigQueryCallback] 注册。
+  /// 如果在 connect 之后注册，窗口期内的 RPC 请求将返回空列表。
+  ModelConfigQueryCallback? _onModelConfigQuery;
+
+  // ===== 远端模型配置缓存 =====
+
+  /// 远端设备模型配置缓存（按设备 ID 分组，仅内存缓存，不落库）
+  final Map<String, _ModelConfigCacheEntry> _remoteModelConfigCaches = {};
+
+  /// 缓存过期时间：5 分钟
+  static const _modelConfigCacheTTL = Duration(minutes: 5);
+
+  // ===== AppContext 依赖注入 =====
+
+  /// 获取关联的 AppContext（初始化后可用）
+  AppContext? get _ctx => AppContext.get(_deviceId);
+
+  // ===== 子模块懒加载引用（优先从 AppContext 获取） =====
+
+  DeviceConnectionManager get _connectionManager =>
+      _ctx?.connectionManager ?? DeviceConnectionManager.getInstance(_deviceId);
+
+  DeviceRegistry get _deviceRegistry =>
+      _ctx?.deviceRegistry ?? DeviceRegistry.getInstance(_deviceId);
+
+  DeviceConfigManager get _configManager =>
+      _ctx?.configManager ?? DeviceConfigManager.getInstance(_deviceId);
+
+  DataSyncManager get _dataSyncManager =>
+      _ctx?.dataSyncManager ?? DataSyncManager.getInstance(_deviceId);
+
+  EmployeeOnlineTracker get _onlineTracker =>
+      _ctx?.onlineTracker ?? EmployeeOnlineTracker.getInstance(_deviceId);
+
+  DeviceAgentManager get _agentManager =>
+      _ctx?.agentManager ?? DeviceAgentManager.getInstance(_deviceId);
+
+  DeviceNotificationManager get _notificationManager =>
+      _ctx?.notificationManager ??
+      DeviceNotificationManager.getInstance(_deviceId);
+
+  DeviceMessageHandler get _messageHandler =>
+      _ctx?.messageHandler ?? DeviceMessageHandler.getInstance(_deviceId);
+
+  DeviceStateHolder get _stateHolder =>
+      _ctx?.stateHolder ?? DeviceStateHolder.getInstance(_deviceId);
+
+  // ===== 基础服务 =====
+
+  EmployeeManager get _employeeManager =>
+      _ctx?.employeeManager ?? EmployeeManager.getInstance(_deviceId);
+
+  SessionManager get _sessionManager =>
+      _ctx?.sessionManager ?? SessionManager.getInstance(_deviceId);
+
+  MessageStoreService get _messageStoreService =>
+      _ctx?.messageStoreService ?? MessageStoreService.getInstance(_deviceId);
+
+  SkillManager get _skillManager =>
+      _ctx?.skillManager ?? SkillManager.getInstance(_deviceId);
+
+  EmployeeConfigService get _configService =>
+      _ctx?.employeeConfigService ??
+      EmployeeConfigService.getInstance(_deviceId);
+
+  GlobalSkillManager get _globalSkillManager =>
+      _ctx?.globalSkillManager ?? GlobalSkillManager.getInstance(_deviceId);
+
+  ProjectManager get _projectManager =>
+      ProjectManager.getInstance(_deviceId);
+
+  DeviceClient._({required String deviceId}) : _deviceId = deviceId;
+
+  // ===== 单例管理 =====
+
+  static final Map<String, DeviceClient> _instances = {};
+  static final Map<String, AsyncLock> _initLocks = {};
+
+  /// 获取实例（不存在则自动创建）
+  static DeviceClient getInstance(String deviceId) {
+    return _instances.putIfAbsent(
+      deviceId,
+      () => DeviceClient._(deviceId: deviceId),
+    );
+  }
+
+  /// 初始化配置（带锁，防止并发初始化）
+  ///
+  /// 统一初始化流程：
+  /// 1. 初始化数据库 [DatabaseManager]
+  /// 2. 创建 [AppContext] 依赖容器
+  /// 3. 读取数据库配置表（合并缺失的连接参数）
+  /// 4. 初始化所有关联子模块
+  Future<void> initialize(DeviceClientConfig config) async {
+    if (_initialized) return;
+    final lock = _initLocks.putIfAbsent(_deviceId, () => AsyncLock());
+    await lock.synchronized(() async {
+      if (_initialized) return;
+
+      // 1. 基于 storagePath 推导默认路径
+      final storagePath = config.storagePath;
+      final effectiveDbPath = config.dbPath ??
+          p.join(storagePath, 'db');
+      final effectiveSkillsDir = config.skillsDir ??
+          p.join(storagePath, 'skills', 'folder');
+
+      // 2. 确保目录存在
+      await _ensureDirExists(effectiveDbPath, 'dbPath');
+      await _ensureDirExists(effectiveSkillsDir, 'skillsDir');
+
+      // 3. 初始化数据库
+      await DatabaseManager.getInstance(
+        _deviceId,
+      ).initialize(storagePath: effectiveDbPath);
+
+      // 4. 创建 AppContext 依赖容器
+      AppContext.create(deviceId: _deviceId, dbPath: effectiveDbPath);
+
+      // 5. 设置配置（参数优先）
+      _host = config.host ?? '';
+      _port = config.port;
+      _topic = config.topic;
+      _deviceName = config.deviceName;
+      _skillsDir = effectiveSkillsDir;
+
+      _log.info('DeviceClient 初始化配置:');
+      _log.info('  storagePath = ${Directory(storagePath).absolute.path}');
+      _log.info('  dbPath      = ${Directory(effectiveDbPath).absolute.path}');
+      _log.info('  skillsDir   = ${Directory(effectiveSkillsDir).absolute.path}');
+
+      // 如果 host 未传入，尝试从数据库配置读取
+      if (_host.isEmpty) {
+        try {
+          final dbConfig = await _configManager.getDeviceConfig();
+          _mergeDbConfig(dbConfig);
+        } catch (e) {
+          // DB 中无配置，忽略
+          _log.debug('read config from DB failed: $e');
+        }
+      }
+
+      // 6. 初始化子模块
+      _connectionManager.initialize(host: _host, port: _port, topic: _topic);
+      _deviceRegistry.initialize(
+        deviceName: _deviceName,
+        host: _host,
+        port: _port,
+        topic: _topic,
+      );
+      _notificationManager.initialize(topic: _topic);
+      _agentManager.initialize(topic: _topic);
+      _messageHandler.initialize(deviceName: _deviceName, topic: _topic);
+
+      // 8. 启动员工在线状态事件监听（创建/更新员工后自动刷新在线状态）
+      _log.info('[initialize] 即将调用 startListening(), _deviceId=$_deviceId');
+      _onlineTracker.startListening();
+
+      // 9. 初始化完成
+      _initialized = true;
+    });
+  }
+
+  /// 确保目录存在，不存在则自动创建
+  Future<void> _ensureDirExists(String path, String label) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+      _log.info('  自动创建目录 [$label]: ${dir.absolute.path}');
+    } else {
+      _log.info('  目录已存在 [$label]: ${dir.absolute.path}');
+    }
+  }
+
+  /// 从数据库配置合并缺失的连接参数
+  ///
+  /// 优先级：参数传入 > 数据库 metadata > 环境变量
+  void _mergeDbConfig(DeviceConfigEntity dbConfig) {
+    final meta = dbConfig.deviceInfo.metadata;
+    final env = dbConfig.environmentVariables;
+
+    if (_host.isEmpty) {
+      _host = meta['host'] as String? ?? env['LAN_HOST'] ?? '';
+    }
+    if (meta['port'] != null) {
+      _port = int.tryParse(meta['port'].toString()) ?? _port;
+    }
+    _topic ??= meta['topic'] as String? ?? env['LAN_TOPIC'];
+    _deviceName ??= dbConfig.deviceInfo.name;
+  }
+
+  /// 获取当前配置
+  DeviceClientConfig getConfig() => DeviceClientConfig(
+    storagePath: '',
+    // storagePath 仅在 initialize 时设置，运行时不可变
+    skillsDir: _skillsDir,
+    host: _host,
+    port: _port,
+    topic: _topic,
+    deviceName: _deviceName,
+  );
+
+  /// 更新运行时配置
+  ///
+  /// 如果连接参数（host/port/topic）发生变化且当前已连接，将自动触发重连。
+  /// 其他参数（deviceName）变更会同步到关联子模块。
+  Future<void> updateConfig({
+    String? host,
+    int? port,
+    String? topic,
+    String? deviceName,
+  }) async {
+    final oldHost = _host;
+    final oldPort = _port;
+    final oldTopic = _topic;
+
+    if (host != null) _host = host;
+    if (port != null) _port = port;
+    if (topic != null) _topic = topic;
+    if (deviceName != null) _deviceName = deviceName;
+
+    // 同步到所有子模块
+    _connectionManager.updateConfig(host: _host, port: _port, topic: _topic);
+    _deviceRegistry.updateConfig(
+      deviceName: _deviceName,
+      host: _host,
+      port: _port,
+      topic: _topic,
+    );
+    _notificationManager.updateConfig(topic: _topic);
+    _agentManager.updateConfig(topic: _topic);
+    _messageHandler.updateConfig(deviceName: _deviceName, topic: _topic);
+
+    // 如果连接参数变化且当前已连接，自动重连
+    final connectionChanged =
+        _host != oldHost || _port != oldPort || _topic != oldTopic;
+    if (connectionChanged && _connectionManager.isConnected) {
+      await _connectionManager.reconnect();
+    }
+  }
+
+  /// 销毁实例并释放所有资源
+  static Future<void> removeInstance(String deviceId) async {
+    _initLocks.remove(deviceId);
+    final client = _instances.remove(deviceId);
+    if (client != null) {
+      client._initialized = false;
+      await client.dispose();
+    }
+    // 释放 AppContext（统一管理所有子模块实例）
+    await AppContext.dispose(deviceId);
+    // 兼容清理：移除各模块独立 _instances 中的记录
+    DeviceStateHolder.removeInstance(deviceId);
+    DeviceConnectionManager.removeInstance(deviceId);
+    DeviceRegistry.removeInstance(deviceId);
+    DeviceConfigManager.removeInstance(deviceId);
+    DataSyncManager.removeInstance(deviceId);
+    EmployeeOnlineTracker.removeInstance(deviceId);
+    DeviceRpcHandler.removeInstance(deviceId);
+    DeviceAgentManager.removeInstance(deviceId);
+    DeviceMessageHandler.removeInstance(deviceId);
+    DeviceNotificationManager.removeInstance(deviceId);
+  }
+
+  // ===== 只读属性 =====
+
+  String get deviceId => _deviceId;
+
+  String? get deviceName => _deviceName;
+
+  String get host => _host;
+
+  int get port => _port;
+
+  String? get topic => _topic;
+
+  bool get isInitialized => _initialized;
+
+  DeviceConnectionState get connectionState =>
+      _connectionManager.connectionState;
+
+  bool get isConnected => _connectionManager.isConnected;
+
+  List<String> get localAgentProxyIds => _agentManager.localAgentProxyIds;
+
+  List<String> get remoteAgentProxyIds => _agentManager.remoteAgentProxyIds;
+
+  Stream<DeviceConnectionState> get onConnectionStateChanged =>
+      _stateHolder.onConnectionStateChanged;
+
+  Stream<EmployeeOnlineEvent> get onEmployeeOnlineEvent =>
+      _stateHolder.onEmployeeOnlineEvent;
+
+  Stream<AgentEvent> get onAgentEvent => _stateHolder.onAgentEvent;
+
+  Stream<DeviceEvent> get onDeviceEvent => _stateHolder.onDeviceEvent;
+
+  /// 员工数据变更通知（新增/更新/删除），由底层 EmployeeManager 触发
+  Stream<EmployeeChangeEvent> get onEmployeeEvent =>
+      _stateHolder.onEmployeeEvent;
+
+  /// 会话数据变更通知（新增/更新/删除），由底层 SessionManager 触发
+  Stream<SessionChangeEvent> get onSessionEvent => _stateHolder.onSessionEvent;
+
+  /// 跨设备数据同步完成事件（同步后如有数据变更则发射）
+  Stream<DataSyncEvent> get onSyncEvent => _stateHolder.onSyncEvent;
+
+  /// 员工级技能变更通知（新增/更新/删除），由底层 SkillManager 触发
+  Stream<SkillChangeEvent> get onSkillEvent => _stateHolder.onSkillEvent;
+
+  /// 全局技能变更通知（新增/更新/删除），由底层 GlobalSkillManager 触发
+  Stream<GlobalSkillChangeEvent> get onGlobalSkillEvent =>
+      _stateHolder.onGlobalSkillEvent;
+
+  /// 项目变更通知（新增/更新/删除），由底层 ProjectManager 触发
+  Stream<ProjectChangeEvent> get onProjectEvent =>
+      _stateHolder.onProjectEvent;
+
+  List<LanDeviceInfo> get cachedDevices => _deviceRegistry.cachedDevices;
+
+  Stream<LanMessage> get onLanMessage => _stateHolder.onLanMessage;
+
+  // ===== Service 属性 =====
+
+  EmployeeManager get employeeManager => _employeeManager;
+
+  SessionManager get sessionManager => _sessionManager;
+
+  SkillManager get skillManager => _skillManager;
+
+  GlobalSkillManager get globalSkillManager => _globalSkillManager;
+
+  MessageStoreService get messageStore => _messageStoreService;
+
+  EmployeeConfigService get configService => _configService;
+
+  ProjectManager get projectManager => _projectManager;
+
+  // ===== 连接管理 =====
+
+  Future<bool> pingEmployee(
+    String employeeId, {
+    Duration timeout = const Duration(seconds: 2),
+  }) async {
+    final localAgent = _agentManager.getLocalAgent(employeeId);
+    if (localAgent != null) return localAgent.isAlive;
+    final employee = await _employeeManager.getEmployee(employeeId);
+    if (employee == null) return false;
+    final targetDeviceId = employee.currentDeviceId;
+    if (targetDeviceId == null || targetDeviceId.isEmpty) return false;
+    if (targetDeviceId == deviceId) return false;
+    if (!isConnected) return false;
+    return _deviceRegistry.containsDevice(targetDeviceId);
+  }
+
+  bool? isEmployeeOnline(String employeeId) =>
+      _onlineTracker.isEmployeeOnline(employeeId);
+
+  /// 连接到服务器
+  ///
+  /// 必须先调用 [initialize] 完成初始化。
+  Future<void> connect() async {
+    if (!_initialized) {
+      throw StateError('DeviceClient 未初始化，请先调用 initialize() 方法');
+    }
+    if (_host.isEmpty) {
+      throw StateError('未配置服务器地址(host)，请先通过 initialize() 或 updateConfig() 配置');
+    }
+    await _connectionManager.connect();
+  }
+
+  Future<void> reconnect({String? newHost, int? newPort}) =>
+      _connectionManager.reconnect(newHost: newHost, newPort: newPort);
+
+  Future<void> disconnect() => _connectionManager.disconnect();
+
+  Future<void> dispose() async {
+    await _connectionManager.dispose();
+    await _agentManager.dispose();
+    await _stateHolder.close();
+  }
+
+  // ===== AgentProxy 管理（核心） =====
+
+  Future<CachedAgentProxy> getOrCreateAgentProxy({
+    required String employeeId,
+    String? deviceId,
+    AiEmployeeEntity? employee,
+    bool autoCreateSession = true,
+  }) => _agentManager.getOrCreateAgentProxy(
+    employeeId: employeeId,
+    deviceId: deviceId,
+    employee: employee,
+    autoCreateSession: autoCreateSession,
+  );
+
+  Future<void> destroyAgentProxy(
+    String employeeId, {
+    String? targetDeviceId,
+    bool keepLocalAgent = false,
+  }) => _agentManager.destroyAgentProxy(
+    employeeId,
+    targetDeviceId: targetDeviceId,
+    keepLocalAgent: keepLocalAgent,
+  );
+
+  CachedAgentProxy? getAgentProxy(String employeeId) =>
+      _agentManager.getAgentProxy(employeeId);
+
+  List<CachedAgentProxy> getLocalAgentProxies() =>
+      _agentManager.getLocalAgentProxies();
+
+  List<CachedAgentProxy> getRemoteAgentProxies() =>
+      _agentManager.getRemoteAgentProxies();
+
+  List<CachedAgentProxy> getAllAgentProxies() =>
+      _agentManager.getAllAgentProxies();
+
+  // ===== 设备管理 =====
+
+  Future<List<LanDeviceInfo>> getOnlineDevices() =>
+      _deviceRegistry.getOnlineDevices();
+
+  Future<List<DeviceWithEmployeesInfo>> getOnlineDevicesWithEmployees() =>
+      _deviceRegistry.getOnlineDevicesWithEmployees();
+
+  Future<void> refreshDeviceList() => _deviceRegistry.refreshDeviceList();
+
+  Future<void> sendToDevice(String toDeviceId, LanMessage message) async {
+    _deviceRegistry.sendToDevice(toDeviceId, message);
+  }
+
+  Future<void> requestDeviceInfoBroadcast() async {
+    _deviceRegistry.requestDeviceInfoBroadcast();
+  }
+
+  // ===== 设备配置 =====
+
+  Future<DeviceConfigEntity> getDeviceConfig() =>
+      _configManager.getDeviceConfig();
+
+  Future<void> updateDeviceInfo(DeviceInfoConfig deviceInfo) async {
+    await _configManager.updateDeviceInfo(deviceInfo);
+    if (deviceInfo.name != null) {
+      _deviceName = deviceInfo.name;
+      _deviceRegistry.updateConfig(deviceName: deviceInfo.name);
+      await _deviceRegistry.sendDeviceRegistration();
+    }
+  }
+
+  Future<void> updateRemoteDeviceInfo({
+    required String targetDeviceId,
+    required DeviceInfoConfig deviceInfo,
+  }) async {
+    if (!_connectionManager.isConnected) throw StateError('未连接到服务器');
+    if (targetDeviceId == deviceId) {
+      await updateDeviceInfo(deviceInfo);
+      return;
+    }
+    await _connectionManager.remoteUpdateDeviceInfo(
+      targetDeviceId: targetDeviceId,
+      deviceInfoMap: deviceInfo.toMap(),
+    );
+  }
+
+  Future<void> updateEnvironmentVariables(Map<String, String> vars) =>
+      _configManager.updateEnvironmentVariables(vars);
+
+  Future<void> setEnvironmentVariable(String key, String value) =>
+      _configManager.setEnvironmentVariable(key, value);
+
+  Future<void> deleteEnvironmentVariable(String key) =>
+      _configManager.deleteEnvironmentVariable(key);
+
+  // ===== 员工操作（含跨设备同步） =====
+
+  /// 删除员工（软删除 + 广播同步到所有设备）
+  Future<void> deleteEmployee(String employeeId) =>
+      _dataSyncManager.deleteEmployeeWithSync(employeeId);
+
+  // ===== 会话操作（含跨设备同步） =====
+
+  Future<void> deleteSession(String employeeId) =>
+      _dataSyncManager.deleteSessionWithSync(employeeId);
+
+  // ===== 数据同步（内部LAN RPC实现） =====
+
+  /// 同步员工数据（防抖）
+  Future<void> syncEmployeesFromDevices() =>
+      _dataSyncManager.syncEmployeesFromDevices();
+
+  /// 同步会话数据（防抖）
+  Future<void> syncSessionsFromDevices() =>
+      _dataSyncManager.syncSessionsFromDevices();
+
+  /// 同步全部数据：员工+会话（防抖）
+  Future<void> syncAllFromDevices() => _dataSyncManager.syncAllFromDevices();
+
+  /// 同步会话摘要数据（从远端拉取最新摘要到本地）
+  Future<void> syncSessionSummariesFromDevices() =>
+      _dataSyncManager.syncSessionSummariesFromDevices();
+
+  /// 从其他设备同步单个员工数据
+  Future<AiEmployeeEntity?> syncEmployeeFromDevice({
+    required String employeeId,
+    String? targetDeviceId,
+  }) => _dataSyncManager.syncEmployeeFromDevice(
+    employeeId: employeeId,
+    targetDeviceId: targetDeviceId,
+  );
+
+  /// 广播员工到所有在线设备（创建/更新后调用）
+  Future<void> broadcastEmployeeToAllDevices(String employeeId) =>
+      _dataSyncManager.broadcastEmployeeToAllDevices(employeeId);
+
+  /// 广播会话到所有在线设备（创建/更新后调用）
+  Future<void> broadcastSessionToAllDevices(String employeeId) =>
+      _dataSyncManager.broadcastSessionToAllDevices(employeeId);
+
+  /// 同步技能数据（从远端拉取最新技能到本地）
+  Future<void> syncSkillsFromDevices() =>
+      _dataSyncManager.syncSkillsFromDevices();
+
+  /// 广播员工技能到所有在线设备（创建/更新后调用）
+  Future<void> broadcastSkillToAllDevices(String employeeId) =>
+      _dataSyncManager.broadcastSkillToAllDevices(employeeId);
+
+  /// 广播全局技能到所有在线设备
+  Future<void> broadcastGlobalSkillsToAllDevices() =>
+      _dataSyncManager.broadcastGlobalSkillsToAllDevices();
+
+  /// 删除技能并同步到其他设备
+  Future<void> deleteSkillWithSync(String skillId) =>
+      _dataSyncManager.deleteSkillWithSync(skillId);
+
+  /// 同步项目数据（从远端拉取最新项目到本地）
+  Future<void> syncProjectsFromDevices() =>
+      _dataSyncManager.syncProjectsFromDevices();
+
+  /// 广播项目数据到所有在线设备（创建/更新后调用）
+  Future<void> broadcastProjectToAllDevices(String projectUuid) =>
+      _dataSyncManager.broadcastProjectToAllDevices(projectUuid);
+
+  /// 删除项目并同步到其他设备
+  Future<void> deleteProjectWithSync(String projectUuid) =>
+      _dataSyncManager.deleteProjectWithSync(projectUuid);
+
+  /// 同步员工到指定远程设备
+  Future<bool> syncEmployeeToDevice({
+    required String employeeId,
+    required String targetDeviceId,
+  }) => _dataSyncManager.syncEmployeeToDevice(
+    employeeId: employeeId,
+    targetDeviceId: targetDeviceId,
+  );
+
+  // ===== 远程设备文件操作 =====
+
+  /// 调用远程设备的文件操作 RPC
+  ///
+  /// 通用方法，不依赖特定 employee，直接通过 RPC 通道调用远程设备。
+  Future<Map<String, dynamic>> invokeFileRpc({
+    required String toDeviceId,
+    required String method,
+    required Map<String, dynamic> params,
+  }) {
+    if (!_connectionManager.isConnected) {
+      throw StateError('未连接到服务器');
+    }
+    return _connectionManager.invokeRemote(toDeviceId, method, params);
+  }
+
+  /// 列出远程设备目录内容
+  Future<DirectoryListingResult> listRemoteDirectory({
+    required String toDeviceId,
+    required String path,
+  }) async {
+    final result = await invokeFileRpc(
+      toDeviceId: toDeviceId,
+      method: AgentRpcConfig.methodListDirectory,
+      params: {'path': path},
+    );
+    return DirectoryListingResult.fromMap(result['result']);
+  }
+
+  /// 获取远程设备文件/目录信息
+  Future<FileInfoResult> getRemoteFileInfo({
+    required String toDeviceId,
+    required String path,
+  }) async {
+    final result = await invokeFileRpc(
+      toDeviceId: toDeviceId,
+      method: AgentRpcConfig.methodGetFileInfo,
+      params: {'path': path},
+    );
+    return FileInfoResult.fromMap(result['result']);
+  }
+
+  /// 读取远程设备文件内容（小文件，Base64 编码返回）
+  Future<FileReadResult> readRemoteFile({
+    required String toDeviceId,
+    required String path,
+    int? offset,
+    int? limit,
+    int? maxBytes,
+  }) async {
+    final params = <String, dynamic>{'path': path};
+    if (offset != null) params['offset'] = offset;
+    if (limit != null) params['limit'] = limit;
+    if (maxBytes != null) params['maxBytes'] = maxBytes;
+
+    final result = await invokeFileRpc(
+      toDeviceId: toDeviceId,
+      method: AgentRpcConfig.methodReadFile,
+      params: params,
+    );
+    return FileReadResult.fromMap(result['result']);
+  }
+
+  /// 写入远程设备文件
+  Future<FileWriteResult> writeRemoteFile({
+    required String toDeviceId,
+    required String path,
+    required String contentBase64,
+    bool append = false,
+  }) async {
+    final result = await invokeFileRpc(
+      toDeviceId: toDeviceId,
+      method: AgentRpcConfig.methodWriteFile,
+      params: {'path': path, 'contentBase64': contentBase64, 'append': append},
+    );
+    return FileWriteResult.fromMap(result['result']);
+  }
+
+  /// 请求远程设备文件下载 Token
+  Future<FileDownloadUrlResult> requestRemoteDownloadToken({
+    required String toDeviceId,
+    required String path,
+  }) async {
+    final result = await invokeFileRpc(
+      toDeviceId: toDeviceId,
+      method: AgentRpcConfig.methodDownloadFile,
+      params: {'path': path},
+    );
+    // 从 RPC 响应中提取远程设备的 HTTP 地址，拼接完整下载 URL
+    final data = Map<String, dynamic>.from(result['result']);
+    final hostIp = data['hostIp'] as String? ?? '';
+    final hostPort = data['hostPort'] as int? ?? 0;
+    final token = data['token'] as String? ?? '';
+    if (hostIp.isNotEmpty && hostPort > 0 && token.isNotEmpty) {
+      data['url'] = 'http://$hostIp:$hostPort/file-download?token=$token';
+    }
+    return FileDownloadUrlResult.fromMap(data);
+  }
+
+  /// 请求远程设备文件上传 Token
+  Future<FileUploadUrlResult> requestRemoteUploadToken({
+    required String toDeviceId,
+    required String path,
+    bool overwrite = true,
+  }) async {
+    final result = await invokeFileRpc(
+      toDeviceId: toDeviceId,
+      method: AgentRpcConfig.methodUploadFile,
+      params: {'path': path, 'overwrite': overwrite},
+    );
+    // 从 RPC 响应中提取远程设备的 HTTP 地址，拼接完整上传 URL
+    final data = Map<String, dynamic>.from(result['result']);
+    final hostIp = data['hostIp'] as String? ?? '';
+    final hostPort = data['hostPort'] as int? ?? 0;
+    final token = data['token'] as String? ?? '';
+    if (hostIp.isNotEmpty && hostPort > 0 && token.isNotEmpty) {
+      data['url'] = 'http://$hostIp:$hostPort/file-upload?token=$token';
+    }
+    return FileUploadUrlResult.fromMap(data);
+  }
+
+  // ===== LAN消息扩展 =====
+
+  void setLanMessageHandler(LanMessageHandler? handler) =>
+      _stateHolder.lanMessageHandler = handler;
+
+  Future<bool> sendLanMessage(LanMessage message) {
+    return _connectionManager.sendLanMessage(message);
+  }
+
+  Future<void> sendLanMessageTo(String toDeviceId, LanMessage message) {
+    final lc = _connectionManager.lanClient;
+    if (lc == null || !lc.isConnected) throw StateError('未连接到服务器');
+    lc.sendLanMessage(
+      LanMessage(
+        type: message.type,
+        fromId: deviceId,
+        toDeviceId: toDeviceId,
+        content: message.content,
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        topic: message.topic,
+      ),
+    );
+    return Future.value();
+  }
+
+  // ===== 文件传输 =====
+
+  Future<String> uploadFile(
+    String filePath, {
+    void Function(double)? onProgress,
+  }) async {
+    final fileId = await _connectionManager.uploadFile(filePath);
+    return fileId;
+  }
+
+  Future<void> downloadFile(
+    String fileId,
+    String savePath, {
+    void Function(double)? onProgress,
+  }) async {
+    await _connectionManager.downloadFile(fileId, savePath);
+  }
+
+  // ===== 文件元信息消息 =====
+
+  /// 发送文件元信息到指定设备（或广播给所有设备）
+  ///
+  /// 不会上传文件本身，仅发送元信息。接收方根据元信息中的
+  /// [fromDeviceId] 和 [filePath] 自行通过 RPC → Token → HTTP 链路下载。
+  ///
+  /// [toDeviceId] 为 null 时广播给所有在线设备。
+  /// [role] 消息角色（user / assistant），默认 user。
+  /// [employeeId] 所属会话 ID，持久化到对应会话的消息列表。
+  /// [fileId] 可选，外部指定的文件 ID（用于与调用方消息 ID 对齐，防止重复）。
+  /// [messageId] 可选，外部指定的消息 ID（默认自动生成 UUID v4）。
+  Future<void> sendFileMeta({
+    required String filePath,
+    String? toDeviceId,
+    String role = 'user',
+    String? employeeId,
+    String? fileId,
+    String? messageId,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('文件不存在: $filePath');
+    }
+
+    final fileName = p.basename(filePath);
+    final fileSize = await file.length();
+    final hash = sha256.convert(await file.readAsBytes()).toString();
+    final actualFileId = fileId ?? const Uuid().v4();
+    final actualMsgId = messageId ?? const Uuid().v4();
+
+    final meta = FileMetaMessage(
+      fileId: actualFileId,
+      fileName: fileName,
+      fileSize: fileSize,
+      sha256: hash,
+      filePath: filePath,
+      fromDeviceId: deviceId,
+      role: role,
+      employeeId: employeeId,
+    );
+
+    final message = LanMessage(
+      id: actualMsgId,
+      type: LanMessageType.file,
+      fromId: deviceId,
+      toDeviceId: toDeviceId,
+      content: jsonEncode(meta.toJson()),
+      fileId: actualFileId,
+      fileName: fileName,
+      fileSize: fileSize,
+      fileHash: hash,
+    );
+
+    if (toDeviceId != null) {
+      await sendLanMessageTo(toDeviceId, message);
+    } else {
+      await sendLanMessage(message);
+    }
+
+    // 持久化到本地 DB
+    if (employeeId != null) {
+      try {
+        final chatMsg = ChatMessage.file(
+          id: actualMsgId,
+          employeeId: employeeId,
+          role: MessageRole.fromString(role),
+          fileName: fileName,
+          fileSize: fileSize,
+          fileId: actualFileId,
+          fileHash: hash,
+          filePath: filePath,
+          fromDeviceId: deviceId,
+          deviceId: deviceId,
+        );
+        await _messageStoreService.addMessage(deviceId, chatMsg);
+      } catch (e) {
+        _log.warn('文件消息持久化失败: $e');
+      }
+    }
+  }
+
+  /// 根据文件元信息从远端设备下载文件（通过 WebSocket 二进制流式传输）
+  ///
+  /// 通过 RPC 流式通道向远程设备发起文件读取请求，远程设备分块读取文件
+  /// 并通过 WebSocket 原生二进制帧发送，本端接收后写入本地文件。
+  ///
+  /// 返回本地保存路径。下载完成后会校验 SHA256 哈希。
+  Future<String> downloadFileByMeta(
+    FileMetaMessage meta, {
+    required String saveDir,
+    void Function(double progress)? onProgress,
+  }) async {
+    if (!_connectionManager.isConnected) {
+      throw StateError('未连接到服务器');
+    }
+
+    // 1. 拼接保存路径
+    final savePath = p.join(saveDir, meta.fileName);
+    final file = File(savePath);
+    final sink = file.openWrite();
+    int received = 0;
+
+    try {
+      // 2. 发起 RPC 流式请求（使用 invokeRemoteStreamWithId 提前获取 requestId）
+      //
+      // 关键修复：使用 invokeRemoteStreamWithId 在发送 RPC 请求前就生成 requestId，
+      // 确保二进制帧到达时 binarySub 已经能按 requestId 过滤。
+      //
+      // 之前的 bug：使用 invokeRemoteStream 时，requestId 是从第一个 RPC 文本事件中
+      // 提取的，但二进制帧可能比 RPC 文本事件更早到达，导致第一个 chunk 被丢弃。
+      final result = _connectionManager.invokeRemoteStreamWithId(
+        meta.fromDeviceId,
+        AgentRpcConfig.methodReadFileStream,
+        {'path': meta.filePath},
+        timeout: 0, // 大文件不超时
+      );
+      final reqId = result.requestId;
+      final stream = result.stream;
+
+      // 3. 订阅二进制 chunk 流（reqId 已知，可以立即过滤）
+      final binarySub = _connectionManager.binaryChunkStream.listen((chunk) {
+        if (chunk.requestId == reqId) {
+          sink.add(chunk.data);
+          received += chunk.data.length;
+          if (meta.fileSize > 0) {
+            onProgress?.call(received / meta.fileSize);
+          }
+        }
+      });
+
+      try {
+        await for (final event in stream) {
+          if (event.isDone) {
+            // 流结束
+            break;
+          }
+        }
+      } finally {
+        await binarySub.cancel();
+      }
+
+      await sink.close();
+    } catch (e) {
+      await sink.close();
+      try {
+        await file.delete();
+      } catch (_) {}
+      rethrow;
+    }
+
+    // 4. 校验 SHA256（仅当 meta 提供了非空 hash 时才校验）
+    if (meta.sha256.isNotEmpty) {
+      final savedBytes = await File(savePath).readAsBytes();
+      final actualHash = sha256.convert(savedBytes).toString();
+      if (actualHash != meta.sha256) {
+        await File(savePath).delete();
+        throw Exception('文件校验失败: SHA256 不匹配');
+      }
+    }
+
+    return savePath;
+  }
+
+  // ===== Folder Skill 文件同步 =====
+
+  /// 从远端设备同步 Folder Skill 文件
+  ///
+  /// 流程：
+  /// 1. RPC 调用远端打包 ZIP → 获取 zipFilePath + zipSize + sha256
+  /// 2. 通过 downloadFileByMeta（二进制流式传输）下载 ZIP
+  /// 3. 解压到本地 skillsDir/{folderName}/
+  /// 4. 删除临时 ZIP
+  ///
+  /// 返回本地解压后的文件夹路径。
+  Future<String> syncFolderSkillFiles({
+    required String fromDeviceId,
+    required String folderPath,
+    required String skillId,
+    String? localSkillsDir,
+    String? targetFolderName,
+    void Function(double progress)? onProgress,
+  }) async {
+    if (!_connectionManager.isConnected) {
+      throw StateError('未连接到服务器');
+    }
+
+    _log.info('syncFolderSkillFiles: 开始从设备 $fromDeviceId 同步 skill=$skillId, folderPath=$folderPath');
+
+    // 1. 调用远端打包
+    final packResult = await invokeFileRpc(
+      toDeviceId: fromDeviceId,
+      method: AgentRpcConfig.methodPackSkillFolder,
+      params: {
+        'folderPath': folderPath,
+        'skillId': skillId,
+      },
+    );
+    final packData = Map<String, dynamic>.from(packResult['result']);
+    if (packData['success'] != true) {
+      throw Exception('打包失败: ${packData['error']}');
+    }
+
+    final zipFilePath = packData['zipFilePath'] as String;
+    final zipSize = packData['zipSize'] as int;
+    final zipHash = packData['sha256'] as String;
+    final folderName = packData['folderName'] as String;
+
+    _log.info('syncFolderSkillFiles: 远端打包完成, zipSize=$zipSize, folderName=$folderName, zipHash=$zipHash');
+
+    // 2. 构建 FileMetaMessage，通过 downloadFileByMeta 下载
+    final meta = FileMetaMessage(
+      fileId: skillId,
+      fileName: '$skillId.zip',
+      fileSize: zipSize,
+      sha256: zipHash,
+      filePath: zipFilePath,
+      fromDeviceId: fromDeviceId,
+    );
+
+    final tempZipDir = await Directory.systemTemp.createTemp('skill_sync_');
+
+    try {
+      // 3. 下载 ZIP
+      final downloadedPath = await downloadFileByMeta(
+        meta,
+        saveDir: tempZipDir.path,
+        onProgress: onProgress,
+      );
+
+      _log.info('syncFolderSkillFiles: ZIP 下载完成, downloadedPath=$downloadedPath');
+
+      // 4. 解压到 skillsDir/{targetFolderName}/
+      final skillsDir = localSkillsDir ?? _skillsDir;
+      final effectiveFolderName = targetFolderName ?? folderName;
+      final targetDir = p.join(skillsDir, effectiveFolderName);
+      await _unpackZip(downloadedPath, targetDir);
+
+      _log.info('syncFolderSkillFiles: 解压完成, targetDir=$targetDir');
+      return targetDir;
+    } finally {
+      // 5. 清理临时文件
+      try {
+        await tempZipDir.delete(recursive: true);
+      } catch (_) {}
+    }
+  }
+
+  /// 解压 ZIP 文件到目标目录（智能识别 SKILL.md 结构）
+  ///
+  /// 支持三种 ZIP 内部格式：
+  ///
+  /// **格式 A — 扁平结构（单 skill，无根目录包裹）：**
+  /// ```
+  /// SKILL.md
+  /// prompt/translate.md
+  /// ```
+  /// → 直接解压到 targetDir，结果：targetDir/SKILL.md
+  ///
+  /// **格式 B — 单层包裹（单 skill，带同名根目录）：**
+  /// ```
+  /// translator/SKILL.md
+  /// translator/prompt/translate.md
+  /// ```
+  /// → 自动剥离根目录层，结果：targetDir/SKILL.md
+  ///
+  /// **格式 C — 多 skill 包裹：**
+  /// ```
+  /// skill1/SKILL.md
+  /// skill1/prompt/a.md
+  /// skill2/SKILL.md
+  /// skill2/prompt/b.md
+  /// ```
+  /// → 每个 skill 解压为独立文件夹，结果：targetDir/skill1/SKILL.md, targetDir/skill2/SKILL.md
+  ///
+  /// 返回解压后所有 skill 文件夹的路径列表。
+  /// 测试用：公开 _unpackZip 供测试调用
+  @visibleForTesting
+  static Future<List<String>> unpackZipForTest(String zipPath, String targetDir) =>
+      _unpackZip(zipPath, targetDir);
+
+  static Future<List<String>> _unpackZip(String zipPath, String targetDir) async {
+    final target = Directory(targetDir);
+    if (await target.exists()) {
+      await target.delete(recursive: true);
+    }
+    await target.create(recursive: true);
+
+    final zipBytes = await File(zipPath).readAsBytes();
+    final archive = ZipDecoder().decodeBytes(zipBytes);
+
+    // 1. 识别 ZIP 内部结构
+    final structure = _analyzeZipStructure(archive);
+    _log.info(
+      'ZIP 结构分析: format=${structure.format}, '
+      'skillRoots=${structure.skillRoots}, '
+      'stripPrefix="${structure.stripPrefix}"',
+    );
+
+    // 2. 安全校验：拒绝路径穿越
+    for (final file in archive) {
+      final normalizedName = file.name.replaceAll('\\', '/');
+      if (normalizedName.contains('..')) {
+        throw FileSystemException('ZIP 条目包含非法路径穿越: ${file.name}');
+      }
+    }
+
+    // 3. 根据结构解压
+    final skillPaths = <String>[];
+    final String stripPrefix = structure.stripPrefix;
+
+    for (final file in archive) {
+      String entryName = file.name.replaceAll('\\', '/');
+
+      // 剥离前缀（格式 B 的单层包裹）
+      if (stripPrefix.isNotEmpty && entryName.startsWith(stripPrefix)) {
+        entryName = entryName.substring(stripPrefix.length);
+      }
+
+      // 跳过空条目（剥离后可能为空）
+      if (entryName.isEmpty) continue;
+
+      final filePath = p.join(targetDir, entryName.replaceAll('/', Platform.pathSeparator));
+
+      if (file.isFile) {
+        final outFile = File(filePath);
+        await outFile.parent.create(recursive: true);
+        await outFile.writeAsBytes(file.content as List<int>);
+      } else {
+        // 仅在目录不是以 stripPrefix 本身结尾时创建
+        // （避免创建多余的空目录）
+        if (entryName != '/' && !entryName.endsWith('/')) {
+          await Directory(filePath).create(recursive: true);
+        }
+      }
+    }
+
+    // 4. 收集解压后的 skill 文件夹路径
+    for (final root in structure.skillRoots) {
+      // 格式 A：root 为空，skill 直接在 targetDir 下
+      if (root.isEmpty) {
+        // 检查 targetDir 下是否存在 SKILL.md
+        if (await File(p.join(targetDir, 'SKILL.md')).exists()) {
+          skillPaths.add(targetDir);
+        }
+      } else {
+        final skillDir = p.join(targetDir, root);
+        if (await File(p.join(skillDir, 'SKILL.md')).exists()) {
+          skillPaths.add(skillDir);
+        }
+      }
+    }
+
+    _log.info('ZIP 解压完成: ${skillPaths.length} 个 skill, paths=$skillPaths');
+    return skillPaths;
+  }
+
+  /// ZIP 内部结构分析结果
+  static const String _skillMarker = 'SKILL.md';
+
+  /// 分析 ZIP 内部结构，确定格式类型和需要剥离的前缀
+  static _ZipStructure _analyzeZipStructure(Archive archive) {
+    // 收集所有非目录条目的归一化路径
+    final allFiles = <String>[];
+    for (final f in archive) {
+      final name = f.name.replaceAll('\\', '/');
+      if (f.isFile && name.isNotEmpty) {
+        allFiles.add(name);
+      }
+    }
+
+    if (allFiles.isEmpty) {
+      return _ZipStructure(format: _ZipFormat.flat, skillRoots: [], stripPrefix: '');
+    }
+
+    // 查找所有 SKILL.md 的位置
+    final skillMdPaths = <String>[];
+    for (final filePath in allFiles) {
+      final parts = filePath.split('/');
+      if (parts.contains(_skillMarker)) {
+        skillMdPaths.add(filePath);
+      }
+    }
+
+    if (skillMdPaths.isEmpty) {
+      // 无 SKILL.md，按扁平结构处理
+      return _ZipStructure(format: _ZipFormat.flat, skillRoots: [], stripPrefix: '');
+    }
+
+    // 判断每个 SKILL.md 的深度（所在目录层级）
+    // depth 0 = SKILL.md 在 ZIP 根
+    // depth 1 = xxx/SKILL.md
+    // depth 2 = xxx/yyy/SKILL.md
+    final skillDepths = <int, List<String>>{};
+    for (final skillPath in skillMdPaths) {
+      final parts = skillPath.split('/');
+      final depth = parts.indexOf(_skillMarker); // SKILL.md 之前有几级目录
+      skillDepths.putIfAbsent(depth, () => []).add(skillPath);
+    }
+
+    // 取最小深度作为基准
+    final minDepth = skillDepths.keys.reduce((a, b) => a < b ? a : b);
+
+    if (minDepth == 0) {
+      // 格式 A：SKILL.md 在 ZIP 根，扁平结构
+      return _ZipStructure(
+        format: _ZipFormat.flat,
+        skillRoots: [''],
+        stripPrefix: '',
+      );
+    }
+
+    if (minDepth == 1) {
+      // SKILL.md 在一级子目录下
+      final skillDirs = <String>[];
+      for (final skillPath in skillDepths[minDepth]!) {
+        final parts = skillPath.split('/');
+        skillDirs.add(parts[0]);
+      }
+      final uniqueDirs = skillDirs.toSet().toList();
+
+      if (uniqueDirs.length == 1) {
+        // 格式 B：单 skill，带一层根目录包裹
+        // → 剥离这层根目录
+        final rootDir = uniqueDirs[0];
+        return _ZipStructure(
+          format: _ZipFormat.singleWrapped,
+          skillRoots: [''],
+          stripPrefix: '$rootDir/',
+        );
+      } else {
+        // 格式 C：多个 skill，每个在独立子目录下
+        // → 不剥离前缀，保留各自的目录
+        return _ZipStructure(
+          format: _ZipFormat.multiSkill,
+          skillRoots: uniqueDirs,
+          stripPrefix: '',
+        );
+      }
+    }
+
+    // minDepth >= 2：SKILL.md 埋得较深
+    // 尝试找到包含 SKILL.md 的公共父目录层级
+    // 例如：some-prefix/translator/SKILL.md → 剥离 some-prefix/
+    final skillDirs = <String>[];
+    for (final skillPath in skillDepths[minDepth]!) {
+      final parts = skillPath.split('/');
+      // SKILL.md 前面 minDepth 级目录，取最后 1 级作为 skill 名
+      skillDirs.add(parts[minDepth - 1]);
+    }
+    final uniqueDirs = skillDirs.toSet().toList();
+
+    // 计算需要剥离的公共前缀层数
+    // 所有 SKILL.md 路径的前 (minDepth - 1) 级就是外层包裹
+    final prefixParts = skillDepths[minDepth]!.first.split('/');
+    final stripParts = prefixParts.sublist(0, minDepth - 1);
+    final stripPrefix = '${stripParts.join('/')}/';
+
+    if (uniqueDirs.length == 1) {
+      // 深层嵌套单 skill：prefix/skill-name/SKILL.md
+      // → 剥离 prefix/ 和 skill-name/，直接放到 targetDir
+      final fullStrip = prefixParts.sublist(0, minDepth).join('/');
+      return _ZipStructure(
+        format: _ZipFormat.singleWrapped,
+        skillRoots: [''],
+        stripPrefix: '$fullStrip/',
+      );
+    } else {
+      // 深层嵌套多 skill：prefix/skill1/SKILL.md, prefix/skill2/SKILL.md
+      // → 剥离公共前缀，保留 skill 目录名
+      return _ZipStructure(
+        format: _ZipFormat.multiSkill,
+        skillRoots: uniqueDirs,
+        stripPrefix: stripPrefix,
+      );
+    }
+  }
+
+
+
+  // ===== 当前打开的会话状态 =====
+
+  OpenSessionState? get currentOpenSession =>
+      _notificationManager.currentOpenSession;
+
+  Future<void> setCurrentOpenSession({
+    required String employeeId,
+    String? fromDeviceId,
+  }) => _notificationManager.setCurrentOpenSession(
+    employeeId: employeeId,
+    fromDeviceId: fromDeviceId,
+  );
+
+  void clearCurrentOpenSession() =>
+      _notificationManager.clearCurrentOpenSession();
+
+  bool isSessionOpen({required String employeeId, String? fromDeviceId}) =>
+      _notificationManager.isSessionOpen(
+        employeeId: employeeId,
+        fromDeviceId: fromDeviceId,
+      );
+
+  // ===== 会话摘要查询 =====
+
+  /// 获取所有会话摘要列表（含最新消息 + 未读 + pending 状态）
+  Future<List<SessionSummaryEntity>> getSessionSummaries({String? deviceId}) async {
+    final summaryStore = SessionSummaryStore(deviceId: _deviceId);
+    return await summaryStore.getAllSummaries(deviceId: deviceId ?? _deviceId);
+  }
+
+  /// 获取单个会话摘要
+  Future<SessionSummaryEntity?> getSessionSummary({
+    required String employeeId,
+    String? deviceId,
+  }) async {
+    final summaryStore = SessionSummaryStore(deviceId: _deviceId);
+    return await summaryStore.getSummary(employeeId, deviceId: deviceId ?? _deviceId);
+  }
+
+  /// 获取所有有 pending 请求的会话
+  Future<List<SessionSummaryEntity>> getPendingSessions() async {
+    final summaryStore = SessionSummaryStore(deviceId: _deviceId);
+    return await summaryStore.getPendingSummaries();
+  }
+
+  /// 获取有未读消息的会话列表
+  Future<List<SessionSummaryEntity>> getUnreadSessions({String? deviceId}) async {
+    final summaryStore = SessionSummaryStore(deviceId: _deviceId);
+    final ids = await summaryStore.getUnreadEmployeeIds(
+      deviceId: deviceId ?? _deviceId,
+    );
+    if (ids.isEmpty) return [];
+    final summaries = <SessionSummaryEntity>[];
+    for (final id in ids) {
+      final s = await summaryStore.getSummary(id, deviceId: deviceId ?? _deviceId);
+      if (s != null) summaries.add(s);
+    }
+    return summaries;
+  }
+
+  // ===== 消息通知中心 =====
+
+  AgentNotificationHub get notificationHub =>
+      _notificationManager.notificationHub;
+
+  int getUnreadCount({required String employeeId, String? fromDeviceId}) =>
+      _notificationManager.getUnreadCount(
+        employeeId: employeeId,
+        fromDeviceId: fromDeviceId,
+      );
+
+  int getTotalUnreadCount() => _notificationManager.getTotalUnreadCount();
+
+  Future<void> markAllMessagesAsRead({
+    required String employeeId,
+    String? targetDeviceId,
+  }) async {
+    final deviceId = targetDeviceId ?? _deviceId;
+    if (deviceId == _deviceId) {
+      // 本地设备：通过 notificationManager 统一处理 DB + memory + broadcast + agent
+      await _notificationManager.markAllMessagesAsRead(
+        employeeId: employeeId,
+        targetDeviceId: deviceId,
+      );
+    } else {
+      // 远程设备：通过 RPC 调用远程 Agent 的 markAllMessagesAsRead
+      final proxy = _agentManager.getAgentProxy(employeeId);
+      if (proxy != null) {
+        await proxy.proxy.markAllMessagesAsRead(deviceId);
+      }
+    }
+  }
+
+  Future<void> markAllMessagesAsReadGlobal() =>
+      _notificationManager.markAllMessagesAsReadGlobal();
+
+  Future<void> syncReadStatusFromAgent({required String employeeId}) =>
+      _notificationManager.syncReadStatusFromAgent(employeeId: employeeId);
+
+  Future<void> restoreUnreadStatus() =>
+      _notificationManager.restoreUnreadStatus();
+
+  /// 恢复 pending 请求（App 启动时调用）
+  void restorePendingRequests() =>
+      _notificationManager.restorePendingRequests();
+
+  Future<List<ChatMessage>> getLatestMessages({
+    required String employeeId,
+    required String deviceId,
+    int limit = 2,
+  }) => _notificationManager.getLatestMessages(
+    employeeId: employeeId,
+    deviceId: deviceId,
+    limit: limit,
+  );
+
+  AgentMessage? getCachedLatestMessage({
+    required String employeeId,
+    required String deviceId,
+  }) => _notificationManager.getCachedLatestMessage(
+    employeeId: employeeId,
+    deviceId: deviceId,
+  );
+
+  // ===== 模型配置查询 API =====
+
+  /// 注册模型配置查询回调
+  ///
+  /// 前端在项目初始化时调用此方法注册回调，用于返回前端持久化的模型配置列表。
+  ///
+  /// **重要**：必须在调用 [connect] 之前注册。如果在 connect 之后注册，
+  /// 窗口期内到达的 RPC 请求将返回空列表。
+  ///
+  /// 示例:
+  /// ```dart
+  /// deviceClient.setModelConfigQueryCallback(() async {
+  ///   final configs = myConfigStorage.getAllModelConfigs();
+  ///   return configs.map((c) => c.toMap()).toList();
+  /// });
+  /// ```
+  void setModelConfigQueryCallback(ModelConfigQueryCallback callback) {
+    _onModelConfigQuery = callback;
+  }
+
+  /// 获取当前注册的模型配置查询回调（内部使用）
+  ///
+  /// [DeviceRpcHandler] 通过此 getter 访问回调，
+  /// 避免在 DeviceRpcHandler 中直接持有 DeviceClient 引用。
+  ModelConfigQueryCallback? get onModelConfigQueryCallback =>
+      _onModelConfigQuery;
+
+  // ===== 远端模型配置更新通知 =====
+
+  /// 远端模型配置更新回调列表（由前端注册）
+  ///
+  /// 当本设备收到其他设备的模型配置变更通知（[hostSyncModelConfigs]）并成功拉取
+  /// 最新配置后，遍历此列表通知前端刷新模型选择器等 UI 组件。
+  final List<void Function()> _remoteModelConfigUpdatedCallbacks = [];
+
+  /// 注册远端模型配置更新回调
+  ///
+  /// 前端注册此回调后，当远端设备模型配置变更通知到达时，
+  /// 会自动触发回调以便 UI 刷新模型配置列表。
+  /// 支持多个回调同时注册（如多个聊天窗口）。
+  ///
+  /// 示例:
+  /// ```dart
+  /// deviceClient.addRemoteModelConfigUpdatedCallback(() {
+  ///   modelSelectorController.refresh();
+  /// });
+  /// ```
+  void addRemoteModelConfigUpdatedCallback(void Function() callback) {
+    _remoteModelConfigUpdatedCallbacks.add(callback);
+  }
+
+  /// 移除远端模型配置更新回调
+  void removeRemoteModelConfigUpdatedCallback(void Function() callback) {
+    _remoteModelConfigUpdatedCallbacks.remove(callback);
+  }
+
+  /// 触发远端模型配置更新回调（内部使用）
+  ///
+  /// [DeviceRpcHandler.hostSyncModelConfigs] 在成功拉取远端配置后调用此方法。
+  void notifyRemoteModelConfigUpdated() {
+    for (final cb in _remoteModelConfigUpdatedCallbacks) {
+      cb();
+    }
+  }
+
+  /// 查询指定设备的所有模型配置（方式2：按需拉取）
+  ///
+  /// 通过 LAN RPC 调用目标设备的 [hostGetModelConfigs] 方法，
+  /// 目标设备会回调前端获取模型配置数据。
+  /// 结果缓存在内存中，[cacheTtl] 内复用缓存。
+  ///
+  /// [targetDeviceId] 目标设备 ID
+  /// [forceRefresh] 是否强制刷新（忽略缓存）
+  ///
+  /// 返回: `Map<employeeId, 模型配置Map>`
+  ///
+  /// 可能抛出 [StateError]（未连接）或 RPC 超时/网络异常。
+  Future<Map<String, Map<String, dynamic>>> getModelConfigsFromDevice(
+    String targetDeviceId, {
+    bool forceRefresh = false,
+  }) async {
+    final now = DateTime.now();
+
+    // 本机短路：直接调用回调返回本地数据
+    if (targetDeviceId == _deviceId) {
+      if (_onModelConfigQuery == null) return {};
+      final localConfigs = await _onModelConfigQuery!();
+      final result = <String, Map<String, dynamic>>{};
+      for (final cfg in localConfigs) {
+        final employeeId = cfg['employeeId'] as String?;
+        if (employeeId != null) {
+          result[employeeId] = cfg;
+        }
+      }
+      return result;
+    }
+
+    // 检查缓存
+    if (!forceRefresh) {
+      final cached = _remoteModelConfigCaches[targetDeviceId];
+      if (cached != null &&
+          now.difference(cached.time) < _modelConfigCacheTTL) {
+        return Map<String, Map<String, dynamic>>.from(cached.configs);
+      }
+    }
+
+    // 从远端拉取
+    final result = await _connectionManager.invokeRemote(
+      targetDeviceId,
+      HostRpcConfig.methodGetModelConfigs,
+      {},
+    );
+
+    final rpcResult = result['result'] as Map<String, dynamic>?;
+    final configs = <String, Map<String, dynamic>>{};
+
+    if (rpcResult != null) {
+      final list = rpcResult['modelConfigs'] as List? ?? [];
+      for (final data in list) {
+        final map = data as Map<String, dynamic>;
+        final uuid = map['uuid'] as String?;
+        if (uuid != null && uuid.isNotEmpty) {
+          configs[uuid] = map;
+        }
+      }
+    }
+
+    // 更新缓存
+    _remoteModelConfigCaches[targetDeviceId] = _ModelConfigCacheEntry(
+      configs: Map<String, Map<String, dynamic>>.from(configs),
+      time: now,
+    );
+
+    return configs;
+  }
+
+  /// 查询指定设备的单个员工模型配置
+  ///
+  /// [targetDeviceId] 目标设备 ID
+  /// [employeeId] 员工 UUID
+  /// [forceRefresh] 是否强制刷新（忽略缓存）
+  ///
+  /// 返回: 模型配置 Map，未找到时返回 null
+  Future<Map<String, dynamic>?> getModelConfigFromDevice(
+    String targetDeviceId,
+    String employeeId, {
+    bool forceRefresh = false,
+  }) async {
+    final configs = await getModelConfigsFromDevice(
+      targetDeviceId,
+      forceRefresh: forceRefresh,
+    );
+    return configs[employeeId];
+  }
+
+  /// 清除指定设备的远端模型配置缓存
+  ///
+  /// 不传 [targetDeviceId] 时清除所有设备的缓存。
+  void invalidateModelConfigCache({String? targetDeviceId}) {
+    if (targetDeviceId != null) {
+      _remoteModelConfigCaches.remove(targetDeviceId);
+    } else {
+      _remoteModelConfigCaches.clear();
+    }
+  }
+
+  // ===== 模型配置广播 API（方式1：主动推送） =====
+
+  /// 广播模型配置变更通知到所有在线设备（方式1：主动推送）
+  ///
+  /// 前端在本地模型配置发生变更后调用此方法。
+  /// 广播仅携带本机 [deviceId]（变更通知），不携带配置数据。
+  /// 接收方收到通知后通过 [getModelConfigsFromDevice] 主动拉取最新配置。
+  ///
+  /// 示例:
+  /// ```dart
+  /// // 模型配置保存后触发广播
+  /// await myConfigStorage.saveConfig(newConfig);
+  /// await deviceClient.broadcastModelConfigs();
+  /// ```
+  Future<void> broadcastModelConfigs() async {
+    if (!isConnected) return;
+
+    // 仅广播变更通知（只传 deviceId，不传配置数据）
+    final devices = await _deviceRegistry.getOnlineDevices();
+    for (final device in devices) {
+      if (device.id == _deviceId) continue;
+      try {
+        await _connectionManager.invokeRemote(
+          device.id,
+          HostRpcConfig.methodSyncModelConfigs,
+          {'sourceDeviceId': _deviceId},
+        );
+      } catch (_) {
+        // 单个设备失败不阻塞其他设备的通知
+      }
+    }
+  }
+}
+
+/// ZIP 内部格式枚举
+enum _ZipFormat {
+  /// 扁平结构：SKILL.md 在 ZIP 根
+  flat,
+
+  /// 单层包裹：skill-name/SKILL.md，需剥离根目录
+  singleWrapped,
+
+  /// 多 skill：skill1/SKILL.md, skill2/SKILL.md
+  multiSkill,
+}
+
+/// ZIP 结构分析结果
+class _ZipStructure {
+  final _ZipFormat format;
+
+  /// 各个 skill 的相对根目录名（格式 A 为 ['']，格式 C 为 ['skill1', 'skill2']）
+  final List<String> skillRoots;
+
+  /// 需要从 ZIP 条目名中剥离的前缀（含尾部斜杠）
+  final String stripPrefix;
+
+  const _ZipStructure({
+    required this.format,
+    required this.skillRoots,
+    required this.stripPrefix,
+  });
+}
+
+/// 模型配置缓存条目（内部使用）
+class _ModelConfigCacheEntry {
+  final Map<String, Map<String, dynamic>> configs;
+  final DateTime time;
+
+  _ModelConfigCacheEntry({
+    required this.configs,
+    required this.time,
+  });
+}
+
+/// 员工在线状态变化事件
+class EmployeeOnlineEvent {
+  /// 员工ID
+  final String employeeId;
+
+  /// 是否在线
+  final bool isOnline;
+
+  /// 设备ID（员工所在的设备）
+  final String? deviceId;
+
+  EmployeeOnlineEvent({
+    required this.employeeId,
+    required this.isOnline,
+    this.deviceId,
+  });
+}
+
+/// 设备与员工信息
+class DeviceWithEmployeesInfo {
+  final String deviceId;
+  final String? deviceName;
+  final String? ip;
+  final DateTime? connectedAt;
+  final List<EmployeeBriefInfo> employees;
+
+  DeviceWithEmployeesInfo({
+    required this.deviceId,
+    this.deviceName,
+    this.ip,
+    this.connectedAt,
+    required this.employees,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'deviceId': deviceId,
+    'deviceName': deviceName,
+    'ip': ip,
+    'connectedAt': connectedAt?.millisecondsSinceEpoch,
+    'employees': employees.map((e) => e.toMap()).toList(),
+  };
+}
+
+/// 员工简要信息
+class EmployeeBriefInfo {
+  final String uuid;
+  final String name;
+  final String status;
+  final String? deviceId;
+
+  EmployeeBriefInfo({
+    required this.uuid,
+    required this.name,
+    required this.status,
+    this.deviceId,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uuid': uuid,
+    'name': name,
+    'status': status,
+    'deviceId': deviceId,
+  };
+}

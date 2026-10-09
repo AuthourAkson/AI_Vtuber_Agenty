@@ -1,0 +1,12 @@
+# AUAKAgent LAN 服务端配置示例
+# 复制为 auak_server.yaml（放在 auak_server.exe 同目录或其 config/ 下）后修改。
+
+port: 9090                      # 服务端口
+
+# 设备 ID：整行注释掉/删除才会自动生成 UUID。
+# ⚠️ 写成 deviceId: "" 会得到空设备 ID（配置空串优先于自动生成），多设备场景无法区分。
+# deviceId: "auak-server-01"
+
+hostName: "AUAKAgent Server"    # 设备显示名称
+storagePath: "./data"           # 数据目录（相对「启动时的工作目录」）
+logLevel: "info"                # 日志级别: debug|info|warn|error|none

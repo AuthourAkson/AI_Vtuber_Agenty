@@ -1,0 +1,14 @@
+# AUAKAgent LAN 客户端配置示例
+# 复制为 auak_client.yaml（放在 auak_client.exe 同目录或其 config/ 下）后修改。
+
+host: "192.168.1.100"           # 服务器 IP 地址（必填，或用 --host 指定）
+port: 9090                      # 服务器端口
+
+# 设备 ID：整行注释掉/删除才会自动生成 UUID。
+# ⚠️ 写成 deviceId: "" 会得到空设备 ID（配置空串优先于自动生成），多设备场景无法区分。
+# deviceId: "auak-client-01"
+
+deviceName: "AUAKAgent Client"  # 设备显示名称
+storagePath: "./data"           # 本地数据目录（相对「启动时的工作目录」）
+logLevel: "info"                # 日志级别: debug|info|warn|error|none
+topic: ""                       # 分组主题（可选，留空不分组）

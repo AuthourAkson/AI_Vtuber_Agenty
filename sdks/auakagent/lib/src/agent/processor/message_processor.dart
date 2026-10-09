@@ -1,0 +1,517 @@
+import '../agent_state.dart';
+import '../entity/entity.dart';
+import '../tool/permission_manager.dart';
+import '../tool/tool_registry.dart';
+import 'cancellation_token.dart';
+import 'message_queue.dart';
+import 'message_tracker.dart';
+import '../../utils/logger.dart';
+import 'package:llm_dart/llm_dart.dart' as llm;
+
+/// 流式响应
+///
+/// 承载文本 chunk、完成信号、错误信息，以及工具调用事件。
+class StreamResponse {
+  final String? content;
+  final bool isDone;
+  final String? error;
+
+  /// 事件类型（null 表示普通文本 chunk）
+  ///
+  /// 可选值: 'toolCallStart', 'toolCallResult', 'permissionRequest'
+  final String? type;
+
+  /// 结构化事件数据
+  final Map<String, dynamic>? data;
+
+  const StreamResponse({
+    this.content,
+    this.isDone = false,
+    this.error,
+    this.type,
+    this.data,
+  });
+
+  factory StreamResponse.chunk(String content) {
+    return StreamResponse(content: content, isDone: false);
+  }
+
+  factory StreamResponse.done() {
+    return const StreamResponse(isDone: true);
+  }
+
+  factory StreamResponse.error(String error) {
+    return StreamResponse(error: error, isDone: true);
+  }
+
+  /// 工具调用开始事件
+  factory StreamResponse.toolCallStart({
+    required String toolCallId,
+    required String toolName,
+    required Map<String, dynamic> arguments,
+  }) {
+    return StreamResponse(
+      type: 'toolCallStart',
+      data: {
+        'toolCallId': toolCallId,
+        'toolName': toolName,
+        'arguments': arguments,
+      },
+    );
+  }
+
+  /// 工具调用结果事件
+  factory StreamResponse.toolCallResult({
+    required String toolCallId,
+    required String toolName,
+    required String result,
+    required bool isError,
+    int? durationMs,
+  }) {
+    return StreamResponse(
+      type: 'toolCallResult',
+      data: {
+        'toolCallId': toolCallId,
+        'toolName': toolName,
+        'result': result,
+        'isError': isError,
+        'durationMs': ?durationMs,
+      },
+    );
+  }
+
+  /// 权限请求事件
+  factory StreamResponse.permissionRequest({
+    required String requestId,
+    required String toolName,
+    required String description,
+  }) {
+    return StreamResponse(
+      type: 'permissionRequest',
+      data: {
+        'requestId': requestId,
+        'toolName': toolName,
+        'description': description,
+      },
+    );
+  }
+}
+
+/// 聊天适配器接口
+///
+/// 定义 Agent 与 AI 模型交互的接口。
+/// 具体实现由外部注入。
+abstract class IChatAdapter {
+  /// 当前消息列表
+  List<Map<String, dynamic>> get currentMessages;
+
+  /// 当前上下文
+  Map<String, dynamic>? get currentContext;
+
+  /// 是否正在流式输出
+  bool get isStreaming;
+
+  /// 初始化会话
+  ///
+  /// [recentLimit] 为 null 时加载全部历史消息；
+  /// 指定数量时仅加载最新 N 条（用于快速初始化场景）。
+  Future<void> initSession({required String employeeId, int? recentLimit});
+
+  /// 加载全部历史消息（替换内存中的消息）
+  ///
+  /// 在 [initSession] 使用 [recentLimit] 快速初始化后，
+  /// 调用此方法在后台加载完整历史。
+  Future<void> loadRemainingMessages();
+
+  /// 流式发送消息
+  Stream<StreamResponse> streamMessage(
+    MessageInput message, {
+    CancellationToken? cancellationToken,
+  });
+
+  /// 停止流式输出
+  Future<void> stopStreaming();
+
+  /// 获取会话消息
+  Future<List<AgentMessage>> getSessionMessages(String employeeId);
+
+  /// 清空当前会话
+  Future<void> clearCurrentSession();
+
+  /// 从内存中删除指定消息
+  bool removeMessageFromMemory(String messageId);
+
+  /// 设置上下文
+  void setContext(Map<String, dynamic> contextData);
+
+  /// 清除上下文
+  void clearContext();
+
+  /// 更新 Provider 配置
+  Future<void> updateProvider(Map<String, dynamic> providerConfig);
+
+  /// 获取 Provider 配置
+  Map<String, dynamic>? getProviderConfig();
+
+  /// 更新项目上下文
+  Future<void> updateProjectContext(Map<String, dynamic>? projectContext);
+
+  /// 设置工具注册器
+  void setToolRegistry(ToolRegistry? registry);
+
+  /// 设置权限管理器
+  void setPermissionManager(ToolPermissionManager? manager);
+
+  /// 设置工具事件回调
+  void setToolEventCallback(void Function(ToolEvent event)? callback);
+
+  /// 流式输出文本增量回调（每个 token/chunk 一次）
+  ///
+  /// 由 [AgentImpl] 注入，用于发射 `streamDelta` AgentEvent。
+  /// 回调参数为当前 chunk 文本内容。
+  void Function(String chunk)? onStreamDelta;
+
+  /// LLM 思考内容增量回调（如 DeepSeek-R1 reasoning_content）
+  ///
+  /// 由 [AgentImpl] 注入，用于发射 `thinkingDelta` AgentEvent。
+  /// 回调参数为当前思考增量文本。
+  void Function(String delta)? onThinkingDelta;
+
+  /// Token 用量回调
+  ///
+  /// 由 [AgentImpl] 注入，每次 LLM 调用后触发，用于统计 token 消耗。
+  void Function(llm.UsageInfo usage)? onTokenUsage;
+
+  /// 更新消息状态（用于持久化）
+  void updateMessageStatus(
+    String messageId,
+    AgentMessageStatus status, {
+    String? error,
+  });
+
+  /// 一次性 LLM 调用（不保留对话历史，不影响流式状态）
+  Future<String> invokeOnce(String prompt);
+
+  /// 释放资源
+  Future<void> dispose();
+}
+
+/// 消息处理器状态回调
+typedef MessageStatusCallback =
+    void Function(String messageId, AgentMessageStatus status, {String? error});
+
+/// 流式消息函数类型
+typedef StreamMessageFunc =
+    Stream<StreamResponse> Function(
+      String messageId,
+      MessageInput message, {
+      CancellationToken? cancellationToken,
+    });
+
+/// 消息处理器
+///
+/// 负责消息的排队、处理、中断等逻辑。
+/// 消息到达后直接加入队列，不自动打断当前处理；
+/// 中断操作由用户通过 [interruptCurrentTask] 手动触发。
+class MessageProcessor {
+  static final _log = Logger('MessageProcessor');
+
+  final StreamMessageFunc _streamMessage;
+  final Future<void> Function() _stopStreaming;
+
+  final MessageQueue _queue = MessageQueue();
+  String? _currentProcessingMessageId;
+  CancellationToken? _currentCancellationToken;
+  bool _disposed = false;
+
+  AgentStatus _status = AgentStatus.idle;
+
+  /// 消息追踪器
+  final MessageTracker _tracker = MessageTracker();
+
+  /// 待处理的权限请求数量（引用计数，支持多个并发权限请求）
+  int _permissionBlockCount = 0;
+
+  /// 状态变更回调
+  void Function(AgentStatus status)? onStateChanged;
+
+  /// 消息状态变更回调
+  MessageStatusCallback? onMessageStatusChanged;
+
+  /// 消息完成前回调（在广播 completed 之前调用）
+  ///
+  /// 用于等待持久化等异步操作完成，确保 completed 事件广播时
+  /// 数据已经落盘（如 SQLite 持久化、seq 已分配）。
+  /// 这解决了 async* generator 被取消导致 post-loop 代码无法执行的问题。
+  Future<void> Function()? onBeforeMessageCompleted;
+
+  /// 消息开始处理回调（从队列中取出后触发）
+  ///
+  /// 在消息状态变更为 processing 之后调用，
+  /// 用于发射 `messageStarted` AgentEvent。
+  /// 回调参数为 (messageId, messageData)。
+  void Function(String messageId, Map<String, dynamic> messageData)? onMessageStarted;
+
+  MessageProcessor({
+    required StreamMessageFunc streamMessage,
+    required Future<void> Function() stopStreaming,
+  }) : _streamMessage = streamMessage,
+       _stopStreaming = stopStreaming;
+
+  /// 当前处理中的消息ID
+  String? get currentProcessingMessageId => _currentProcessingMessageId;
+
+  /// 当前处理中的消息ID（非空版本，用于类型提升）
+  String get currentMessageId => _currentProcessingMessageId!;
+
+  /// 排队中的消息ID列表
+  List<String> get queuedMessageIds => _queue.messageIds;
+
+  /// 队列长度
+  int get queueLength => _queue.length;
+
+  /// 当前状态
+  AgentStatus get status => _status;
+
+  /// 获取所有追踪的消息（只读）
+  List<TrackedMessage> get allTrackedMessages => _tracker.allMessages;
+
+  /// 提交消息到队列
+  ///
+  /// 消息到达后直接加入队列，不自动打断当前处理。
+  /// 如果处理器空闲则立即处理；如果正在处理则排队等待。
+  /// 中断操作由用户通过 [interruptCurrentTask] 手动触发。
+  Future<void> submitMessage(
+    String messageId,
+    Map<String, dynamic> messageData, {
+    List<Map<String, dynamic>>? recentContext,
+  }) async {
+    _log.debug('submitMessage: $messageId');
+    if (_disposed) throw Exception('MessageProcessor 已销毁');
+
+    // 创建 QueuedMessage
+    final queuedMessage = QueuedMessage.fromMap({
+      ...messageData,
+      'id': messageId,
+      'processingStatus': MessageProcessingStatus.queued.name,
+      'enqueuedAt': DateTime.now().toIso8601String(),
+    });
+
+    final item = MessageQueueItem(message: queuedMessage);
+
+    // 1. 追踪消息
+    _tracker.track(messageId, messageData);
+
+    // 2. 入队
+    _queue.enqueue(item);
+    onMessageStatusChanged?.call(
+      messageId,
+      MessageProcessingStatus.queued.toAgentMessageStatus(),
+    );
+    _log.debug('message queued, queue length: ${_queue.length}');
+    _log.debug('current status: $_status');
+
+    // 3. 如果空闲，直接处理
+    if (_status == AgentStatus.idle) {
+      _log.debug('status is idle, calling _processNext');
+      _processNext();
+      return;
+    }
+
+    // 4. 当前有消息在处理 → 直接排队，中断由用户决定
+    _log.debug('message queued while processing (status: $_status), interrupt decision left to user');
+  }
+
+  /// 中断当前处理（由用户手动调用）
+  Future<void> interruptCurrentTask() async {
+    if (_currentCancellationToken != null) {
+      _currentCancellationToken!.cancel();
+    }
+    await _stopStreaming();
+
+    if (_currentProcessingMessageId != null) {
+      onMessageStatusChanged?.call(
+        _currentProcessingMessageId!,
+        MessageProcessingStatus.interrupted.toAgentMessageStatus(),
+      );
+      _tracker.updateStatus(
+        _currentProcessingMessageId!,
+        MessageProcessingStatus.interrupted,
+      );
+    }
+
+    _currentProcessingMessageId = null;
+    _currentCancellationToken = null;
+    _setStatus(AgentStatus.idle);
+
+    // 处理下一条消息
+    _processNext();
+  }
+
+  /// 撤回消息
+  Future<void> revokeMessage(String messageId) async {
+    if (_queue.contains(messageId)) {
+      _queue.revoke(messageId);
+      onMessageStatusChanged?.call(
+        messageId,
+        MessageProcessingStatus.revoked.toAgentMessageStatus(),
+      );
+      _tracker.updateStatus(messageId, MessageProcessingStatus.revoked);
+    }
+  }
+
+  /// 设置权限阻塞
+  ///
+  /// 使用引用计数支持多个并发权限请求：每个 requestId 增加计数，
+  /// 每次 null 调用减少计数，计数归零时才恢复为 processing 状态。
+  void setPermissionBlocked(String? requestId) {
+    if (requestId != null) {
+      _permissionBlockCount++;
+      _setStatus(AgentStatus.waitingPermission);
+    } else {
+      _permissionBlockCount--;
+      if (_permissionBlockCount <= 0) {
+        _permissionBlockCount = 0;
+        _setStatus(AgentStatus.processing);
+      }
+    }
+  }
+
+  /// 释放资源
+  void dispose() {
+    _disposed = true;
+    _queue.clear();
+    _currentCancellationToken?.cancel();
+    _currentCancellationToken = null;
+    _currentProcessingMessageId = null;
+  }
+
+  // ===== 私有方法 =====
+
+  void _processNext() {
+    _log.debug('_processNext called, disposed: $_disposed');
+    if (_disposed) return;
+
+    final item = _queue.dequeue();
+    if (item == null) {
+      _log.debug('queue is empty, setting status to idle');
+      _setStatus(AgentStatus.idle);
+      return;
+    }
+
+    _log.debug('processing message: ${item.messageId}');
+    _currentProcessingMessageId = item.messageId;
+    _currentCancellationToken = CancellationToken();
+    _setStatus(AgentStatus.processing);
+    onMessageStatusChanged?.call(
+      item.messageId,
+      MessageProcessingStatus.processing.toAgentMessageStatus(),
+    );
+    _tracker.updateStatus(
+      item.messageId,
+      MessageProcessingStatus.processing,
+    ); // 同步追踪器状态
+
+    // 通知消息开始处理（发射 messageStarted 事件）
+    onMessageStarted?.call(item.messageId, item.messageData);
+
+    _processMessage(item.messageId, MessageInput.fromMap(item.messageData));
+  }
+
+  Future<void> _processMessage(
+    String messageId,
+    MessageInput messageInput,
+  ) async {
+    _log.debug('_processMessage: $messageId');
+    try {
+      final stream = _streamMessage(
+        messageId,
+        messageInput,
+        cancellationToken: _currentCancellationToken,
+      );
+
+      bool hasContent = false;
+
+      await for (final response in stream) {
+        if (_currentCancellationToken?.isCancelled ?? false) {
+          _log.debug('cancelled');
+          break;
+        }
+
+        if (response.error != null) {
+          _log.error('error: ${response.error}');
+          onMessageStatusChanged?.call(
+            messageId,
+            MessageProcessingStatus.failed.toAgentMessageStatus(),
+            error: response.error,
+          );
+          _tracker.updateStatus(messageId, MessageProcessingStatus.failed);
+          _finishProcessing();
+          return;
+        }
+
+        if (!hasContent &&
+            response.content != null &&
+            response.content!.isNotEmpty) {
+          hasContent = true;
+          _setStatus(AgentStatus.streaming);
+        }
+
+        if (response.isDone) {
+          _log.debug('message completed: $messageId');
+          // 等待持久化完成后再广播 completed（修复 async* generator 取消问题）
+          await onBeforeMessageCompleted?.call();
+          onMessageStatusChanged?.call(
+            messageId,
+            MessageProcessingStatus.completed.toAgentMessageStatus(),
+          );
+          _tracker.updateStatus(messageId, MessageProcessingStatus.completed);
+          _finishProcessing();
+          return;
+        }
+      }
+
+      // 流正常结束
+      if (!_disposed && _currentProcessingMessageId == messageId) {
+        // 等待持久化完成后再广播 completed
+        await onBeforeMessageCompleted?.call();
+        onMessageStatusChanged?.call(
+          messageId,
+          MessageProcessingStatus.completed.toAgentMessageStatus(),
+        );
+        _tracker.updateStatus(messageId, MessageProcessingStatus.completed);
+        _finishProcessing();
+      }
+    } catch (e) {
+      _log.error('exception: $e');
+      if (!_disposed && _currentProcessingMessageId == messageId) {
+        onMessageStatusChanged?.call(
+          messageId,
+          MessageProcessingStatus.failed.toAgentMessageStatus(),
+          error: e.toString(),
+        );
+        _tracker.updateStatus(messageId, MessageProcessingStatus.failed);
+        _finishProcessing();
+      }
+    }
+  }
+
+  void _finishProcessing() {
+    _currentProcessingMessageId = null;
+    _currentCancellationToken?.dispose();
+    _currentCancellationToken = null;
+    _setStatus(AgentStatus.idle);
+
+    // 处理下一条消息
+    if (!_disposed) {
+      Future.microtask(() => _processNext());
+    }
+  }
+
+  void _setStatus(AgentStatus newStatus) {
+    if (_status == newStatus) return;
+    _status = newStatus;
+
+    onStateChanged?.call(newStatus);
+  }
+}
